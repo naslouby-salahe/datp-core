@@ -79,6 +79,7 @@ class ExperimentId(StrEnum):
     CONTROLLED_HETEROGENEITY_SWEEP = "controlled_heterogeneity_sweep"
     PHYSICAL_FAMILY_ADEQUACY = "physical_family_adequacy"
     CALIBRATION_SUPPORT_BURDEN = "calibration_support_burden"
+    NATURAL_DEVICE_CLIENT_IMPACT = "natural_device_client_impact"
     HETEROGENEITY_CALIBRATION_SUPPORT_INTERACTION = "heterogeneity_calibration_support_interaction"
     FAMILY_AND_GROUPED_GRANULARITY = "family_and_grouped_granularity"
     PER_CLIENT_SCORE_GEOMETRY = "per_client_score_geometry"

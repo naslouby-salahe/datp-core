@@ -132,6 +132,7 @@ class ConfirmatoryAssetDirectory(StrEnum):
     SUPPORTIVE = "supportive"
     PHYSICAL_FAMILY_ADEQUACY = "physical_family_adequacy"
     CALIBRATION_SUPPORT_BURDEN = "calibration_support_burden"
+    NATURAL_DEVICE_CLIENT_IMPACT = "natural_device_client_impact"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -385,6 +386,52 @@ def analyze_calibration_support_burden(*, overwrite: bool) -> Path:
     export_mechanism_publication(
         records,
         experiment=ExperimentId.CALIBRATION_SUPPORT_BURDEN,
+        population=PopulationId.NBAIOT_NATURAL_DEVICES,
+        output_directory=output,
+        evidence_role=EvidenceRole.MECHANISM,
+    )
+    return output
+
+
+def analyze_natural_device_client_impact(*, overwrite: bool) -> Path:
+    """Publish the §7.5B client-impact and fixed-support-strata bundle."""
+
+    output = (
+        OUTPUTS_ROOT
+        / ConfirmatoryAssetDirectory.ROOT
+        / PopulationId.NBAIOT_NATURAL_DEVICES.value
+        / ConfirmatoryAssetDirectory.ANALYSIS
+        / ConfirmatoryAssetDirectory.NATURAL_DEVICE_CLIENT_IMPACT
+    )
+    if overwrite and output.exists():
+        from shutil import rmtree
+
+        rmtree(output)
+    movements: list[ThresholdMovementCohort] = []
+    pairs: list[tuple[FederatedEvaluationDocument, FederatedEvaluationDocument]] = []
+    records: list[MechanismEvidence] = []
+    for seed in CONFIRMATORY_SEED_COHORT.values:
+        shared = load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.SHARED_THRESHOLD))
+        local = load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.LOCAL_THRESHOLD))
+        movement = threshold_movements_from_evaluations(
+            shared=shared, local=local, experiment=ExperimentId.NATURAL_DEVICE_CLIENT_IMPACT
+        )
+        pairs.append((shared, local))
+        movements.append(movement)
+        records.append(summarize_client_impact(movement))
+    strata = campaign_fixed_support_strata(tuple(shared for shared, _ in pairs))
+    outcomes = support_stratum_seed_outcomes(strata, tuple(pairs), tuple(movements))
+    records.extend(
+        (
+            summarize_client_impact_campaign(tuple(movements)),
+            strata,
+            outcomes,
+            summarize_support_stratum_campaign(outcomes),
+        )
+    )
+    export_mechanism_publication(
+        tuple(records),
+        experiment=ExperimentId.NATURAL_DEVICE_CLIENT_IMPACT,
         population=PopulationId.NBAIOT_NATURAL_DEVICES,
         output_directory=output,
         evidence_role=EvidenceRole.MECHANISM,

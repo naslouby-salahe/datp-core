@@ -55,6 +55,7 @@ from datp_core.experiments.confirmatory.run import (
     ConfirmatoryAssetDirectory,
     analyze_calibration_support_burden,
     analyze_confirmatory_campaign,
+    analyze_natural_device_client_impact,
     analyze_physical_family_adequacy,
     load_fedavg_cv_fpr_effect,
     run_confirmatory_seed,
@@ -216,6 +217,7 @@ _ANALYSIS_ONLY_EXPERIMENTS = frozenset(
     (
         ExperimentId.PHYSICAL_FAMILY_ADEQUACY,
         ExperimentId.CALIBRATION_SUPPORT_BURDEN,
+        ExperimentId.NATURAL_DEVICE_CLIENT_IMPACT,
         ExperimentId.PER_CLIENT_SCORE_GEOMETRY,
         ExperimentId.HETEROGENEITY_BENEFIT_ASSOCIATION,
         ExperimentId.THRESHOLD_MOVEMENT_TRADEOFF,
@@ -605,6 +607,8 @@ def _report_heterogeneity(experiment_id: ExperimentId) -> ReportResult:
         path = analyze_physical_family_adequacy(overwrite=True)
     elif experiment_id is ExperimentId.CALIBRATION_SUPPORT_BURDEN:
         path = analyze_calibration_support_burden(overwrite=True)
+    elif experiment_id is ExperimentId.NATURAL_DEVICE_CLIENT_IMPACT:
+        path = analyze_natural_device_client_impact(overwrite=True)
     elif experiment_id is ExperimentId.PER_CLIENT_SCORE_GEOMETRY:
         path = analyze_per_client_score_geometry(overwrite=True)
     elif experiment_id is ExperimentId.HETEROGENEITY_BENEFIT_ASSOCIATION:
@@ -757,9 +761,7 @@ def _report_fine_tuning(experiment_id: ExperimentId) -> ReportResult:
                 f"| {seed.value} | {model.client.client_id.value} | "
                 f"{model.serialized_state_evidence.byte_count.value} | {model.wall_time.value:.12g} |"
             )
-    activation = summarize_alignment_activation(
-        tuple(item.alignment_reductions for item in evidence_by_seed)
-    )
+    activation = summarize_alignment_activation(tuple(item.alignment_reductions for item in evidence_by_seed))
     rows.extend(
         (
             "",
@@ -1087,7 +1089,11 @@ def _heterogeneity_marker(experiment_id: ExperimentId) -> bool:
         / population.value
         / MechanismAnalysisDirectory.ANALYSIS
     )
-    if experiment_id in {ExperimentId.PHYSICAL_FAMILY_ADEQUACY, ExperimentId.CALIBRATION_SUPPORT_BURDEN}:
+    if experiment_id in {
+        ExperimentId.PHYSICAL_FAMILY_ADEQUACY,
+        ExperimentId.CALIBRATION_SUPPORT_BURDEN,
+        ExperimentId.NATURAL_DEVICE_CLIENT_IMPACT,
+    }:
         output = (
             OUTPUTS_ROOT
             / ConfirmatoryAssetDirectory.ROOT
@@ -1097,6 +1103,8 @@ def _heterogeneity_marker(experiment_id: ExperimentId) -> bool:
                 ConfirmatoryAssetDirectory.PHYSICAL_FAMILY_ADEQUACY
                 if experiment_id is ExperimentId.PHYSICAL_FAMILY_ADEQUACY
                 else ConfirmatoryAssetDirectory.CALIBRATION_SUPPORT_BURDEN
+                if experiment_id is ExperimentId.CALIBRATION_SUPPORT_BURDEN
+                else ConfirmatoryAssetDirectory.NATURAL_DEVICE_CLIENT_IMPACT
             )
         )
     if experiment_id is ExperimentId.HETEROGENEITY_CALIBRATION_SUPPORT_INTERACTION:
@@ -1428,6 +1436,14 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         anchor_requirement=AnchorRequirement.REQUIRED,
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_analysis_recipe(ExperimentId.CALIBRATION_SUPPORT_BURDEN),
+        report=_report_heterogeneity,
+        analysis_marker=_heterogeneity_marker,
+    ),
+    ExperimentRecipe(
+        experiment=ExperimentId.NATURAL_DEVICE_CLIENT_IMPACT,
+        anchor_requirement=AnchorRequirement.REQUIRED,
+        campaign_role=CampaignRole.MANDATORY,
+        dispatch=_analysis_recipe(ExperimentId.NATURAL_DEVICE_CLIENT_IMPACT),
         report=_report_heterogeneity,
         analysis_marker=_heterogeneity_marker,
     ),
