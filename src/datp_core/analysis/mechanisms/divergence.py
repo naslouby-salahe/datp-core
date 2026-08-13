@@ -8,12 +8,11 @@ from scipy.spatial.distance import jensenshannon
 
 from datp_core.core.contracts import StrictModel
 from datp_core.core.identifiers import AnalysisReasonText, AvailabilityStatus, EvidenceRole
-from datp_core.core.numeric import MetricValue, PairedObservationCount, PositiveIntegerValue, ScoreValue
+from datp_core.core.numeric import MetricValue, PairedObservationCount, PositiveIntegerValue
 from datp_core.data.populations.contracts import ClientIdentity
 
 MINIMUM_DIVERGENCE_CLIENTS = PairedObservationCount(2)
-DEFAULT_BIN_COUNT = PositiveIntegerValue(32)
-DEFAULT_SMOOTHING = MetricValue(1e-12)
+DEFAULT_BIN_COUNT = PositiveIntegerValue(64)
 
 
 class DivergenceBlocker(StrEnum):
@@ -38,11 +37,11 @@ class JensenShannonScoreSource(StrEnum):
 
 
 class JensenShannonSharedSupport(StrEnum):
-    GLOBAL_MIN_MAX = "global_min_max"
+    POOLED_TYPE7_QUANTILES = "pooled_type7_quantiles"
 
 
 class JensenShannonBinning(StrEnum):
-    EQUAL_WIDTH_HISTOGRAM = "equal_width_histogram"
+    POOLED_TYPE7_QUANTILE_HISTOGRAM = "pooled_type7_quantile_histogram"
 
 
 class JensenShannonAggregation(StrEnum):
@@ -58,7 +57,6 @@ class JensenShannonProtocol(StrictModel):
     shared_support: JensenShannonSharedSupport
     binning: JensenShannonBinning
     bin_count: PositiveIntegerValue
-    smoothing_constant: MetricValue
     logarithm_base: JensenShannonLogBase
     aggregation: JensenShannonAggregation
 
@@ -66,17 +64,14 @@ class JensenShannonProtocol(StrictModel):
     def validate_protocol(self) -> "JensenShannonProtocol":
         if self.bin_count.value < 2:
             raise ValueError("Jensen-Shannon bin count requires at least two bins")
-        if self.smoothing_constant.value <= 0.0:
-            raise ValueError("Jensen-Shannon smoothing constant must be positive")
         return self
 
 
 LOCKED_JENSEN_SHANNON_PROTOCOL = JensenShannonProtocol(
     score_source=JensenShannonScoreSource.BENIGN_CALIBRATION_SCORES,
-    shared_support=JensenShannonSharedSupport.GLOBAL_MIN_MAX,
-    binning=JensenShannonBinning.EQUAL_WIDTH_HISTOGRAM,
+    shared_support=JensenShannonSharedSupport.POOLED_TYPE7_QUANTILES,
+    binning=JensenShannonBinning.POOLED_TYPE7_QUANTILE_HISTOGRAM,
     bin_count=DEFAULT_BIN_COUNT,
-    smoothing_constant=DEFAULT_SMOOTHING,
     logarithm_base=JensenShannonLogBase.BASE_TWO,
     aggregation=JensenShannonAggregation.MEAN_PAIRWISE,
 )
@@ -186,24 +181,17 @@ def jensen_shannon_divergence(
             DivergenceBlocker.NON_FINITE_SCORE,
             protocol=protocol,
         )
-    support_min = ScoreValue(float(min(float(array.min()) for array in arrays)))
-    support_max = ScoreValue(float(max(float(array.max()) for array in arrays)))
-    if not np.isfinite(support_min.value) or not np.isfinite(support_max.value):
-        return blocked_jensen_shannon_divergence(
-            clients,
-            DivergenceBlocker.COMMON_SUPPORT_UNRESOLVED,
-            protocol=protocol,
+    edges = np.unique(
+        np.quantile(
+            np.concatenate(arrays),
+            np.linspace(0.0, 1.0, protocol.bin_count.value + 1),
+            method="linear",
         )
-    if support_max.value <= support_min.value:
-        support_max = ScoreValue(support_min.value + protocol.smoothing_constant.value)
+    )
+    if edges.size < 3:
+        return blocked_jensen_shannon_divergence(clients, DivergenceBlocker.BINNING_UNRESOLVED, protocol=protocol)
     histograms = tuple(
-        _smoothed_histogram(
-            array,
-            support_min=support_min,
-            support_max=support_max,
-            bin_count=protocol.bin_count,
-            smoothing=protocol.smoothing_constant,
-        )
+        _quantile_histogram(array, edges)
         for array in arrays
     )
     pairwise: list[PairwiseJensenShannonDistance] = []
@@ -243,15 +231,11 @@ def _score_array(scores: tuple[MetricValue, ...]) -> NDArray[np.float64]:
     return np.fromiter((score.value for score in scores), dtype=np.float64, count=len(scores))
 
 
-def _smoothed_histogram(
+def _quantile_histogram(
     scores: NDArray[np.float64],
-    *,
-    support_min: ScoreValue,
-    support_max: ScoreValue,
-    bin_count: PositiveIntegerValue,
-    smoothing: MetricValue,
+    edges: NDArray[np.float64],
 ) -> NDArray[np.float64]:
-    counts, _ = np.histogram(scores, bins=bin_count.value, range=(support_min.value, support_max.value))
-    density = counts.astype(np.float64) + smoothing.value
+    counts, _ = np.histogram(scores, bins=edges)
+    density = counts.astype(np.float64)
     density /= density.sum()
     return density

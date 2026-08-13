@@ -1,7 +1,12 @@
 import pytest
 from tests.unit.thresholding.helpers import identity
 
-from datp_core.analysis.mechanisms.divergence import ClientScoreVector, jensen_shannon_divergence
+from datp_core.analysis.mechanisms.divergence import (
+    LOCKED_JENSEN_SHANNON_PROTOCOL,
+    ClientScoreVector,
+    DivergenceBlocker,
+    jensen_shannon_divergence,
+)
 from datp_core.analysis.mechanisms.family_adequacy import family_explanatory_adequacy
 from datp_core.core.identifiers import FamilyIdentity
 from datp_core.core.numeric import MetricValue, PairedObservationCount, Seed, ThresholdValue
@@ -80,3 +85,20 @@ def test_family_adequacy_retains_nonpositive_separation() -> None:
 
     assert result.family_separation_js is not None
     assert result.family_separation_js.value == pytest.approx(-0.5)
+
+
+def test_jensen_shannon_uses_locked_quantile_bins_without_smoothing() -> None:
+    protocol = LOCKED_JENSEN_SHANNON_PROTOCOL
+    assert protocol.bin_count.value == 64
+    assert protocol.shared_support.value == "pooled_type7_quantiles"
+    assert protocol.binning.value == "pooled_type7_quantile_histogram"
+
+
+def test_jensen_shannon_blocks_a_collapsed_quantile_grid() -> None:
+    result = jensen_shannon_divergence(
+        (
+            ClientScoreVector(client=identity("a"), scores=(MetricValue(1.0), MetricValue(1.0))),
+            ClientScoreVector(client=identity("b"), scores=(MetricValue(1.0), MetricValue(1.0))),
+        )
+    )
+    assert result.blocker is DivergenceBlocker.BINNING_UNRESOLVED
