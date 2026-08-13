@@ -130,6 +130,7 @@ class ConfirmatoryAssetDirectory(StrEnum):
     SCORE_GEOMETRY = "score_geometry"
     MECHANISMS = "mechanisms"
     SUPPORTIVE = "supportive"
+    PHYSICAL_FAMILY_ADEQUACY = "physical_family_adequacy"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -308,6 +309,47 @@ def _partition_confirmatory_descriptive_evidence(
     supportive = tuple(item for item in mechanisms if isinstance(item, supportive_types))
     mechanism = tuple(item for item in mechanisms if not isinstance(item, supportive_types))
     return mechanism, supportive
+
+
+def analyze_physical_family_adequacy(*, overwrite: bool) -> Path:
+    """Publish the §7.2A analysis from fixed confirmatory score/evaluation evidence."""
+
+    output = (
+        OUTPUTS_ROOT
+        / ConfirmatoryAssetDirectory.ROOT
+        / PopulationId.NBAIOT_NATURAL_DEVICES.value
+        / ConfirmatoryAssetDirectory.ANALYSIS
+        / ConfirmatoryAssetDirectory.PHYSICAL_FAMILY_ADEQUACY
+    )
+    if overwrite and output.exists():
+        from shutil import rmtree
+
+        rmtree(output)
+    records: list[MechanismEvidence] = []
+    for seed in CONFIRMATORY_SEED_COHORT.values:
+        shared = load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.SHARED_THRESHOLD))
+        local = load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.LOCAL_THRESHOLD))
+        divergence = jensen_shannon_from_client_scores(_client_score_vectors(shared))
+        family_assignments = _natural_device_family_assignments(tuple(item.client for item in local.clients))
+        records.append(
+            family_explanatory_adequacy(
+                seed=seed,
+                divergence=divergence,
+                family_by_client=family_assignments,
+                local_thresholds=tuple(
+                    (assignment, next(item.threshold for item in local.clients if item.client == assignment.client))
+                    for assignment in family_assignments
+                ),
+            )
+        )
+    export_mechanism_publication(
+        tuple(records),
+        experiment=ExperimentId.PHYSICAL_FAMILY_ADEQUACY,
+        population=PopulationId.NBAIOT_NATURAL_DEVICES,
+        output_directory=output,
+        evidence_role=EvidenceRole.MECHANISM,
+    )
+    return output
 
 
 def _confirmatory_descriptive_effects() -> ConfirmatoryDescriptiveEffects:

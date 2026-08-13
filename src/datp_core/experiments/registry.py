@@ -186,6 +186,15 @@ EXPERIMENTS = (
         CONFIRMATORY_METRICS,
     ),
     _declare(
+        ExperimentId.PHYSICAL_FAMILY_ADEQUACY,
+        EvidenceRole.MECHANISM,
+        PopulationId.NBAIOT_NATURAL_DEVICES,
+        TrainingModelId.FEDAVG_AUTOENCODER,
+        PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
+        (FederatedThresholdMethod.LOCAL_THRESHOLD,),
+        OPERATING_POINT_METRICS,
+    ),
+    _declare(
         ExperimentId.HETEROGENEITY_CALIBRATION_SUPPORT_INTERACTION,
         EvidenceRole.MECHANISM,
         PopulationId.NBAIOT_DIRICHLET_CLIENTS,

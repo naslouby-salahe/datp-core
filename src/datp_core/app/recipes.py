@@ -54,6 +54,7 @@ from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CON
 from datp_core.experiments.confirmatory.run import (
     ConfirmatoryAssetDirectory,
     analyze_confirmatory_campaign,
+    analyze_physical_family_adequacy,
     load_fedavg_cv_fpr_effect,
     run_confirmatory_seed,
     run_family_grouped_mechanism_seed,
@@ -212,6 +213,7 @@ _METHOD_NOT_COMPLETED_DETAIL = "declared but not completed in this execution"
 
 _ANALYSIS_ONLY_EXPERIMENTS = frozenset(
     (
+        ExperimentId.PHYSICAL_FAMILY_ADEQUACY,
         ExperimentId.PER_CLIENT_SCORE_GEOMETRY,
         ExperimentId.HETEROGENEITY_BENEFIT_ASSOCIATION,
         ExperimentId.THRESHOLD_MOVEMENT_TRADEOFF,
@@ -597,6 +599,8 @@ def _report_external(experiment_id: ExperimentId) -> ReportResult:
 def _report_heterogeneity(experiment_id: ExperimentId) -> ReportResult:
     if experiment_id is ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP:
         path = analyze_controlled_heterogeneity_sweep(overwrite=True)
+    elif experiment_id is ExperimentId.PHYSICAL_FAMILY_ADEQUACY:
+        path = analyze_physical_family_adequacy(overwrite=True)
     elif experiment_id is ExperimentId.PER_CLIENT_SCORE_GEOMETRY:
         path = analyze_per_client_score_geometry(overwrite=True)
     elif experiment_id is ExperimentId.HETEROGENEITY_BENEFIT_ASSOCIATION:
@@ -1079,6 +1083,14 @@ def _heterogeneity_marker(experiment_id: ExperimentId) -> bool:
         / population.value
         / MechanismAnalysisDirectory.ANALYSIS
     )
+    if experiment_id is ExperimentId.PHYSICAL_FAMILY_ADEQUACY:
+        output = (
+            OUTPUTS_ROOT
+            / ConfirmatoryAssetDirectory.ROOT
+            / PopulationId.NBAIOT_NATURAL_DEVICES.value
+            / ConfirmatoryAssetDirectory.ANALYSIS
+            / ConfirmatoryAssetDirectory.PHYSICAL_FAMILY_ADEQUACY
+        )
     if experiment_id is ExperimentId.HETEROGENEITY_CALIBRATION_SUPPORT_INTERACTION:
         analysis = output / "support_interaction_analysis.json"
         surface = output / "support_interaction_surface.md"
@@ -1392,6 +1404,14 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         anchor_requirement=AnchorRequirement.REQUIRED,
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_declared_recipe(ExperimentId.HETEROGENEITY_CALIBRATION_SUPPORT_INTERACTION),
+        report=_report_heterogeneity,
+        analysis_marker=_heterogeneity_marker,
+    ),
+    ExperimentRecipe(
+        experiment=ExperimentId.PHYSICAL_FAMILY_ADEQUACY,
+        anchor_requirement=AnchorRequirement.REQUIRED,
+        campaign_role=CampaignRole.MANDATORY,
+        dispatch=_analysis_recipe(ExperimentId.PHYSICAL_FAMILY_ADEQUACY),
         report=_report_heterogeneity,
         analysis_marker=_heterogeneity_marker,
     ),

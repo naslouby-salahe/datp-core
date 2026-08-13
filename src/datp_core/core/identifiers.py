@@ -77,6 +77,7 @@ class ExperimentId(StrEnum):
     QUANTILE_SENSITIVITY = "quantile_sensitivity"
     THRESHOLD_ESTIMATOR_SCOPE_SENSITIVITY = "threshold_estimator_scope_sensitivity"
     CONTROLLED_HETEROGENEITY_SWEEP = "controlled_heterogeneity_sweep"
+    PHYSICAL_FAMILY_ADEQUACY = "physical_family_adequacy"
     HETEROGENEITY_CALIBRATION_SUPPORT_INTERACTION = "heterogeneity_calibration_support_interaction"
     FAMILY_AND_GROUPED_GRANULARITY = "family_and_grouped_granularity"
     PER_CLIENT_SCORE_GEOMETRY = "per_client_score_geometry"
