@@ -7,6 +7,7 @@ from datp_core.analysis.inference.bootstrap.contracts import BootstrapInterval
 from datp_core.analysis.inference.precision import confirmatory_precision_diagnostics
 from datp_core.analysis.influence import (
     LeaveOneDeviceEffect,
+    LodoHighInfluenceTrigger,
     RelativeLodoShiftStatus,
     summarize_leave_one_device_out_effects,
 )
@@ -95,11 +96,16 @@ def test_lodo_summary_uses_only_device_level_seed_means() -> None:
     assert diagnostics.minimum_lodo_mean == MetricValue(0.0)
     assert diagnostics.maximum_lodo_mean.value == pytest.approx(0.3)
     assert diagnostics.maximum_lodo_shift == MetricValue(0.2)
+    assert diagnostics.full_mean_delta == MetricValue(0.2)
     assert diagnostics.positive_direction_retention == Ratio(0.5)
     assert diagnostics.nonpositive_omissions == (second,)
     assert diagnostics.relative_maximum_lodo_shift == MetricValue(1.0)
     assert diagnostics.relative_shift_status is RelativeLodoShiftStatus.AVAILABLE
     assert diagnostics.high_influence
+    assert diagnostics.high_influence_triggers == (
+        LodoHighInfluenceTrigger.NONPOSITIVE_OMISSION,
+        LodoHighInfluenceTrigger.RELATIVE_SHIFT,
+    )
 
 
 def _lodo_effect(seed: Seed, device: ClientIdentity, delta: float) -> LeaveOneDeviceEffect:

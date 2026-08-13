@@ -34,6 +34,11 @@ class RelativeLodoShiftStatus(StrEnum):
     UNAVAILABLE_NEAR_ZERO_FULL_EFFECT = "unavailable_near_zero_full_effect"
 
 
+class LodoHighInfluenceTrigger(StrEnum):
+    NONPOSITIVE_OMISSION = "nonpositive_omission"
+    RELATIVE_SHIFT = "relative_shift"
+
+
 @dataclass(frozen=True, slots=True)
 class LeaveOneDeviceEffect:
     seed: Seed
@@ -55,6 +60,7 @@ class LeaveOneDeviceSummary(StrictModel):
 
 class LeaveOneDeviceOutDiagnostics(StrictModel):
     device_summaries: tuple[LeaveOneDeviceSummary, ...]
+    full_mean_delta: MetricValue
     minimum_lodo_mean: MetricValue
     maximum_lodo_mean: MetricValue
     maximum_lodo_shift: MetricValue
@@ -62,6 +68,7 @@ class LeaveOneDeviceOutDiagnostics(StrictModel):
     nonpositive_omissions: tuple[ClientIdentity, ...]
     relative_maximum_lodo_shift: MetricValue | None
     relative_shift_status: RelativeLodoShiftStatus
+    high_influence_triggers: tuple[LodoHighInfluenceTrigger, ...]
     high_influence: bool
 
     @model_validator(mode="after")
@@ -71,6 +78,33 @@ class LeaveOneDeviceOutDiagnostics(StrictModel):
             raise ValueError("relative LODO shift availability must match its status")
         if tuple(sorted(self.nonpositive_omissions)) != self.nonpositive_omissions:
             raise ValueError("nonpositive LODO omissions must be sorted")
+        if tuple(sorted(self.device_summaries, key=lambda item: item.omitted_device)) != self.device_summaries:
+            raise ValueError("LODO device summaries must be sorted")
+        means = tuple(summary.mean_delta.value for summary in self.device_summaries)
+        if self.minimum_lodo_mean.value != min(means) or self.maximum_lodo_mean.value != max(means):
+            raise ValueError("LODO extrema must match the retained device means")
+        expected_shift = max(abs(mean - self.full_mean_delta.value) for mean in means)
+        if self.maximum_lodo_shift.value != expected_shift:
+            raise ValueError("maximum LODO shift must match the retained device means and full mean")
+        expected_relative = (
+            None
+            if abs(self.full_mean_delta.value) <= NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE.value
+            else self.maximum_lodo_shift.value / abs(self.full_mean_delta.value)
+        )
+        if expected_relative is None:
+            if self.relative_shift_status is not RelativeLodoShiftStatus.UNAVAILABLE_NEAR_ZERO_FULL_EFFECT:
+                raise ValueError("near-zero full effect requires unavailable relative LODO shift")
+        elif self.relative_maximum_lodo_shift is None or self.relative_maximum_lodo_shift.value != expected_relative:
+            raise ValueError("relative LODO shift must match the full effect and maximum shift")
+        expected_triggers: list[LodoHighInfluenceTrigger] = []
+        if self.nonpositive_omissions:
+            expected_triggers.append(LodoHighInfluenceTrigger.NONPOSITIVE_OMISSION)
+        if expected_relative is not None and expected_relative >= LODO_HIGH_INFLUENCE_RELATIVE_SHIFT.value:
+            expected_triggers.append(LodoHighInfluenceTrigger.RELATIVE_SHIFT)
+        if self.high_influence_triggers != tuple(expected_triggers):
+            raise ValueError("LODO high-influence triggers must match the retained sensitivity evidence")
+        if self.high_influence != bool(expected_triggers):
+            raise ValueError("LODO high-influence flag must match its triggers")
         return self
 
 
@@ -171,11 +205,14 @@ def summarize_leave_one_device_out_effects(
     else:
         relative_status = RelativeLodoShiftStatus.AVAILABLE
         relative_shift = MetricValue(maximum_shift.value / abs(full_mean_delta.value))
-    high_influence = bool(nonpositive) or (
-        relative_shift is not None and relative_shift.value >= LODO_HIGH_INFLUENCE_RELATIVE_SHIFT.value
-    )
+    triggers: list[LodoHighInfluenceTrigger] = []
+    if nonpositive:
+        triggers.append(LodoHighInfluenceTrigger.NONPOSITIVE_OMISSION)
+    if relative_shift is not None and relative_shift.value >= LODO_HIGH_INFLUENCE_RELATIVE_SHIFT.value:
+        triggers.append(LodoHighInfluenceTrigger.RELATIVE_SHIFT)
     return LeaveOneDeviceOutDiagnostics(
         device_summaries=tuple(summaries),
+        full_mean_delta=full_mean_delta,
         minimum_lodo_mean=MetricValue(min(means)),
         maximum_lodo_mean=MetricValue(max(means)),
         maximum_lodo_shift=maximum_shift,
@@ -185,7 +222,8 @@ def summarize_leave_one_device_out_effects(
         nonpositive_omissions=nonpositive,
         relative_maximum_lodo_shift=relative_shift,
         relative_shift_status=relative_status,
-        high_influence=high_influence,
+        high_influence_triggers=tuple(triggers),
+        high_influence=bool(triggers),
     )
 
 

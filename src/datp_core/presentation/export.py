@@ -920,9 +920,11 @@ def _render_leave_one_device_out(diagnostics: LeaveOneDeviceOutDiagnostics) -> l
         else _format_publication_metric(diagnostics.relative_maximum_lodo_shift.value)
     )
     nonpositive = ", ".join(device.client_id.value for device in diagnostics.nonpositive_omissions) or "none"
+    triggers = ", ".join(trigger.value for trigger in diagnostics.high_influence_triggers) or "none"
     lines = [
         "## Leave-One-Device-Out Influence",
         "",
+        f"Full paired mean delta: {_format_publication_metric(diagnostics.full_mean_delta.value)}",
         f"Minimum LODO mean: {_format_publication_metric(diagnostics.minimum_lodo_mean.value)}",
         f"Maximum LODO mean: {_format_publication_metric(diagnostics.maximum_lodo_mean.value)}",
         f"Maximum LODO shift: {_format_publication_metric(diagnostics.maximum_lodo_shift.value)}",
@@ -930,6 +932,7 @@ def _render_leave_one_device_out(diagnostics: LeaveOneDeviceOutDiagnostics) -> l
         "Positive-direction retention: " + _format_publication_metric(diagnostics.positive_direction_retention.value),
         f"Nonpositive omissions: {nonpositive}",
         f"LODO_HIGH_INFLUENCE: {'yes' if diagnostics.high_influence else 'no'}",
+        f"LODO high-influence triggers: {triggers}",
         "",
         "| Omitted device | Mean delta | Seed deltas |",
         "|---|---:|---|",
@@ -1914,6 +1917,8 @@ def _leave_one_device_out_table(
                     + _format_publication_metric(diagnostics.positive_direction_retention.value)
                     + "; high influence="
                     + ("yes" if diagnostics.high_influence else "no")
+                    + "; triggers="
+                    + (", ".join(trigger.value for trigger in diagnostics.high_influence_triggers) or "none")
                 ),
             ),
         ),
