@@ -6220,13 +6220,13 @@ The implementation must distinguish at least these roadmap-defined scientific st
 
 | ID | Source line | Audit requirement | Implementation disposition | Audit outcome | Evidence / remediation |
 |---|---:|---|---|---|---|
-| `GATE-P-001` | 6220 | Temporal evidence uses valid timestamps and genuine chronology only. | `NOT_AUDITED` | — | — |
-| `GATE-P-002` | 6221 | Static, frozen-future, and one-shot-recalibrated states are computed exactly as Part II §12.1 specifies. | `NOT_AUDITED` | — | — |
-| `GATE-P-003` | 6222 | Future evaluation never influences historical thresholding or future recalibration. | `NOT_AUDITED` | — | — |
-| `GATE-P-004` | 6223 | `drift_excess`, `recovered_amount`, and `recovery_ratio` use Part III §14 definitions. | `NOT_AUDITED` | — | — |
-| `GATE-P-005` | 6224 | `recovery_ratio` is undefined below the locked positive-materiality threshold. | `NOT_AUDITED` | — | — |
-| `GATE-P-006` | 6225 | Temporal association diagnostics use the declared 64-bin common quantile grid and n≥5 requirement. | `NOT_AUDITED` | — | — |
-| `GATE-P-007` | 6226 | Results are framed as one-shot threshold aging/recalibration evidence, not continuous drift handling. | `NOT_AUDITED` | — | — |
+| `GATE-P-001` | 6220 | Temporal evidence uses valid timestamps and genuine chronology only. | `IMPLEMENTED` | `PASS` | Temporal population construction requires verified PCAP-backed chronology and rejects unmatched or otherwise invalid chronology evidence. |
+| `GATE-P-002` | 6221 | Static, frozen-future, and one-shot-recalibrated states are computed exactly as Part II §12.1 specifies. | `IMPLEMENTED` | `PASS` | Typed temporal states bind the 55/15/10/20 historical/future construction and require frozen/recalibrated states to share the future score identity. |
+| `GATE-P-003` | 6222 | Future evaluation never influences historical thresholding or future recalibration. | `IMPLEMENTED` | `PASS` | Historical calibration and future recalibration are separate typed score roles; frozen and recalibrated deployments share a fixed future evaluation artifact. |
+| `GATE-P-004` | 6223 | `drift_excess`, `recovered_amount`, and `recovery_ratio` use Part III §14 definitions. | `IMPLEMENTED` | `PASS` | Temporal recovery derives the three values directly from static, frozen-future, and recalibrated-future CV(FPR) values and publication renders each. |
+| `GATE-P-005` | 6224 | `recovery_ratio` is undefined below the locked positive-materiality threshold. | `IMPLEMENTED` | `PASS` | The temporal decision protocol locks 0.05 drift excess; a non-positive-materiality denominator yields explicit undefined recovery. |
+| `GATE-P-006` | 6225 | Temporal association diagnostics use the declared 64-bin common quantile grid and n≥5 requirement. | `IMPLEMENTED` | `PASS` | Temporal DriftJS now uses unsmoothed pooled type-7 64-bin quantile edges with collapsed-grid rejection; the within-seed Spearman diagnostic requires five valid pairs and retains typed unavailable states. |
+| `GATE-P-007` | 6226 | Results are framed as one-shot threshold aging/recalibration evidence, not continuous drift handling. | `IMPLEMENTED` | `PASS` | Temporal states, figures, and claim vocabulary explicitly describe one-shot recalibration and exclude continuous/streaming adaptation language. |
 
 ### Gate Q
 
@@ -7466,13 +7466,13 @@ README_REPRODUCIBILITY.md
 | `BOUNDARY-010` | IV | 6214 | 17. Gate O — External and boundary evidence integrity | External validation is never promoted into a second confirmatory endpoint. | `PASS` | The graph locks one natural-device confirmatory endpoint and rejects other confirmatory populations. |
 | `DATASET-103` | IV | 6215 | 17. Gate O — External and boundary evidence integrity | Controlled Dirichlet partitions remain sensitivity evidence and are not called natural-device evidence. | `PASS` | Synthetic identity and allowable evidence roles prevent confirmatory treatment. |
 | `DATASET-104` | IV | 6216 | 17. Gate O — External and boundary evidence integrity | No extra dataset is added without an explicit roadmap amendment. | `PASS` | The DatasetId registry is closed and exhaustively tested. |
-| `TEMPORAL-002` | IV | 6220 | 18. Gate P — Temporal integrity | Temporal evidence uses valid timestamps and genuine chronology only. | `NOT_AUDITED` | — |
-| `TEMPORAL-003` | IV | 6221 | 18. Gate P — Temporal integrity | Static, frozen-future, and one-shot-recalibrated states are computed exactly as Part II §12.1 specifies. | `NOT_AUDITED` | — |
-| `CALIBRATION-246` | IV | 6222 | 18. Gate P — Temporal integrity | Future evaluation never influences historical thresholding or future recalibration. | `NOT_AUDITED` | — |
-| `TEMPORAL-004` | IV | 6223 | 18. Gate P — Temporal integrity | `drift_excess`, `recovered_amount`, and `recovery_ratio` use Part III §14 definitions. | `NOT_AUDITED` | — |
-| `THRESHOLD-336` | IV | 6224 | 18. Gate P — Temporal integrity | `recovery_ratio` is undefined below the locked positive-materiality threshold. | `NOT_AUDITED` | — |
-| `THRESHOLD-337` | IV | 6225 | 18. Gate P — Temporal integrity | Temporal association diagnostics use the declared 64-bin common quantile grid and n≥5 requirement. | `NOT_AUDITED` | — |
-| `CALIBRATION-247` | IV | 6226 | 18. Gate P — Temporal integrity | Results are framed as one-shot threshold aging/recalibration evidence, not continuous drift handling. | `NOT_AUDITED` | — |
+| `TEMPORAL-002` | IV | 6220 | 18. Gate P — Temporal integrity | Temporal evidence uses valid timestamps and genuine chronology only. | `PASS` | Temporal construction validates genuine, PCAP-backed chronology. |
+| `TEMPORAL-003` | IV | 6221 | 18. Gate P — Temporal integrity | Static, frozen-future, and one-shot-recalibrated states are computed exactly as Part II §12.1 specifies. | `PASS` | Typed states and shared future identity enforce the locked temporal construction. |
+| `CALIBRATION-246` | IV | 6222 | 18. Gate P — Temporal integrity | Future evaluation never influences historical thresholding or future recalibration. | `PASS` | Separate calibration roles and fixed shared future evaluation evidence prevent leakage. |
+| `TEMPORAL-004` | IV | 6223 | 18. Gate P — Temporal integrity | `drift_excess`, `recovered_amount`, and `recovery_ratio` use Part III §14 definitions. | `PASS` | The temporal recovery owner implements the literal CV-based formulas. |
+| `THRESHOLD-336` | IV | 6224 | 18. Gate P — Temporal integrity | `recovery_ratio` is undefined below the locked positive-materiality threshold. | `PASS` | The locked 0.05 criterion yields explicit undefined recovery. |
+| `THRESHOLD-337` | IV | 6225 | 18. Gate P — Temporal integrity | Temporal association diagnostics use the declared 64-bin common quantile grid and n≥5 requirement. | `PASS` | DriftJS uses unsmoothed pooled type-7 quantile bins; Spearman requires n≥5. |
+| `CALIBRATION-247` | IV | 6226 | 18. Gate P — Temporal integrity | Results are framed as one-shot threshold aging/recalibration evidence, not continuous drift handling. | `PASS` | Typed state and claim vocabulary remain one-shot-only. |
 | `REPORT-038` | IV | 6230 | 19. Gate Q — Artifact, provenance, and deterministic reconstruction integrity | Every table/figure/result row can be traced back to its exact execution coordinate. | `NOT_AUDITED` | — |
 | `DATASET-105` | IV | 6231 | 19. Gate Q — Artifact, provenance, and deterministic reconstruction integrity | Artifact provenance records code version, dataset identity, population identity, seed, protocol identities, and dependency/library versions required by the method. | `NOT_AUDITED` | — |
 | `PROVENANCE-013` | IV | 6232 | 19. Gate Q — Artifact, provenance, and deterministic reconstruction integrity | Ordered record identities are recoverable for score and label artifacts. | `NOT_AUDITED` | — |

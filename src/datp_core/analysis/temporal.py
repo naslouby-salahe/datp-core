@@ -157,7 +157,6 @@ class TemporalClientTrajectory(StrictModel):
 
 
 TEMPORAL_DRIFT_JSD_BIN_COUNT = 64
-TEMPORAL_DRIFT_JSD_SMOOTHING = 1e-12
 
 
 def temporal_drift_js(
@@ -168,21 +167,31 @@ def temporal_drift_js(
         raise ScientificContractError(ErrorMessage("temporal drift JSD requires score records for one client"))
     historical = _score_values(historical_calibration)
     future = _score_values(future_recalibration)
-    lower = min(float(historical.min()), float(future.min()))
-    upper = max(float(historical.max()), float(future.max()))
-    if upper <= lower:
-        upper = lower + TEMPORAL_DRIFT_JSD_SMOOTHING
-    historical_histogram, _ = np.histogram(
-        historical, bins=TEMPORAL_DRIFT_JSD_BIN_COUNT, range=(lower, upper)
+    edges = np.unique(
+        np.quantile(
+            np.concatenate((historical, future)),
+            np.linspace(0.0, 1.0, TEMPORAL_DRIFT_JSD_BIN_COUNT + 1, dtype=np.float64),
+            method="linear",
+        )
     )
-    future_histogram, _ = np.histogram(future, bins=TEMPORAL_DRIFT_JSD_BIN_COUNT, range=(lower, upper))
-    left = historical_histogram.astype(np.float64) + TEMPORAL_DRIFT_JSD_SMOOTHING
-    right = future_histogram.astype(np.float64) + TEMPORAL_DRIFT_JSD_SMOOTHING
+    if len(edges) < 3:
+        raise ScientificContractError(
+            ErrorMessage("temporal drift JSD requires at least two nonzero-width pooled quantile bins")
+        )
+    historical_histogram, _ = np.histogram(historical, bins=edges)
+    future_histogram, _ = np.histogram(future, bins=edges)
+    left = historical_histogram.astype(np.float64)
+    right = future_histogram.astype(np.float64)
     left /= left.sum()
     right /= right.sum()
     midpoint = (left + right) / 2.0
-    divergence = 0.5 * (np.sum(left * np.log2(left / midpoint)) + np.sum(right * np.log2(right / midpoint)))
+    divergence = 0.5 * (_kl_base2(left, midpoint) + _kl_base2(right, midpoint))
     return MetricValue(float(divergence))
+
+
+def _kl_base2(probabilities: np.ndarray, reference: np.ndarray) -> float:
+    positive = probabilities > 0.0
+    return float(np.sum(probabilities[positive] * np.log2(probabilities[positive] / reference[positive])))
 
 
 def temporal_drift_fpr_spearman(
