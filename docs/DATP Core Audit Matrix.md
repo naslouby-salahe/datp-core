@@ -6083,11 +6083,11 @@ The implementation must distinguish at least these roadmap-defined scientific st
 
 | ID | Source line | Audit requirement | Implementation disposition | Audit outcome | Evidence / remediation |
 |---|---:|---|---|---|---|
-| `GATE-H-001` | 6089 | Every DATP-compatible threshold method uses benign calibration data only. | `NOT_AUDITED` | — | — |
-| `GATE-H-002` | 6090 | Attack-labelled rows never affect threshold values, q selection, eligibility, cluster count, comparator tuning, shrinkage, or conformal significance level. | `NOT_AUDITED` | — | — |
-| `GATE-H-003` | 6091 | Calibration and evaluation rows are disjoint. | `NOT_AUDITED` | — | — |
-| `GATE-H-004` | 6092 | Type-7 empirical quantiles use float64 and are not rounded before threshold application. | `NOT_AUDITED` | — | — |
-| `GATE-H-005` | 6093 | LOCAL_CONFORMAL_THRESHOLD is the explicit conformal-order-statistic exception and is not routed through type-7 interpolation. | `NOT_AUDITED` | — | — |
+| `GATE-H-001` | 6089 | Every DATP-compatible threshold method uses benign calibration data only. | `IMPLEMENTED` | `PASS` | Calibration loading rejects non-benign labels before all threshold construction inputs are created. |
+| `GATE-H-002` | 6090 | Attack-labelled rows never affect threshold values, q selection, eligibility, cluster count, comparator tuning, shrinkage, or conformal significance level. | `IMPLEMENTED` | `PASS` | The benign calibration loader fails on any attack label, so downstream policy inputs cannot contain attack-labelled calibration evidence. |
+| `GATE-H-003` | 6091 | Calibration and evaluation rows are disjoint. | `IMPLEMENTED` | `PASS` | Calibration service validates calibration/evaluation stable-row disjointness before eligibility/construction. |
+| `GATE-H-004` | 6092 | Type-7 empirical quantiles use float64 and are not rounded before threshold application. | `IMPLEMENTED` | `PASS` | Quantile construction materializes scores as `float64` and calls locked NumPy linear (type-7) interpolation directly into the threshold value. |
+| `GATE-H-005` | 6093 | LOCAL_CONFORMAL_THRESHOLD is the explicit conformal-order-statistic exception and is not routed through type-7 interpolation. | `IMPLEMENTED` | `PASS` | Finite-sample conformal construction has a separately tested rank-index/order-statistic implementation. |
 | `GATE-H-006` | 6094 | Calibration-size subsampling follows Part II §2.3A exactly: immutable-row ordering, SHA-256 seed derivation, PCG64, without replacement, prefix nesting. | `NOT_AUDITED` | — | — |
 | `GATE-H-007` | 6095 | The 10 nested calibration replicates are summarized within training seed and never treated as independent seeds. | `NOT_AUDITED` | — | — |
 | `GATE-H-008` | 6096 | Shared-calibration contributor-availability sensitivity enumerates every permitted omission subset exhaustively, changes only shared-summary contribution, and evaluates every resulting shared threshold on the unchanged full eligible client population. | `NOT_AUDITED` | — | — |
@@ -7369,11 +7369,11 @@ README_REPRODUCIBILITY.md
 | `SCORE-028` | IV | 6083 | 9. Gate G — Fixed-score and scoring integrity | A higher reconstruction error always denotes greater anomaly evidence. | `PASS` | Strict score-greater-than-threshold prediction semantics. |
 | `SCORE-029` | IV | 6084 | 9. Gate G — Fixed-score and scoring integrity | AUROC is computed from the canonical continuous score/label artifact, not from thresholded predictions. | `PASS` | AUROC consumes continuous score values/labels directly. |
 | `SCORE-030` | IV | 6085 | 9. Gate G — Fixed-score and scoring integrity | Any policy-specific AUROC difference within a fixed-score ladder is treated as an identity/provenance failure. | `PASS` | Quality-control invariance rejects policy differences. |
-| `CALIBRATION-223` | IV | 6089 | 10. Gate H — Calibration integrity | Every DATP-compatible threshold method uses benign calibration data only. | `NOT_AUDITED` | — |
-| `CALIBRATION-224` | IV | 6090 | 10. Gate H — Calibration integrity | Attack-labelled rows never affect threshold values, q selection, eligibility, cluster count, comparator tuning, shrinkage, or conformal significance level. | `NOT_AUDITED` | — |
-| `CALIBRATION-225` | IV | 6091 | 10. Gate H — Calibration integrity | Calibration and evaluation rows are disjoint. | `NOT_AUDITED` | — |
-| `CALIBRATION-226` | IV | 6092 | 10. Gate H — Calibration integrity | Type-7 empirical quantiles use float64 and are not rounded before threshold application. | `NOT_AUDITED` | — |
-| `CALIBRATION-227` | IV | 6093 | 10. Gate H — Calibration integrity | LOCAL_CONFORMAL_THRESHOLD is the explicit conformal-order-statistic exception and is not routed through type-7 interpolation. | `NOT_AUDITED` | — |
+| `CALIBRATION-223` | IV | 6089 | 10. Gate H — Calibration integrity | Every DATP-compatible threshold method uses benign calibration data only. | `PASS` | Benign-only calibration loader is the threshold construction entrypoint. |
+| `CALIBRATION-224` | IV | 6090 | 10. Gate H — Calibration integrity | Attack-labelled rows never affect threshold values, q selection, eligibility, cluster count, comparator tuning, shrinkage, or conformal significance level. | `PASS` | Attack labels fail before downstream policy input construction. |
+| `CALIBRATION-225` | IV | 6091 | 10. Gate H — Calibration integrity | Calibration and evaluation rows are disjoint. | `PASS` | Stable-row overlap validation rejects the coordinate. |
+| `CALIBRATION-226` | IV | 6092 | 10. Gate H — Calibration integrity | Type-7 empirical quantiles use float64 and are not rounded before threshold application. | `PASS` | Float64 linear/type-7 quantile is applied directly. |
+| `CALIBRATION-227` | IV | 6093 | 10. Gate H — Calibration integrity | LOCAL_CONFORMAL_THRESHOLD is the explicit conformal-order-statistic exception and is not routed through type-7 interpolation. | `PASS` | Separate finite-sample conformal rank construction. |
 | `CALIBRATION-228` | IV | 6094 | 10. Gate H — Calibration integrity | Calibration-size subsampling follows Part II §2.3A exactly: immutable-row ordering, SHA-256 seed derivation, PCG64, without replacement, prefix nesting. | `NOT_AUDITED` | — |
 | `CALIBRATION-229` | IV | 6095 | 10. Gate H — Calibration integrity | The 10 nested calibration replicates are summarized within training seed and never treated as independent seeds. | `NOT_AUDITED` | — |
 | `CALIBRATION-230` | IV | 6096 | 10. Gate H — Calibration integrity | Shared-calibration contributor-availability sensitivity enumerates every permitted omission subset exhaustively, changes only shared-summary contribution, and evaluates every resulting shared threshold on the unchanged full eligible client population. | `NOT_AUDITED` | — |
