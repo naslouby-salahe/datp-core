@@ -120,6 +120,12 @@ from datp_core.analysis.mechanisms.support_burden import (
     summarize_calibration_support_burden,
     summarize_calibration_support_burden_devices,
 )
+from datp_core.analysis.mechanisms.support_interaction import (
+    SupportInteractionAnalysis,
+    SupportInteractionCoefficient,
+    SupportInteractionObservation,
+    summarize_support_interaction,
+)
 from datp_core.analysis.mechanisms.support_strata import (
     CalibrationSupportStratum,
     CampaignFixedSupportStrata,
@@ -224,6 +230,9 @@ __all__ = (
     "PolicySurfaceCell",
     "PolicySurfacePolicyMetric",
     "PolicySurfaceState",
+    "SupportInteractionAnalysis",
+    "SupportInteractionCoefficient",
+    "SupportInteractionObservation",
     "RegressionSlopeConfidenceInterval",
     "RecoveryAssessment",
     "GroupDispersionObservation",
@@ -264,6 +273,7 @@ __all__ = (
     "local_threshold_dispersion",
     "model_alignment",
     "policy_surface_cell",
+    "summarize_support_interaction",
     "summarize_alignment_activation",
     "summarize_client_impact",
     "summarize_family_recall_campaign",
