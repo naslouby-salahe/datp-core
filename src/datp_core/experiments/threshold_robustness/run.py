@@ -140,9 +140,25 @@ class EstimatorScopeSummary(StrictModel):
     summary: MethodCvSummary
 
 
+class EstimatorScopeContrast(StrictModel):
+    seed: Seed
+    q95_scope_gain: MetricDelta
+    moment_scope_gain: MetricDelta
+    estimator_sensitivity: MetricDelta
+
+
+class EstimatorScopeSignCounts(StrictModel):
+    estimator: ThresholdEstimator
+    positive: NonNegativeIntegerValue
+    zero: NonNegativeIntegerValue
+    negative: NonNegativeIntegerValue
+
+
 class EstimatorScopeSummaryReport(StrictModel):
     experiment: ExperimentId
     rows: tuple[EstimatorScopeSummary, ...]
+    contrasts: tuple[EstimatorScopeContrast, ...]
+    sign_counts: tuple[EstimatorScopeSignCounts, ...]
 
 
 class CalibrationSizeAblationRow(StrictModel):
@@ -510,6 +526,14 @@ def report_shared_construction_sensitivity(
         report,
         _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
     )
+    return finalize_analysis_report(
+        AnalysisReportFinalizationInput(
+            directory=directory,
+            marker=_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
+            missing_count=SeedObservationCount(missing),
+            marker_text=AnalysisMarkerText(ThresholdRobustnessAnalysisMarker.THRESHOLD_ESTIMATOR_SCOPE_SENSITIVITY),
+        )
+    )
     write_text_atomically(
         _shared_construction_panel_path(PopulationId.NBAIOT_NATURAL_DEVICES),
         FileContentText(_render_shared_construction_panel(report)),
@@ -651,6 +675,7 @@ def report_threshold_estimator_scope_sensitivity(
     directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
     directory.mkdir(parents=True, exist_ok=True)
     rows: list[EstimatorScopeSummary] = []
+    contrasts: list[EstimatorScopeContrast] = []
     missing = 0
     for estimator in ThresholdEstimator:
         for method in declaration.federated_thresholds:
@@ -676,8 +701,56 @@ def report_threshold_estimator_scope_sensitivity(
                         summary=_method_summary(method, tuple(documents)),
                     )
                 )
+    for seed in CONFIRMATORY_SEED_COHORT.values:
+        seed_documents: dict[tuple[ThresholdEstimator, FederatedThresholdMethod], FederatedEvaluationDocument] = {}
+        for estimator in ThresholdEstimator:
+            for method in declaration.federated_thresholds:
+                try:
+                    seed_documents[(estimator, method)] = _evaluation_document_for_seed(
+                        seed, method, experiment_id, OUTPUTS_ROOT, estimator=estimator
+                    )
+                except ScientificContractError:
+                    continue
+        if len(seed_documents) != len(ThresholdEstimator) * len(declaration.federated_thresholds):
+            continue
+        contrasts.append(
+            estimator_scope_contrast(
+                seed=seed,
+                q95_shared=population_metric(
+                    seed_documents[(ThresholdEstimator.TYPE7_Q95, FederatedThresholdMethod.SHARED_THRESHOLD)],
+                    MetricId.FPR_COEFFICIENT_OF_VARIATION,
+                ),
+                q95_local=population_metric(
+                    seed_documents[(ThresholdEstimator.TYPE7_Q95, FederatedThresholdMethod.LOCAL_THRESHOLD)],
+                    MetricId.FPR_COEFFICIENT_OF_VARIATION,
+                ),
+                moment_shared=population_metric(
+                    seed_documents[
+                        (
+                            ThresholdEstimator.MEAN_PLUS_STANDARD_DEVIATION_ESTIMATOR,
+                            FederatedThresholdMethod.SHARED_THRESHOLD,
+                        )
+                    ],
+                    MetricId.FPR_COEFFICIENT_OF_VARIATION,
+                ),
+                moment_local=population_metric(
+                    seed_documents[
+                        (
+                            ThresholdEstimator.MEAN_PLUS_STANDARD_DEVIATION_ESTIMATOR,
+                            FederatedThresholdMethod.LOCAL_THRESHOLD,
+                        )
+                    ],
+                    MetricId.FPR_COEFFICIENT_OF_VARIATION,
+                ),
+            )
+        )
     serialize_json_model(
-        EstimatorScopeSummaryReport(experiment=experiment_id, rows=tuple(rows)),
+        EstimatorScopeSummaryReport(
+            experiment=experiment_id,
+            rows=tuple(rows),
+            contrasts=tuple(contrasts),
+            sign_counts=_estimator_scope_sign_counts(tuple(contrasts)),
+        ),
         _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
     )
     return finalize_analysis_report(
@@ -686,6 +759,44 @@ def report_threshold_estimator_scope_sensitivity(
             marker=_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
             missing_count=SeedObservationCount(missing),
             marker_text=AnalysisMarkerText(ThresholdRobustnessAnalysisMarker.THRESHOLD_ESTIMATOR_SCOPE_SENSITIVITY),
+        )
+    )
+
+
+def estimator_scope_contrast(
+    *,
+    seed: Seed,
+    q95_shared: MetricValue,
+    q95_local: MetricValue,
+    moment_shared: MetricValue,
+    moment_local: MetricValue,
+) -> EstimatorScopeContrast:
+    q95_gain = MetricDelta(q95_shared.value - q95_local.value)
+    moment_gain = MetricDelta(moment_shared.value - moment_local.value)
+    return EstimatorScopeContrast(
+        seed=seed,
+        q95_scope_gain=q95_gain,
+        moment_scope_gain=moment_gain,
+        estimator_sensitivity=MetricDelta(moment_gain.value - q95_gain.value),
+    )
+
+
+def _estimator_scope_sign_counts(
+    contrasts: tuple[EstimatorScopeContrast, ...],
+) -> tuple[EstimatorScopeSignCounts, ...]:
+    return tuple(
+        EstimatorScopeSignCounts(
+            estimator=estimator,
+            positive=NonNegativeIntegerValue(sum(value > 0.0 for value in gains)),
+            zero=NonNegativeIntegerValue(sum(value == 0.0 for value in gains)),
+            negative=NonNegativeIntegerValue(sum(value < 0.0 for value in gains)),
+        )
+        for estimator, gains in (
+            (ThresholdEstimator.TYPE7_Q95, tuple(item.q95_scope_gain.value for item in contrasts)),
+            (
+                ThresholdEstimator.MEAN_PLUS_STANDARD_DEVIATION_ESTIMATOR,
+                tuple(item.moment_scope_gain.value for item in contrasts),
+            ),
         )
     )
 
@@ -924,7 +1035,9 @@ def report_shared_calibration_contributor_availability(
             directory=directory,
             marker=_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
             missing_count=SeedObservationCount(missing),
-            marker_text=AnalysisMarkerText(ThresholdRobustnessAnalysisMarker.SHARED_CALIBRATION_CONTRIBUTOR_AVAILABILITY),
+            marker_text=AnalysisMarkerText(
+                ThresholdRobustnessAnalysisMarker.SHARED_CALIBRATION_CONTRIBUTOR_AVAILABILITY
+            ),
         )
     )
 
@@ -985,9 +1098,7 @@ def report_calibration_size_ablation(
             local_reference = _evaluation_document_for_seed(
                 seed, FederatedThresholdMethod.LOCAL_THRESHOLD, experiment_id, OUTPUTS_ROOT
             )
-            threshold_stability_rows.extend(
-                _threshold_stability_rows_for_seed(seed, method, cells, local_reference)
-            )
+            threshold_stability_rows.extend(_threshold_stability_rows_for_seed(seed, method, cells, local_reference))
             threshold_order_rows.extend(_threshold_order_rows_for_seed(seed, method, cells, local_reference))
     serialize_json_model(
         CalibrationSizeAblationReport(
