@@ -6454,8 +6454,8 @@ README_REPRODUCIBILITY.md
 | `METRIC-010` | I | 402 | 3.6 Model-quality controls | worst-client balanced accuracy. | `PASS` | Worst-client balanced accuracy is retained in policy surfaces. |
 | `SCORE-004` | I | 408 | 3.6 Model-quality controls | unchanged AUROC does not invalidate a threshold-scope effect; | `PASS` | AUROC invariance is a score-integrity control, not an endpoint override. |
 | `SCORE-005` | I | 409 | 3.6 Model-quality controls | improved AUROC does not establish a threshold-scope effect; | `PASS` | Threshold-scope claims remain bound to FPR-CV, not AUROC. |
-| `THRESHOLD-007` | I | 410 | 3.6 Model-quality controls | lower P10 Macro-F1 under LOCAL_THRESHOLD is an important negative trade-off and must remain visible; | `NOT_AUDITED` | — |
-| `GLOBAL-023` | I | 411 | 3.6 Model-quality controls | global average performance cannot hide severe client-level false-alarm disparity. | `NOT_AUDITED` | — |
+| `THRESHOLD-007` | I | 410 | 3.6 Model-quality controls | lower P10 Macro-F1 under LOCAL_THRESHOLD is an important negative trade-off and must remain visible; | `PASS` | Equity–utility outputs retain P10 Macro-F1 beside FPR equity. |
+| `GLOBAL-023` | I | 411 | 3.6 Model-quality controls | global average performance cannot hide severe client-level false-alarm disparity. | `PASS` | Per-client FPR, worst-client, and dispersion outputs accompany population means. |
 | `TRAIN-006` | I | 423 | 4.1 Centralized reference: CENTRALIZED_REFERENCE | a centralized autoencoder trained on pooled benign training data; | `NOT_AUDITED` | — |
 | `CALIBRATION-029` | I | 424 | 4.1 Centralized reference: CENTRALIZED_REFERENCE | a pooled benign calibration threshold; | `NOT_AUDITED` | — |
 | `TRAIN-007` | I | 425 | 4.1 Centralized reference: CENTRALIZED_REFERENCE | separate centralized training and evaluation. | `NOT_AUDITED` | — |
