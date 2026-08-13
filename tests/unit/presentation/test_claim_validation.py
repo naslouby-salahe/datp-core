@@ -1,3 +1,5 @@
+import pytest
+
 from datp_core.core.identifiers import AvailabilityStatus, ClaimWording, EvidenceRole, MetricId, PopulationId
 from datp_core.experiments.anchor.contracts import VerifiedAnchorGateArtifact
 from datp_core.presentation.export import _descriptive_evidence_claim
@@ -88,6 +90,30 @@ def test_operational_equity_cannot_be_called_demographic_fairness() -> None:
 
     assert decision.status is ClaimStatus.SUPPRESSED
     assert "operational FPR equity" in decision.reason
+
+
+@pytest.mark.parametrize(
+    ("wording", "reason"),
+    [
+        ("This is the first federated anomaly-threshold method", "absolute novelty"),
+        ("The only valid calibration approach", "absolute novelty"),
+        ("State-of-the-art operating-point equity", "absolute novelty"),
+        ("Byzantine-robust calibration", "protocol-compliant"),
+        ("Secure aggregation makes this calibrated threshold trustworthy", "protocol-compliant"),
+    ],
+)
+def test_claims_cannot_overstate_novelty_or_adversarial_calibration_scope(wording: str, reason: str) -> None:
+    decision = validate_claim(
+        claim_request(
+            kind=ClaimKind.SUPPORTIVE,
+            evidence_role=EvidenceRole.SUPPORTIVE,
+            metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
+            wording=wording,
+        )
+    )
+
+    assert decision.status is ClaimStatus.SUPPRESSED
+    assert reason in decision.reason
 
 
 def test_blocked_anchor_blocks_confirmatory_claim() -> None:

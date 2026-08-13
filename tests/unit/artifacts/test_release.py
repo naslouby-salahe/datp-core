@@ -85,6 +85,7 @@ def _release(root: Path) -> Path:
             + f"- Roadmap SHA-256: `{sha256(roadmap_snapshot).hexdigest()}`\n".encode()
             + b"- Code revision: `test-revision`\n"
             + b"- Literature search date: `2026-08-13`\n"
+            + b"- Submission date: `NOT_APPLICABLE`\n"
             + b"- Release state: `PUBLIC`\n\n"
             + b"## Exact roadmap snapshot\n\n"
             + roadmap_snapshot
@@ -302,6 +303,27 @@ def test_release_builder_packages_explicit_retained_evidence_and_validates_it(tm
         "dependency.flwr=",
     ):
         assert key in environment
+
+
+def test_submission_release_rejects_a_literature_search_outside_the_fourteen_day_window(tmp_path: Path) -> None:
+    roadmap = tmp_path / "roadmap.md"
+    source = tmp_path / "source.json"
+    roadmap.write_text("authoritative roadmap\n", encoding="utf-8")
+    source.write_text('{"metric": 0.05}\n', encoding="utf-8")
+
+    with pytest.raises(ArtifactIntegrityError, match="0 through 14 days before submission"):
+        build_release_bundle(
+            ReleaseBuildRequest(
+                root=tmp_path / "release",
+                roadmap=roadmap,
+                code_revision="deadbeef",
+                literature_search_date=date(2026, 7, 29),
+                submission_date=date(2026, 8, 13),
+                state=ReleaseState.PUBLIC,
+                confirmatory_seeds=tuple(range(10)),
+                artifacts=(ReleaseArtifact(source, Path("METRICS/confirmatory.json"), "metric_table"),),
+            )
+        )
 
 
 def test_license_restricted_release_requires_and_records_withheld_artifacts(tmp_path: Path) -> None:

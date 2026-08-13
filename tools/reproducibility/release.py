@@ -178,6 +178,7 @@ class ReleaseBuildRequest:
     confirmatory_seeds: tuple[int, ...]
     artifacts: tuple[ReleaseArtifact, ...]
     withheld_artifacts: tuple[WithheldReleaseArtifact, ...] = ()
+    submission_date: date | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -189,6 +190,8 @@ class ReleaseValidation:
 @dataclass(frozen=True, slots=True)
 class RoadmapLock:
     state: ReleaseState
+    literature_search_date: date
+    submission_date: date | None
 
 
 def release_artifact_from_evaluation(source: Path, relative_path: Path) -> ReleaseArtifact:
@@ -614,12 +617,11 @@ def _read_roadmap_lock(path: Path) -> RoadmapLock:
         lines = tuple(header.decode("utf-8").splitlines())
     except UnicodeDecodeError as error:
         raise ArtifactIntegrityError(ErrorMessage("release roadmap lock header must be UTF-8")) from error
-    if len(lines) != 7 or lines[0] != _ROADMAP_LOCK_TITLE or lines[1] != "" or lines[-1] != "":
+    if len(lines) != 8 or lines[0] != _ROADMAP_LOCK_TITLE or lines[1] != "" or lines[-1] != "":
         raise ArtifactIntegrityError(ErrorMessage("release roadmap lock header does not match the locked schema"))
     digest = _roadmap_lock_value(lines[2], "Roadmap SHA-256")
     revision = _roadmap_lock_value(lines[3], "Code revision")
     search_date = _roadmap_lock_value(lines[4], "Literature search date")
-    state_value = _roadmap_lock_value(lines[5], "Release state")
     if fullmatch(r"[0-9a-f]{64}", digest) is None:
         raise ArtifactIntegrityError(ErrorMessage("release roadmap lock requires a lowercase roadmap SHA-256 digest"))
     if digest != sha256(snapshot).hexdigest():
@@ -627,16 +629,27 @@ def _read_roadmap_lock(path: Path) -> RoadmapLock:
     if not revision:
         raise ArtifactIntegrityError(ErrorMessage("release roadmap lock requires a code revision"))
     try:
-        date.fromisoformat(search_date)
+        parsed_search_date = date.fromisoformat(search_date)
     except ValueError as error:
         raise ArtifactIntegrityError(
             ErrorMessage("release roadmap lock requires an ISO literature search date")
         ) from error
+    submission_date = _submission_date_from_lock(lines[5])
+    if submission_date is not None:
+        elapsed_days = (submission_date - parsed_search_date).days
+        if not 0 <= elapsed_days <= 14:
+            raise ArtifactIntegrityError(
+                ErrorMessage("submission-time literature search must be dated 0 through 14 days before submission")
+            )
     try:
-        state = ReleaseState(state_value)
+        state = ReleaseState(_roadmap_lock_value(lines[6], "Release state"))
     except ValueError as error:
         raise ArtifactIntegrityError(ErrorMessage("release roadmap lock contains an unknown release state")) from error
-    return RoadmapLock(state=state)
+    return RoadmapLock(
+        state=state,
+        literature_search_date=parsed_search_date,
+        submission_date=submission_date,
+    )
 
 
 def _roadmap_lock_value(line: str, label: str) -> str:
@@ -644,6 +657,18 @@ def _roadmap_lock_value(line: str, label: str) -> str:
     if not line.startswith(prefix) or not line.endswith("`"):
         raise ArtifactIntegrityError(ErrorMessage(f"release roadmap lock field is malformed: {label}"))
     return line.removeprefix(prefix).removesuffix("`")
+
+
+def _submission_date_from_lock(line: str) -> date | None:
+    value = _roadmap_lock_value(line, "Submission date")
+    if value == "NOT_APPLICABLE":
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError as error:
+        raise ArtifactIntegrityError(
+            ErrorMessage("release roadmap lock requires an ISO submission date or NOT_APPLICABLE")
+        ) from error
 
 
 def _validate_release_state_and_withheld_records(root: Path, roadmap_lock: RoadmapLock) -> None:
@@ -705,6 +730,12 @@ def build_release_bundle(request: ReleaseBuildRequest) -> ReleaseValidation:
         raise ArtifactIntegrityError(ErrorMessage("release roadmap snapshot is missing"))
     if not request.code_revision:
         raise ArtifactIntegrityError(ErrorMessage("release requires a code revision"))
+    if request.submission_date is not None:
+        elapsed_days = (request.submission_date - request.literature_search_date).days
+        if not 0 <= elapsed_days <= 14:
+            raise ArtifactIntegrityError(
+                ErrorMessage("submission-time literature search must be dated 0 through 14 days before submission")
+            )
     if len(request.confirmatory_seeds) != 10 or len(set(request.confirmatory_seeds)) != 10:
         raise ArtifactIntegrityError(ErrorMessage("release requires the exact ten unique confirmatory seeds"))
     _require_unique_release_artifacts(request.artifacts)
@@ -778,6 +809,7 @@ def _write_release_metadata(request: ReleaseBuildRequest) -> None:
         f"- Roadmap SHA-256: `{roadmap_digest}`\n"
         f"- Code revision: `{request.code_revision}`\n"
         f"- Literature search date: `{request.literature_search_date.isoformat()}`\n"
+        f"- Submission date: `{request.submission_date.isoformat() if request.submission_date else 'NOT_APPLICABLE'}`\n"
         f"- Release state: `{request.state.value}`\n\n"
             + _ROADMAP_SNAPSHOT_HEADING
             + "\n\n"

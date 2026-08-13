@@ -766,7 +766,8 @@ def _report_fine_tuning(experiment_id: ExperimentId) -> ReportResult:
     rows = [
         "# FedAvg local fine-tuning execution evidence",
         "",
-        "This is a bounded model-personalization stress condition, not confirmatory evidence.",
+        "This is a bounded simple model-personalization stress condition, not confirmatory evidence, "
+        "a new personalized-federated-learning contribution, or a replacement for the locked Ditto experiment.",
         "",
         "| Seed | Client | Serialized bytes | Fine-tuning wall time (s) |",
         "|---:|---|---:|---:|",

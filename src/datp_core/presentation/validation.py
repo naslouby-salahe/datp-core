@@ -61,6 +61,14 @@ class ClaimGuardPhrase(StrEnum):
     FLEET_SCALE = "fleet-scale"
     DEMOGRAPHIC_FAIRNESS = "demographic fairness"
     PROTECTED_ATTRIBUTE = "protected attribute"
+    ABSOLUTE_PRIORITY = "first"
+    ABSOLUTE_EXCLUSIVITY = "only"
+    STATE_OF_THE_ART = "state-of-the-art"
+    BYZANTINE_ROBUSTNESS = "byzantine"
+    POISONING_ROBUSTNESS = "poisoning"
+    SECURE_AGGREGATION = "secure aggregation"
+    AUTHENTICATED_MESSAGES = "authenticated-message"
+    ADVERSARIAL_CALIBRATION = "adversarial calibration"
     CONTINUOUS_ADAPTATION = "continuous adaptation"
     ONLINE_ADAPTATION = "online adaptation"
     CONCEPT_DRIFT_SOLUTION = "concept drift solution"
@@ -91,6 +99,22 @@ _EQUITY_GUARD_PHRASES = frozenset(
     {
         ClaimGuardPhrase.DEMOGRAPHIC_FAIRNESS,
         ClaimGuardPhrase.PROTECTED_ATTRIBUTE,
+    }
+)
+_NOVELTY_GUARD_PHRASES = frozenset(
+    {
+        ClaimGuardPhrase.ABSOLUTE_PRIORITY,
+        ClaimGuardPhrase.ABSOLUTE_EXCLUSIVITY,
+        ClaimGuardPhrase.STATE_OF_THE_ART,
+    }
+)
+_ADVERSARIAL_CALIBRATION_GUARD_PHRASES = frozenset(
+    {
+        ClaimGuardPhrase.BYZANTINE_ROBUSTNESS,
+        ClaimGuardPhrase.POISONING_ROBUSTNESS,
+        ClaimGuardPhrase.SECURE_AGGREGATION,
+        ClaimGuardPhrase.AUTHENTICATED_MESSAGES,
+        ClaimGuardPhrase.ADVERSARIAL_CALIBRATION,
     }
 )
 
@@ -155,6 +179,8 @@ def _claim_failures(
     yield _privacy_guard_suppression(normalized_wording)
     yield _deployment_guard_suppression(normalized_wording)
     yield _equity_guard_suppression(normalized_wording)
+    yield _novelty_guard_suppression(normalized_wording)
+    yield _adversarial_calibration_guard_suppression(normalized_wording)
     yield _applicability_boundary_failure(request, normalized_wording)
 
 
@@ -251,6 +277,18 @@ def _deployment_guard_suppression(normalized_wording: NormalizedClaimWording) ->
 def _equity_guard_suppression(normalized_wording: NormalizedClaimWording) -> ClaimDecision | None:
     if any(phrase.value in normalized_wording for phrase in _EQUITY_GUARD_PHRASES):
         return _suppressed(ClaimReason("operational FPR equity is not demographic or protected-attribute fairness"))
+    return None
+
+
+def _novelty_guard_suppression(normalized_wording: NormalizedClaimWording) -> ClaimDecision | None:
+    if any(phrase.value in normalized_wording for phrase in _NOVELTY_GUARD_PHRASES):
+        return _suppressed(ClaimReason("absolute novelty claims require submission-time literature re-verification"))
+    return None
+
+
+def _adversarial_calibration_guard_suppression(normalized_wording: NormalizedClaimWording) -> ClaimDecision | None:
+    if any(phrase.value in normalized_wording for phrase in _ADVERSARIAL_CALIBRATION_GUARD_PHRASES):
+        return _suppressed(ClaimReason("DATP-Core assumes protocol-compliant calibration, not adversarial robustness"))
     return None
 
 
