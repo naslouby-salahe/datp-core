@@ -6427,14 +6427,14 @@ README_REPRODUCIBILITY.md
 | `CALIBRATION-025` | I | 289 | 3.2A Honest-calibration participant and message-integrity assumption | `FEDERATED_KLL_SHARED_THRESHOLD` sketches and declared sketch parameters; | `PASS` | KLL retains serialized client sketches and locked parameters. |
 | `CALIBRATION-026` | I | 290 | 3.2A Honest-calibration participant and message-integrity assumption | conformal score/order-statistic inputs; | `PASS` | Conformal construction retains its score/order-statistic inputs. |
 | `CALIBRATION-027` | I | 291 | 3.2A Honest-calibration participant and message-integrity assumption | any serialized threshold-stage message used for communication accounting. | `PASS` | Communication accounting consumes persisted serialized message evidence. |
-| `TRAIN-004` | I | 339 | 3.3A Federation regime, client persistence, and deployment identity | the benign training partition; | `NOT_AUDITED` | — |
-| `CALIBRATION-028` | I | 340 | 3.3A Federation regime, client persistence, and deployment identity | the benign calibration source pool; | `NOT_AUDITED` | — |
-| `GLOBAL-013` | I | 341 | 3.3A Federation regime, client persistence, and deployment identity | the held-out evaluation partition; | `NOT_AUDITED` | — |
-| `PREPROCESS-027` | I | 342 | 3.3A Federation regime, client persistence, and deployment identity | fitted client-local preprocessing state; | `NOT_AUDITED` | — |
-| `THRESHOLD-006` | I | 343 | 3.3A Federation regime, client persistence, and deployment identity | client-local threshold state; | `NOT_AUDITED` | — |
-| `TRAIN-005` | I | 344 | 3.3A Federation regime, client persistence, and deployment identity | Ditto personalized state; | `NOT_AUDITED` | — |
-| `GLOBAL-014` | I | 345 | 3.3A Federation regime, client persistence, and deployment identity | post-FedAvg locally fine-tuned state; | `NOT_AUDITED` | — |
-| `METRIC-003` | I | 346 | 3.3A Federation regime, client persistence, and deployment identity | all client-disaggregated metrics. | `NOT_AUDITED` | — |
+| `TRAIN-004` | I | 339 | 3.3A Federation regime, client persistence, and deployment identity | the benign training partition; | `PASS` | Client identity binds the training partition in persisted coordinates. |
+| `CALIBRATION-028` | I | 340 | 3.3A Federation regime, client persistence, and deployment identity | the benign calibration source pool; | `PASS` | Client identity binds calibration evidence. |
+| `GLOBAL-013` | I | 341 | 3.3A Federation regime, client persistence, and deployment identity | the held-out evaluation partition; | `PASS` | Client identity binds held-out evaluation evidence. |
+| `PREPROCESS-027` | I | 342 | 3.3A Federation regime, client persistence, and deployment identity | fitted client-local preprocessing state; | `PASS` | Preprocessing state coordinates include client identity. |
+| `THRESHOLD-006` | I | 343 | 3.3A Federation regime, client persistence, and deployment identity | client-local threshold state; | `PASS` | Threshold records are addressed by immutable client identity. |
+| `TRAIN-005` | I | 344 | 3.3A Federation regime, client persistence, and deployment identity | Ditto personalized state; | `PASS` | Ditto personalized states retain their client owner. |
+| `GLOBAL-014` | I | 345 | 3.3A Federation regime, client persistence, and deployment identity | post-FedAvg locally fine-tuned state; | `PASS` | Fine-tuning derives terminal state per immutable client. |
+| `METRIC-003` | I | 346 | 3.3A Federation regime, client persistence, and deployment identity | all client-disaggregated metrics. | `PASS` | Client-disaggregated metric records retain client identity. |
 | `GLOBAL-015` | I | 364 | 3.4 Meaning of “fairness” | demographic fairness; | `NOT_AUDITED` | — |
 | `GLOBAL-016` | I | 365 | 3.4 Meaning of “fairness” | protected-attribute fairness; | `NOT_AUDITED` | — |
 | `GLOBAL-017` | I | 366 | 3.4 Meaning of “fairness” | individual human fairness; | `NOT_AUDITED` | — |
