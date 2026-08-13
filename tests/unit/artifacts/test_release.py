@@ -7,6 +7,7 @@ from typing import cast
 
 import pytest
 from tools.reproducibility import release
+from tools.reproducibility.audit import AUDIT_REPORT_FILENAME, AuditRecord, AuditReport, AuditStatus, write_audit_report
 from tools.reproducibility.release import (
     ReleaseArtifact,
     ReleaseBuildRequest,
@@ -125,6 +126,65 @@ def test_release_validation_rejects_an_invalid_manifest_sidecar(tmp_path: Path) 
 
     with pytest.raises(ArtifactIntegrityError, match="sidecar"):
         validate_release_bundle(root)
+
+
+def test_release_validation_rejects_an_audit_record_with_missing_evidence(tmp_path: Path) -> None:
+    root = _release(tmp_path)
+    report = root / "AUDIT_REPORTS" / AUDIT_REPORT_FILENAME
+    write_audit_report(
+        report,
+        AuditReport(
+            records=(
+                AuditRecord(
+                    requirement_id="PROVENANCE-018",
+                    status=AuditStatus.PASS,
+                    reason="invalid reference",
+                    evidence_paths=(Path("METRICS/missing.csv"),),
+                ),
+            )
+        ),
+    )
+
+    with pytest.raises(ArtifactIntegrityError, match="audit record references a missing release artifact"):
+        validate_release_bundle(root)
+
+
+def test_release_builder_accepts_a_manifested_audit_record(tmp_path: Path) -> None:
+    roadmap = tmp_path / "roadmap.md"
+    metric_source = tmp_path / "metrics.csv"
+    audit_source = tmp_path / AUDIT_REPORT_FILENAME
+    roadmap.write_text("roadmap\n", encoding="utf-8")
+    metric_source.write_text("metric,value\nfpr,0.05\n", encoding="utf-8")
+    write_audit_report(
+        audit_source,
+        AuditReport(
+            records=(
+                AuditRecord(
+                    requirement_id="PROVENANCE-018",
+                    status=AuditStatus.PASS,
+                    reason="roadmap evidence is retained",
+                    evidence_paths=(Path("ROADMAP_LOCK.md"),),
+                ),
+            )
+        ),
+    )
+
+    release = build_release_bundle(
+        ReleaseBuildRequest(
+            root=tmp_path / "release",
+            roadmap=roadmap,
+            code_revision="deadbeef",
+            literature_search_date=date(2026, 8, 13),
+            state=ReleaseState.PUBLIC,
+            confirmatory_seeds=tuple(range(10)),
+            artifacts=(
+                ReleaseArtifact(metric_source, Path("METRICS/metrics.csv"), "metric_table"),
+                ReleaseArtifact(audit_source, Path("AUDIT_REPORTS") / AUDIT_REPORT_FILENAME, "audit_report"),
+            ),
+        )
+    )
+
+    assert (release.root / "AUDIT_REPORTS" / AUDIT_REPORT_FILENAME).is_file()
 
 
 def test_release_builder_packages_explicit_retained_evidence_and_validates_it(tmp_path: Path) -> None:

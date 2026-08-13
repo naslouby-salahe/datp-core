@@ -16,6 +16,8 @@ from shutil import copy2
 from subprocess import CalledProcessError, TimeoutExpired, run
 from sys import argv, version
 
+from tools.reproducibility.audit import AUDIT_REPORT_FILENAME, read_audit_report
+
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
 from datp_core.artifacts.repositories.thresholds import FederatedThresholdAssetName
@@ -528,11 +530,23 @@ def validate_release_bundle(root: Path) -> ReleaseValidation:
 
     _require_payload_layout(root)
     _validate_release_state_and_withheld_records(root)
+    _validate_retained_audit_reports(root)
     manifest_path = root / _MANIFEST_FILENAME
     _validate_manifest_sidecar(manifest_path, root / _SIDECAR_FILENAME)
     entries = _read_manifest(manifest_path)
     _validate_manifest_files(root, entries)
     return ReleaseValidation(root=root, entries=entries)
+
+
+def _validate_retained_audit_reports(root: Path) -> None:
+    for report in sorted((root / "AUDIT_REPORTS").rglob(AUDIT_REPORT_FILENAME)):
+        audit_report = read_audit_report(report)
+        for record in audit_report.records:
+            for evidence_path in record.evidence_paths:
+                if not (root / evidence_path).is_file():
+                    raise ArtifactIntegrityError(
+                        ErrorMessage(f"audit record references a missing release artifact: {evidence_path}")
+                    )
 
 
 def _validate_release_state_and_withheld_records(root: Path) -> None:
