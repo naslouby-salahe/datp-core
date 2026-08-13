@@ -87,12 +87,19 @@ class CalibrationSizeAblationCell:
     population: PopulationMetricResult
     held_out_operating_points: tuple[HeldOutOperatingPointDiagnostic, ...]
     held_out_operating_point_summary: HeldOutOperatingPointSummary | None
+    shrinkage_curve: tuple[ShrinkageLambdaEvaluation, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.clients:
             raise ScientificContractError(ErrorMessage("calibration-size ablation cell requires client metrics"))
         if len({item.client for item in self.clients}) != len(self.clients):
             raise ScientificContractError(ErrorMessage("calibration-size ablation cannot repeat clients"))
+        if self.method is FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE and not self.shrinkage_curve:
+            raise ScientificContractError(
+                ErrorMessage("fixed-shrinkage ablation cells require their complete lambda curve")
+            )
+        if self.method is not FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE and self.shrinkage_curve:
+            raise ScientificContractError(ErrorMessage("only fixed-shrinkage cells may carry a lambda curve"))
 
 
 @dataclass(frozen=True, slots=True)
