@@ -6372,13 +6372,13 @@ README_REPRODUCIBILITY.md
 | `CALIBRATION-003` | I | 123 | 2.2 Fixed elements | client eligibility; | `PASS` | Eligibility is validated before comparator construction. |
 | `DATASET-003` | I | 124 | 2.2 Fixed elements | test population; | `PASS` | Confirmatory population identity is fixed in the execution coordinate. |
 | `METRIC-002` | I | 125 | 2.2 Fixed elements | metric definitions. | `PASS` | Metric identifiers and population aggregation are typed and tested. |
-| `PREPROCESS-004` | I | 135 | 2.2.1 Preprocessing and normalization lock | transformer family: zero-mean unit-variance standardization (`StandardScaler`, `with_mean=True`, `with_std=True`); | `NOT_AUDITED` | — |
-| `PREPROCESS-005` | I | 136 | 2.2.1 Preprocessing and normalization lock | fit scope: **client-local**, fit only on each client’s benign training partition; | `NOT_AUDITED` | — |
-| `PREPROCESS-006` | I | 137 | 2.2.1 Preprocessing and normalization lock | fit partition: train only; calibration, evaluation, and future recalibration rows are transformed only; | `NOT_AUDITED` | — |
-| `PREPROCESS-007` | I | 138 | 2.2.1 Preprocessing and normalization lock | constant-feature rule: zero training scale uses unit scale and yields a zero-centered column (sklearn standard-scaler behaviour); | `NOT_AUDITED` | — |
-| `PREPROCESS-008` | I | 139 | 2.2.1 Preprocessing and normalization lock | out-of-range transformed values after fit: retained unclipped; | `NOT_AUDITED` | — |
-| `PREPROCESS-009` | I | 140 | 2.2.1 Preprocessing and normalization lock | fitted-state persistence: skops with trusted estimator classes only; | `NOT_AUDITED` | — |
-| `PREPROCESS-010` | I | 141 | 2.2.1 Preprocessing and normalization lock | transform serialization equivalence absolute tolerance: `1e-12` (engineering research amendment reusing the fixed-score absolute-tolerance magnitude; skops defines no scientific tolerance). | `NOT_AUDITED` | — |
+| `PREPROCESS-004` | I | 135 | 2.2.1 Preprocessing and normalization lock | transformer family: zero-mean unit-variance standardization (`StandardScaler`, `with_mean=True`, `with_std=True`); | `PASS` | Typed local StandardScaler owner is tested. |
+| `PREPROCESS-005` | I | 136 | 2.2.1 Preprocessing and normalization lock | fit scope: **client-local**, fit only on each client’s benign training partition; | `PASS` | Client-local benign-training fit is enforced. |
+| `PREPROCESS-006` | I | 137 | 2.2.1 Preprocessing and normalization lock | fit partition: train only; calibration, evaluation, and future recalibration rows are transformed only; | `PASS` | Fit and transform roles are separated. |
+| `PREPROCESS-007` | I | 138 | 2.2.1 Preprocessing and normalization lock | constant-feature rule: zero training scale uses unit scale and yields a zero-centered column (sklearn standard-scaler behaviour); | `PASS` | StandardScaler preserves the locked constant-feature behavior. |
+| `PREPROCESS-008` | I | 139 | 2.2.1 Preprocessing and normalization lock | out-of-range transformed values after fit: retained unclipped; | `PASS` | No clipping is applied after transform. |
+| `PREPROCESS-009` | I | 140 | 2.2.1 Preprocessing and normalization lock | fitted-state persistence: skops with trusted estimator classes only; | `PASS` | skops round-trip rejects untrusted types. |
+| `PREPROCESS-010` | I | 141 | 2.2.1 Preprocessing and normalization lock | transform serialization equivalence absolute tolerance: `1e-12` (engineering research amendment reusing the fixed-score absolute-tolerance magnitude; skops defines no scientific tolerance). | `PASS` | State equivalence uses the locked absolute tolerance. |
 | `PREPROCESS-011` | I | 147 | 2.2.1 Preprocessing and normalization lock | transformer family: feature-wise min–max (`MinMaxScaler`); | `NOT_AUDITED` | — |
 | `PREPROCESS-012` | I | 148 | 2.2.1 Preprocessing and normalization lock | fit scope: pooled benign training rows of the federated population; | `NOT_AUDITED` | — |
 | `PREPROCESS-013` | I | 149 | 2.2.1 Preprocessing and normalization lock | same train-only, skops, unclipped, and tolerance rules. | `NOT_AUDITED` | — |
