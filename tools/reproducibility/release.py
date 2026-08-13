@@ -38,6 +38,7 @@ _ROADMAP_LOCK_FILENAME = "ROADMAP_LOCK.md"
 _ROADMAP_LOCK_TITLE = "# DATP-Core roadmap lock"
 _ROADMAP_SNAPSHOT_HEADING = "## Exact roadmap snapshot"
 _WITHHELD_RECORD_FILENAME = "withheld_artifacts.csv"
+_SEED_REGISTRY_FILENAME = "SEEDS.csv"
 _PUBLICATION_MANIFEST_FILENAME = "publication_source_manifest.json"
 _CANONICAL_PROVENANCE_FILENAMES = frozenset({"dataset_manifest.json", "schema.json"})
 _PREPROCESSING_FILENAMES = frozenset({"preprocessing_manifest.json", "state.skops", "validation_report.json"})
@@ -71,7 +72,7 @@ _REQUIRED_FILES = (
     _ROADMAP_LOCK_FILENAME,
     _MANIFEST_FILENAME,
     _SIDECAR_FILENAME,
-    "SEEDS.csv",
+    _SEED_REGISTRY_FILENAME,
     "README_REPRODUCIBILITY.md",
 )
 _MANIFEST_COLUMNS = (
@@ -87,6 +88,18 @@ _MANIFEST_COLUMNS = (
     "experiment_id",
 )
 _SCIENTIFIC_METADATA_COLUMNS = _MANIFEST_COLUMNS[3:]
+_SEED_REGISTRY_COLUMNS = ("training_seed", "purpose", "derivation")
+_REQUIRED_SEED_PURPOSES = frozenset(
+    {
+        "confirmatory_bootstrap",
+        "anchor_analysis",
+        "cluster_initialization",
+        "calibration_subsample_replicate",
+        "federated_client_round_stream",
+        "fedavg_local_fine_tuning",
+        "kll_sketch_reconstruction",
+    }
+)
 _DIRECT_DEPENDENCIES = (
     "pydantic",
     "filelock",
@@ -539,6 +552,7 @@ def validate_release_bundle(root: Path) -> ReleaseValidation:
 
     _require_payload_layout(root)
     roadmap_lock = _read_roadmap_lock(root / _ROADMAP_LOCK_FILENAME)
+    _validate_seed_registry(root / _SEED_REGISTRY_FILENAME)
     _validate_release_state_and_withheld_records(root, roadmap_lock)
     _validate_retained_audit_reports(root)
     manifest_path = root / _MANIFEST_FILENAME
@@ -557,6 +571,33 @@ def _validate_retained_audit_reports(root: Path) -> None:
                     raise ArtifactIntegrityError(
                         ErrorMessage(f"audit record references a missing release artifact: {evidence_path}")
                     )
+
+
+def _validate_seed_registry(path: Path) -> None:
+    with path.open(encoding="utf-8", newline="") as stream:
+        reader = csv.DictReader(stream)
+        if tuple(reader.fieldnames or ()) != _SEED_REGISTRY_COLUMNS:
+            raise ArtifactIntegrityError(ErrorMessage("release seed registry columns do not match the locked schema"))
+        rows = tuple(reader)
+    if any(any(row.get(column) in {None, ""} for column in _SEED_REGISTRY_COLUMNS) for row in rows):
+        raise ArtifactIntegrityError(ErrorMessage("release seed registry fields must be explicit"))
+    training_rows = tuple(row for row in rows if row["purpose"] == "confirmatory_training")
+    if len(training_rows) != 10:
+        raise ArtifactIntegrityError(
+            ErrorMessage("release seed registry requires exactly ten confirmatory training seeds")
+        )
+    try:
+        seeds = tuple(int(row["training_seed"]) for row in training_rows)
+    except ValueError as error:
+        raise ArtifactIntegrityError(ErrorMessage("confirmatory training seeds must be integers")) from error
+    if len(seeds) != len(frozenset(seeds)):
+        raise ArtifactIntegrityError(ErrorMessage("confirmatory training seeds must be unique"))
+    purposes = frozenset(row["purpose"] for row in rows)
+    missing_purposes = tuple(sorted(_REQUIRED_SEED_PURPOSES - purposes))
+    if missing_purposes:
+        raise ArtifactIntegrityError(
+            ErrorMessage(f"release seed registry is missing required purposes: {','.join(missing_purposes)}")
+        )
 
 
 def _read_roadmap_lock(path: Path) -> RoadmapLock:
@@ -739,7 +780,7 @@ def _write_release_metadata(request: ReleaseBuildRequest) -> None:
         ).encode()
         + request.roadmap.read_bytes()
     )
-    (request.root / "SEEDS.csv").write_text(
+    (request.root / _SEED_REGISTRY_FILENAME).write_text(
         "training_seed,purpose,derivation\n"
         + "".join(
             f"{seed},confirmatory_training,declared_confirmatory_seed_cohort\n" for seed in request.confirmatory_seeds
@@ -749,7 +790,9 @@ def _write_release_metadata(request: ReleaseBuildRequest) -> None:
         + "42,cluster_initialization,locked_cluster_random_state\n"
         + "NA,calibration_subsample_replicate,sha256-derived training_seed|population|client|replicate\n"
         + "NA,federated_client_round_stream,derive_worker_seed(training_seed;round;client;stream)\n"
-        + "NA,fedavg_local_fine_tuning,derive_worker_seed(training_seed;dataset;population;client;purpose)\n",
+        + "NA,fedavg_local_fine_tuning,derive_worker_seed(training_seed;dataset;population;client;purpose)\n"
+        + "NA,kll_sketch_reconstruction,library RNG is not controllable; "
+        "rebuild every client sketch ten times per training_seed|k\n",
         encoding="utf-8",
     )
     (request.root / "ENVIRONMENT" / "runtime.txt").write_text("\n".join(_environment_lines()) + "\n", encoding="utf-8")

@@ -68,6 +68,17 @@ def _release(root: Path) -> Path:
     for directory in _DIRECTORIES:
         (root / directory).mkdir(parents=True)
     roadmap_snapshot = b"roadmap snapshot\n"
+    seed_registry = (
+        b"training_seed,purpose,derivation\n"
+        + b"".join(f"{seed},confirmatory_training,test\n".encode() for seed in range(10))
+        + b"31,confirmatory_bootstrap,test\n"
+        + b"29,anchor_analysis,test\n"
+        + b"42,cluster_initialization,test\n"
+        + b"NA,calibration_subsample_replicate,test\n"
+        + b"NA,federated_client_round_stream,test\n"
+        + b"NA,fedavg_local_fine_tuning,test\n"
+        + b"NA,kll_sketch_reconstruction,test\n"
+    )
     artifacts = {
         "ROADMAP_LOCK.md": (
             b"# DATP-Core roadmap lock\n\n"
@@ -78,7 +89,7 @@ def _release(root: Path) -> Path:
             + b"## Exact roadmap snapshot\n\n"
             + roadmap_snapshot
         ),
-        "SEEDS.csv": b"seed,purpose\n0,training\n",
+        "SEEDS.csv": seed_registry,
         "README_REPRODUCIBILITY.md": b"reproduce\n",
         "METRICS/metrics.csv": b"metric,value\nfpr,0.05\n",
     }
@@ -144,6 +155,23 @@ def test_release_validation_rejects_a_mismatched_roadmap_snapshot_digest(tmp_pat
     path.write_bytes(path.read_bytes().replace(original_digest, b"0" * 64, 1))
 
     with pytest.raises(ArtifactIntegrityError, match="snapshot does not match"):
+        validate_release_bundle(root)
+
+
+def test_release_validation_requires_every_nested_seed_purpose(tmp_path: Path) -> None:
+    root = _release(tmp_path)
+    registry = root / "SEEDS.csv"
+    registry.write_text(
+        "\n".join(
+            line
+            for line in registry.read_text(encoding="utf-8").splitlines()
+            if "kll_sketch_reconstruction" not in line
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ArtifactIntegrityError, match="missing required purposes"):
         validate_release_bundle(root)
 
 
