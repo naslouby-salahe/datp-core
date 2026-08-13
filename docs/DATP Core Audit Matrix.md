@@ -6475,11 +6475,11 @@ README_REPRODUCIBILITY.md
 | `THRESHOLD-017` | I | 639 | 5.2 Local–global shrinkage | `lambda = 0` gives the shared endpoint; | `PASS` | Fixed-shrinkage tests require the exact shared endpoint. |
 | `THRESHOLD-018` | I | 640 | 5.2 Local–global shrinkage | `lambda = 1` gives the local endpoint; | `PASS` | Fixed-shrinkage tests require the exact local endpoint. |
 | `THRESHOLD-019` | I | 641 | 5.2 Local–global shrinkage | intermediate values partially pool client information. | `PASS` | The complete declared intermediate curve is constructed per client. |
-| `CALIBRATION-034` | I | 687 | 5.4 Split-conformal local threshold: LOCAL_CONFORMAL_THRESHOLD | arbitrary client-conditional coverage; | `NOT_AUDITED` | — |
-| `CALIBRATION-035` | I | 688 | 5.4 Split-conformal local threshold: LOCAL_CONFORMAL_THRESHOLD | validity under unrestricted non-exchangeability; | `NOT_AUDITED` | — |
-| `CALIBRATION-036` | I | 689 | 5.4 Split-conformal local threshold: LOCAL_CONFORMAL_THRESHOLD | robustness to Byzantine calibration (explicitly outside scope in light of Rob-FCP/PRISM-FCP[^robfcp2024][^prismfcp2026]); | `NOT_AUDITED` | — |
-| `CALIBRATION-037` | I | 690 | 5.4 Split-conformal local threshold: LOCAL_CONFORMAL_THRESHOLD | a full conformal DATP contribution; | `NOT_AUDITED` | — |
-| `CALIBRATION-038` | I | 691 | 5.4 Split-conformal local threshold: LOCAL_CONFORMAL_THRESHOLD | a replacement confirmatory endpoint. | `NOT_AUDITED` | — |
+| `CALIBRATION-034` | I | 687 | 5.4 Split-conformal local threshold: LOCAL_CONFORMAL_THRESHOLD | arbitrary client-conditional coverage; | `PASS` | Conformal reporting is bounded to its finite-sample diagnostic construction. |
+| `CALIBRATION-035` | I | 688 | 5.4 Split-conformal local threshold: LOCAL_CONFORMAL_THRESHOLD | validity under unrestricted non-exchangeability; | `PASS` | No unrestricted-shift guarantee is generated. |
+| `CALIBRATION-036` | I | 689 | 5.4 Split-conformal local threshold: LOCAL_CONFORMAL_THRESHOLD | robustness to Byzantine calibration (explicitly outside scope in light of Rob-FCP/PRISM-FCP[^robfcp2024][^prismfcp2026]); | `PASS` | Adversarial-calibration wording is centrally suppressed. |
+| `CALIBRATION-037` | I | 690 | 5.4 Split-conformal local threshold: LOCAL_CONFORMAL_THRESHOLD | a full conformal DATP contribution; | `PASS` | Publication terminology identifies conformal calibration as a separate supportive diagnostic. |
+| `CALIBRATION-038` | I | 691 | 5.4 Split-conformal local threshold: LOCAL_CONFORMAL_THRESHOLD | a replacement confirmatory endpoint. | `PASS` | The experiment graph locks the sole confirmatory endpoint. |
 | `CALIBRATION-039` | I | 707 | 6.1 `FEDERATED_BENIGN_SUMMARY_THRESHOLD` | use benign calibration information only; | `NOT_AUDITED` | — |
 | `THRESHOLD-020` | I | 708 | 6.1 `FEDERATED_BENIGN_SUMMARY_THRESHOLD` | use the full pooled variance decomposition, including between-client mean-shift; | `NOT_AUDITED` | — |
 | `THRESHOLD-021` | I | 709 | 6.1 `FEDERATED_BENIGN_SUMMARY_THRESHOLD` | target the same benign exceedance as the DATP quantile; | `NOT_AUDITED` | — |
