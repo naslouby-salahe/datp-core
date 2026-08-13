@@ -22,7 +22,7 @@ def _association_observations() -> tuple[AssociationObservation, ...]:
             heterogeneity=MetricValue(0.1 + index * 0.2),
             benefit=MetricValue(0.01 + index * 0.03),
         )
-        for index in range(3)
+        for index in range(5)
     )
 
 
@@ -31,11 +31,13 @@ def test_controlled_heterogeneity_figure_retains_each_seed_and_regime_observatio
 
     figure = run._controlled_heterogeneity_figures(observations)[0]
 
-    assert len(figure.paired_metric_series) == 3
+    assert len(figure.paired_metric_series) == 5
     assert {series.point_labels for series in figure.paired_metric_series} == {
         ("seed_0",),
         ("seed_1",),
         ("seed_2",),
+        ("seed_3",),
+        ("seed_4",),
     }
 
 

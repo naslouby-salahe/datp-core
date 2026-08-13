@@ -9,6 +9,7 @@ from datp_core.analysis.evidence import AnalysisAssetName
 from datp_core.analysis.mechanisms import AbsorptionSeedObservation
 from datp_core.analysis.mechanisms.model_alignment import (
     AlignmentReductionOutcome,
+    ModelAlignmentMetric,
     ModelAlignmentResult,
     summarize_alignment_activation,
 )
@@ -664,16 +665,22 @@ def _report_fedprox(experiment_id: ExperimentId) -> ReportResult:
             )
             write_text_atomically(
                 output / ResearchArtifact.EVIDENCE_REPORT,
-                FileContentText(
-                    _alignment_report(
-                        title=f"FedProx alignment evidence (coefficient={coefficient.value:.12g})",
-                        condition_name="FedProx",
-                        observations=tuple(
-                            (item.training_seed, item.reference_alignment, item.alignment, item.alignment_reductions)
-                            for item in alignment
-                        ),
-                    )
-                ),
+            FileContentText(
+                _alignment_report(
+                    title=f"FedProx alignment evidence (coefficient={coefficient.value:.12g})",
+                    condition_name="FedProx",
+                    observations=tuple(
+                        (
+                            item.training_seed,
+                            item.reference_alignment,
+                            item.alignment,
+                            item.alignment_reductions,
+                            next(observation for observation in observations if observation.seed == item.training_seed),
+                        )
+                        for item in alignment
+                    ),
+                )
+            ),
             )
             paths.append(output)
             activation_evidence.append((coefficient, alignment, observations))
@@ -717,7 +724,7 @@ def _report_ditto(experiment_id: ExperimentId) -> ReportResult:
             )
             for item in results
         )
-        analyze_ditto_absorption(results, reference_evidence=references, output_directory=output)
+        absorption = analyze_ditto_absorption(results, reference_evidence=references, output_directory=output)
         write_text_atomically(
             output / ResearchArtifact.EVIDENCE_REPORT,
             FileContentText(
@@ -730,6 +737,11 @@ def _report_ditto(experiment_id: ExperimentId) -> ReportResult:
                             item.reference_alignment,
                             item.alignment,
                             item.alignment_reductions,
+                            next(
+                                observation
+                                for observation in absorption.observations
+                                if observation.seed == item.personalized_coordinate.training_seed
+                            ),
                         )
                         for item in results
                     ),
@@ -819,10 +831,31 @@ def _report_fine_tuning(experiment_id: ExperimentId) -> ReportResult:
         load_fedavg_cv_fpr_effect(seed, experiment=ExperimentId.FEDAVG_LOCAL_FINE_TUNING)
         for seed in CONFIRMATORY_SEED_COHORT.values
     )
-    analyze_fine_tuning_absorption(
+    absorption = analyze_fine_tuning_absorption(
         evidence_by_seed,
         reference_evidence=references,
         output_directory=output.parent,
+    )
+    rows.extend(
+        (
+            "",
+            "## Common model-side score-alignment and threshold-absorption tuple",
+            "",
+            *_common_alignment_tuple_rows(
+                tuple(
+                    (
+                        evidence.personalized_coordinate.training_seed,
+                        evidence.alignment,
+                        next(
+                            observation
+                            for observation in absorption.observations
+                            if observation.seed == evidence.personalized_coordinate.training_seed
+                        ),
+                    )
+                    for evidence in evidence_by_seed
+                )
+            ),
+        )
     )
     write_text_atomically(output, FileContentText("\n".join(rows) + "\n"))
     return ReportResult(
@@ -843,7 +876,14 @@ def _alignment_report(
     title: str,
     condition_name: str,
     observations: tuple[
-        tuple[Seed, ModelAlignmentResult, ModelAlignmentResult, tuple[AlignmentReductionOutcome, ...]], ...
+        tuple[
+            Seed,
+            ModelAlignmentResult,
+            ModelAlignmentResult,
+            tuple[AlignmentReductionOutcome, ...],
+            AbsorptionSeedObservation,
+        ],
+        ...,
     ],
 ) -> str:
     activation = summarize_alignment_activation(tuple(item[3] for item in observations))
@@ -855,7 +895,7 @@ def _alignment_report(
             "|---:|---|---:|---:|---:|---|",
         )
     )
-    for seed, reference_alignment, condition_alignment, reductions in observations:
+    for seed, reference_alignment, condition_alignment, reductions, _ in observations:
         reference = {item.metric: item for item in reference_alignment.metrics}
         condition = {item.metric: item for item in condition_alignment.metrics}
         for reduction in reductions:
@@ -881,8 +921,56 @@ def _alignment_report(
         f"| {item.metric.value} | {item.valid_seed_count.value} | {_alignment_value(item.value)} |"
         for item in activation.reductions
     )
+    rows.extend(
+        (
+            "",
+            "## Common model-side score-alignment and threshold-absorption tuple",
+            "",
+            *_common_alignment_tuple_rows(
+                tuple(
+                    (seed, condition_alignment, absorption)
+                    for seed, _, condition_alignment, _, absorption in observations
+                )
+            ),
+        )
+    )
     rows.extend(("", f"Campaign activation label: `{activation.label.value}`.", ""))
     return "\n".join(rows)
+
+
+def _common_alignment_tuple_rows(
+    observations: tuple[tuple[Seed, ModelAlignmentResult, AbsorptionSeedObservation], ...],
+) -> tuple[str, ...]:
+    """Render the §7.2B per-seed tuple without deriving a policy recommendation."""
+
+    rows = (
+        "| Seed | ModelAlignmentH | LocationDispersion | ScaleDispersion | LocalThresholdDispersion | "
+        "NormalizedSharedLocalThresholdDistance | DeltaScope | ScopeAbsorption |",
+        "|---:|---:|---:|---:|---:|---:|---:|---|",
+    )
+    rendered: list[str] = list(rows)
+    for seed, alignment, absorption in observations:
+        metrics = {item.metric: item.value for item in alignment.metrics}
+        scope_absorption = (
+            MetricValue(1.0 - absorption.personalized_effect.value / absorption.reference_effect.value)
+            if absorption.reference_effect.value > 1e-12
+            else None
+        )
+        scope_absorption_text = (
+            _alignment_value(scope_absorption)
+            if scope_absorption is not None
+            else "UNAVAILABLE_NO_POSITIVE_FEDAVG_GAP"
+        )
+        rendered.append(
+            f"| {seed.value} | "
+            f"{_alignment_value(metrics[ModelAlignmentMetric.MODEL_ALIGNMENT_HETEROGENEITY])} | "
+            f"{_alignment_value(metrics[ModelAlignmentMetric.LOCATION_DISPERSION])} | "
+            f"{_alignment_value(metrics[ModelAlignmentMetric.SCALE_DISPERSION])} | "
+            f"{_alignment_value(metrics[ModelAlignmentMetric.LOCAL_THRESHOLD_DISPERSION])} | "
+            f"{_alignment_value(metrics[ModelAlignmentMetric.NORMALIZED_SHARED_LOCAL_THRESHOLD_DISTANCE])} | "
+            f"{_alignment_value(absorption.personalized_effect)} | {scope_absorption_text} |"
+        )
+    return tuple(rendered)
 
 
 def _report_temporal(experiment_id: ExperimentId) -> ReportResult:

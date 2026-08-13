@@ -3,11 +3,12 @@ from types import SimpleNamespace
 
 import pytest
 
+from datp_core.analysis.mechanisms.model_alignment import ModelAlignmentMetric
 from datp_core.app.campaign import build_programme_plan
 from datp_core.app.contracts import AnchorRequirement, OverwriteMode
 from datp_core.app.models import DetailText, ReportResult
 from datp_core.app.planning import PlanDisposition, seed_cohort_for
-from datp_core.app.recipes import evaluation_document_experiment_ids
+from datp_core.app.recipes import _common_alignment_tuple_rows, evaluation_document_experiment_ids
 from datp_core.app.research import generate_report, registered_experiment_ids, run_campaign, run_smoke
 from datp_core.app.validation import require_experiment_execution_ready, validate_programme
 from datp_core.artifacts.serializers.json import canonical_json_text
@@ -24,7 +25,7 @@ from datp_core.core.identifiers import (
     FederatedThresholdMethod,
     ProgrammeStatus,
 )
-from datp_core.core.numeric import RowCount, Seed, SourceFileCount, ValidationIssueCount
+from datp_core.core.numeric import MetricValue, RowCount, Seed, SourceFileCount, ValidationIssueCount
 from datp_core.data.contracts import (
     CanonicalManifestDocument,
     ManifestAssetEntry,
@@ -69,6 +70,24 @@ def _valid_canonical_manifest(dataset: DatasetId) -> CanonicalManifestDocument:
             status=AvailabilityStatus.AVAILABLE,
         ),
     )
+
+
+def test_common_alignment_tuple_reports_raw_scope_absorption_and_unavailable_reference() -> None:
+    alignment = SimpleNamespace(
+        metrics=tuple(
+            SimpleNamespace(metric=metric, value=MetricValue(index / 10.0))
+            for index, metric in enumerate(ModelAlignmentMetric, start=1)
+        )
+    )
+    available = SimpleNamespace(reference_effect=MetricValue(0.4), personalized_effect=MetricValue(0.1))
+    unavailable = SimpleNamespace(reference_effect=MetricValue(1e-12), personalized_effect=MetricValue(0.1))
+
+    rows = _common_alignment_tuple_rows(
+        ((Seed(1), alignment, available), (Seed(2), alignment, unavailable))
+    )
+
+    assert "| 1 | 0.1 | 0.2 | 0.3 | 0.4 | 0.5 | 0.1 | 0.75 |" in rows
+    assert rows[-1].endswith("| 0.1 | UNAVAILABLE_NO_POSITIVE_FEDAVG_GAP |")
 
 
 def test_every_non_suppressed_experiment_has_exactly_one_recipe() -> None:

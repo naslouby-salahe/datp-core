@@ -14,7 +14,7 @@ def test_association_report_binds_each_influence_diagnostic_to_its_observation()
             heterogeneity=MetricValue(0.1 + 0.2 * index),
             benefit=MetricValue(0.01 + 0.03 * index),
         )
-        for index in range(3)
+        for index in range(5)
     )
 
     rendered = tuple(str(line) for line in _render_association_result(heterogeneity_benefit_association(observations)))
@@ -32,43 +32,28 @@ def test_association_report_binds_each_influence_diagnostic_to_its_observation()
 
 
 def test_association_report_marks_undefined_leave_one_out_fits_unavailable() -> None:
-    observations = (
+    observations = tuple(
         AssociationObservation(
-            seed=Seed(0),
+            seed=Seed(index),
             experiment=ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP,
             population=PopulationId.NBAIOT_DIRICHLET_CLIENTS,
-            regime_label=RegimeLabel("alpha_low_a"),
-            heterogeneity=MetricValue(0.1),
-            benefit=MetricValue(0.01),
-        ),
-        AssociationObservation(
-            seed=Seed(1),
-            experiment=ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP,
-            population=PopulationId.NBAIOT_DIRICHLET_CLIENTS,
-            regime_label=RegimeLabel("alpha_low_b"),
-            heterogeneity=MetricValue(0.1),
-            benefit=MetricValue(0.02),
-        ),
-        AssociationObservation(
-            seed=Seed(2),
-            experiment=ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP,
-            population=PopulationId.NBAIOT_DIRICHLET_CLIENTS,
-            regime_label=RegimeLabel("alpha_high"),
-            heterogeneity=MetricValue(0.3),
-            benefit=MetricValue(0.03),
-        ),
+            regime_label=RegimeLabel(f"alpha_{index}"),
+            heterogeneity=MetricValue(0.1 if index < 4 else 0.3),
+            benefit=MetricValue(0.01 + index * 0.01),
+        )
+        for index in range(5)
     )
 
     result = heterogeneity_benefit_association(observations)
 
     assert result.statistics is not None
     diagnostics = result.statistics.leave_one_out_diagnostics
-    assert diagnostics.slopes[2] is None
-    assert diagnostics.r_squared[2] is None
-    assert diagnostics.influences[2] is None
-    assert diagnostics.unavailable_reasons[2] is not None
+    assert diagnostics.slopes[4] is None
+    assert diagnostics.r_squared[4] is None
+    assert diagnostics.influences[4] is None
+    assert diagnostics.unavailable_reasons[4] is not None
     rendered = tuple(str(line) for line in _render_association_result(result))
     assert any(
-        "Observation 3:" in line and "slope influence=unavailable (leave-one-out regression is undefined" in line
+        "Observation 5:" in line and "slope influence=unavailable (leave-one-out regression is undefined" in line
         for line in rendered
     )
