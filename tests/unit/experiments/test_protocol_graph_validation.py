@@ -59,7 +59,8 @@ def test_confirmatory_endpoint_is_structurally_locked() -> None:
     assert endpoint.seed_cohort.member_count == SeedCount(10)
 
 
-def test_graph_rejects_attack_metric_without_attack_assignment() -> None:
+@pytest.mark.parametrize("metric", (MetricId.TRUE_POSITIVE_RATE, MetricId.AVERAGE_PRECISION))
+def test_graph_rejects_attack_metric_without_attack_assignment(metric: MetricId) -> None:
     experiment = ExperimentDeclaration(
         id=ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION,
         role=EvidenceRole.EXTERNAL_VALIDATION,
@@ -67,7 +68,7 @@ def test_graph_rejects_attack_metric_without_attack_assignment() -> None:
         training_model=TrainingModelId.FEDAVG_AUTOENCODER,
         preprocessing_protocol=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
         federated_thresholds=(FederatedThresholdMethod.SHARED_THRESHOLD,),
-        metrics=(MetricId.TRUE_POSITIVE_RATE,),
+        metrics=(metric,),
         readiness=ExperimentReadiness.DECLARED,
     )
     graph = replace(CANONICAL_PROTOCOL_GRAPH, experiments=(experiment,))

@@ -757,6 +757,7 @@ def _attack_metric_status(declaration: PopulationDeclaration, capabilities: Data
             MetricId.BALANCED_ACCURACY,
             MetricId.BINARY_MACRO_F1,
             MetricId.AUROC,
+            MetricId.AVERAGE_PRECISION,
         )
     )
     if statuses == frozenset({CapabilityStatus.SUPPORTED}):

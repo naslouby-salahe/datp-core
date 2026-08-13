@@ -65,6 +65,7 @@ NBAIOT_CAPABILITIES = DatasetCapabilities(
             MetricId.BALANCED_ACCURACY,
             MetricId.BINARY_MACRO_F1,
             MetricId.AUROC,
+            MetricId.AVERAGE_PRECISION,
             MetricId.FPR_COEFFICIENT_OF_VARIATION,
         ),
         (),

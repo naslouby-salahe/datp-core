@@ -1,4 +1,4 @@
-from datp_core.core.identifiers import FederatedThresholdMethod, PopulationId
+from datp_core.core.identifiers import FederatedThresholdMethod, MetricId, PopulationId
 from datp_core.data.nbaiot.capabilities import NBAIOT_CAPABILITIES
 from datp_core.data.populations.contracts import CapabilityStatus
 from datp_core.data.registry import population_capabilities
@@ -7,6 +7,7 @@ from datp_core.data.registry import population_capabilities
 def test_nbaio_capability_boundaries() -> None:
     assert NBAIOT_CAPABILITIES.chronology.status is CapabilityStatus.UNAVAILABLE
     assert NBAIOT_CAPABILITIES.family_taxonomy.status is CapabilityStatus.SUPPORTED
+    assert NBAIOT_CAPABILITIES.metrics.status_for(MetricId.AVERAGE_PRECISION) is CapabilityStatus.SUPPORTED
 
 
 def test_nbaiot_declares_threshold_variants_as_supported() -> None:

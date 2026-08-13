@@ -74,7 +74,13 @@ EDGE_IIOTSET_CAPABILITIES = DatasetCapabilities(
         ),
         (MetricId.FALSE_POSITIVE_RATE, MetricId.FPR_COEFFICIENT_OF_VARIATION),
         (),
-        (MetricId.TRUE_POSITIVE_RATE, MetricId.BALANCED_ACCURACY, MetricId.BINARY_MACRO_F1, MetricId.AUROC),
+        (
+            MetricId.TRUE_POSITIVE_RATE,
+            MetricId.BALANCED_ACCURACY,
+            MetricId.BINARY_MACRO_F1,
+            MetricId.AUROC,
+            MetricId.AVERAGE_PRECISION,
+        ),
     ),
     temporal=TemporalCapability(
         CapabilityStatus.SUPPORTED,
