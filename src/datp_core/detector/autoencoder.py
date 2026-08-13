@@ -90,6 +90,34 @@ class AutoencoderModelState:
             return False
         return all(torch.equal(tensor, other._parameters[name]) for name, tensor in self._parameters.items())
 
+    @property
+    def trainable_parameter_count(self) -> int:
+        """Number of scalar parameters represented by this state."""
+
+        return sum(tensor.numel() for tensor in self._parameters.values())
+
+    def l2_distance_to(self, other: "AutoencoderModelState") -> float:
+        """Compute an exact float64 L2 distance between like-for-like model states."""
+
+        if self._parameters.keys() != other._parameters.keys():
+            raise ScientificContractError(
+                ErrorMessage("model-state drift requires identical parameter keys"),
+                subject=ContractSubject.TRAINING,
+            )
+        squared_distance = 0.0
+        for name, tensor in self._parameters.items():
+            reference = other._parameters[name]
+            if tensor.shape != reference.shape:
+                raise ScientificContractError(
+                    ErrorMessage("model-state drift requires identical parameter shapes"),
+                    subject=ContractSubject.TRAINING,
+                )
+            difference = tensor.detach().to(dtype=torch.float64, device="cpu") - reference.detach().to(
+                dtype=torch.float64, device="cpu"
+            )
+            squared_distance += float(torch.sum(torch.square(difference)).item())
+        return float(np.sqrt(squared_distance))
+
     @classmethod
     def sample_weighted_average(
         cls,

@@ -709,9 +709,30 @@ def _run_training_round[T: FedAvgProtocol | FedProxProtocol](
         download_count=request.population_client_count,
     )
 
+    parameter_count = global_model_state.trainable_parameter_count
+    if parameter_count < 1:
+        raise ScientificContractError(
+            ErrorMessage("local-update drift requires at least one trainable parameter"),
+            subject=ContractSubject.TRAINING,
+        )
+    client_results: list[ClientTrainingResult] = []
+    for update in updates:
+        l2_drift = MetricValue(update.model_state.l2_distance_to(global_model_state))
+        client_results.append(
+            ClientTrainingResult.from_update(
+                update,
+                l2_drift=l2_drift,
+                rms_drift=MetricValue(l2_drift.value / np.sqrt(parameter_count)),
+                terminal_prox_penalty=(
+                    MetricValue(proximal_coefficient.value * l2_drift.value**2 / 2.0)
+                    if proximal_coefficient is not None
+                    else None
+                ),
+            )
+        )
     round_result = FederatedRoundResult(
         round_number=round_number,
-        client_results=tuple(ClientTrainingResult.from_update(update) for update in updates),
+        client_results=tuple(client_results),
         aggregate_loss=aggregate_loss,
         communication=communication,
         global_state_reference=GlobalModelStateReference(

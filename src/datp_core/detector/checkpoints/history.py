@@ -52,6 +52,9 @@ class _ClientRoundRow:
     client: ClientIdentity
     sample_count: RowCount
     local_loss: MetricValue
+    l2_drift: MetricValue | None
+    rms_drift: MetricValue | None
+    terminal_prox_penalty: MetricValue | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -215,6 +218,9 @@ def persist_federated_training_history(
     c_ids: list[str] = []
     c_samples: list[int] = []
     c_losses: list[float] = []
+    c_l2_drifts: list[float | None] = []
+    c_rms_drifts: list[float | None] = []
+    c_prox_penalties: list[float | None] = []
     p_rounds: list[int] = []
     p_ids: list[str] = []
     p_losses: list[float] = []
@@ -232,6 +238,11 @@ def persist_federated_training_history(
             c_ids.append(result.client.client_id.value)
             c_samples.append(result.sample_count.value)
             c_losses.append(result.local_loss.value)
+            c_l2_drifts.append(None if result.l2_drift is None else result.l2_drift.value)
+            c_rms_drifts.append(None if result.rms_drift is None else result.rms_drift.value)
+            c_prox_penalties.append(
+                None if result.terminal_prox_penalty is None else result.terminal_prox_penalty.value
+            )
 
         for reference in item.personalized_state_references:
             p_rounds.append(item.round_number.value)
@@ -258,6 +269,9 @@ def persist_federated_training_history(
             FederatedHistoryColumn.CLIENT_ID.value: c_ids,
             FederatedHistoryColumn.SAMPLE_COUNT.value: c_samples,
             FederatedHistoryColumn.LOCAL_LOSS.value: c_losses,
+            FederatedHistoryColumn.L2_DRIFT.value: c_l2_drifts,
+            FederatedHistoryColumn.RMS_DRIFT.value: c_rms_drifts,
+            FederatedHistoryColumn.TERMINAL_PROX_PENALTY.value: c_prox_penalties,
         },
         schema=schema_pairs(CLIENT_ROUNDS_SCHEMA),
     ).write_parquet(directory / FederatedHistoryAssetName.CLIENT_ROUNDS.value)
@@ -364,14 +378,25 @@ def load_federated_training_history(
 
     column = FederatedHistoryColumn
     client_dict_by_round: dict[RoundNumber, list[_ClientRoundRow]] = {}
-    for round_val, client_val, sample_val, loss_val in client_frame.select(
-        (column.ROUND_NUMBER.value, column.CLIENT_ID.value, column.SAMPLE_COUNT.value, column.LOCAL_LOSS.value)
+    for round_val, client_val, sample_val, loss_val, l2_drift, rms_drift, prox_penalty in client_frame.select(
+        (
+            column.ROUND_NUMBER.value,
+            column.CLIENT_ID.value,
+            column.SAMPLE_COUNT.value,
+            column.LOCAL_LOSS.value,
+            column.L2_DRIFT.value,
+            column.RMS_DRIFT.value,
+            column.TERMINAL_PROX_PENALTY.value,
+        )
     ).iter_rows():
         client_dict_by_round.setdefault(RoundNumber(int(round_val)), []).append(
             _ClientRoundRow(
                 client=ClientIdentity(coordinate.population, ClientIdentityToken(str(client_val)), identity_kind),
                 sample_count=RowCount(int(sample_val)),
                 local_loss=MetricValue(float(loss_val)),
+                l2_drift=None if l2_drift is None else MetricValue(float(l2_drift)),
+                rms_drift=None if rms_drift is None else MetricValue(float(rms_drift)),
+                terminal_prox_penalty=None if prox_penalty is None else MetricValue(float(prox_penalty)),
             )
         )
 
@@ -444,6 +469,9 @@ def _round_result(
             client=row.client,
             sample_count=row.sample_count,
             local_loss=row.local_loss,
+            l2_drift=row.l2_drift,
+            rms_drift=row.rms_drift,
+            terminal_prox_penalty=row.terminal_prox_penalty,
         )
         for row in client_data
     )

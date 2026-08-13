@@ -84,13 +84,26 @@ class ClientTrainingResult:
     client: ClientIdentity
     sample_count: RowCount
     local_loss: MetricValue
+    l2_drift: MetricValue | None = None
+    rms_drift: MetricValue | None = None
+    terminal_prox_penalty: MetricValue | None = None
 
     @classmethod
-    def from_update(cls, update: ClientUpdate) -> "ClientTrainingResult":
+    def from_update(
+        cls,
+        update: ClientUpdate,
+        *,
+        l2_drift: MetricValue | None = None,
+        rms_drift: MetricValue | None = None,
+        terminal_prox_penalty: MetricValue | None = None,
+    ) -> "ClientTrainingResult":
         return cls(
             client=update.client,
             sample_count=update.sample_count,
             local_loss=update.local_loss,
+            l2_drift=l2_drift,
+            rms_drift=rms_drift,
+            terminal_prox_penalty=terminal_prox_penalty,
         )
 
 

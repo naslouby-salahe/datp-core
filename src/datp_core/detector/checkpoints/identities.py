@@ -22,6 +22,9 @@ class FederatedHistoryColumn(StrEnum):
     CLIENT_ID = "client_id"
     SAMPLE_COUNT = "sample_count"
     LOCAL_LOSS = "local_loss"
+    L2_DRIFT = "l2_drift"
+    RMS_DRIFT = "rms_drift"
+    TERMINAL_PROX_PENALTY = "terminal_prox_penalty"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -43,6 +46,9 @@ CLIENT_ROUNDS_SCHEMA = (
     ParquetColumnSpec(identity=FederatedHistoryColumn.CLIENT_ID, dtype=pl.String),
     ParquetColumnSpec(identity=FederatedHistoryColumn.SAMPLE_COUNT, dtype=pl.Int64),
     ParquetColumnSpec(identity=FederatedHistoryColumn.LOCAL_LOSS, dtype=pl.Float64),
+    ParquetColumnSpec(identity=FederatedHistoryColumn.L2_DRIFT, dtype=pl.Float64),
+    ParquetColumnSpec(identity=FederatedHistoryColumn.RMS_DRIFT, dtype=pl.Float64),
+    ParquetColumnSpec(identity=FederatedHistoryColumn.TERMINAL_PROX_PENALTY, dtype=pl.Float64),
 )
 PERSONALIZED_ROUNDS_SCHEMA = (
     ParquetColumnSpec(identity=FederatedHistoryColumn.ROUND_NUMBER, dtype=pl.Int64),

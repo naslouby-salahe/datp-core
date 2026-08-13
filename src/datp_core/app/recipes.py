@@ -6,6 +6,7 @@ from shutil import rmtree
 from typing import Protocol
 
 from datp_core.analysis.evidence import AnalysisAssetName
+from datp_core.analysis.mechanisms import AbsorptionSeedObservation
 from datp_core.analysis.mechanisms.model_alignment import (
     AlignmentReductionOutcome,
     ModelAlignmentResult,
@@ -38,7 +39,7 @@ from datp_core.core.identifiers import (
     PopulationId,
     ThresholdMethodExecutionStatus,
 )
-from datp_core.core.numeric import MetricValue, Seed
+from datp_core.core.numeric import MetricValue, ProximalCoefficient, Seed
 from datp_core.detector.training.protocols import (
     DITTO_REGULARIZATION_GRID,
     FEDPROX_COEFFICIENTS,
@@ -134,12 +135,14 @@ from datp_core.experiments.threshold_robustness import (
     threshold_estimator_scope_sensitivity_analysis_marker_present,
 )
 from datp_core.experiments.training_stress import (
+    FedProxAlignmentEvidence,
     FineTuningArtifactBranch,
     analyze_ditto_absorption,
     analyze_fedprox_absorption,
     analyze_fine_tuning_absorption,
     build_fedprox_absorption_observation,
     ditto_analysis_directory,
+    fedprox_activation_report,
     fedprox_analysis_directory,
     load_ditto_stress_test_evidence,
     load_fedprox_alignment_evidence,
@@ -607,6 +610,13 @@ def _report_heterogeneity(experiment_id: ExperimentId) -> ReportResult:
 def _report_fedprox(experiment_id: ExperimentId) -> ReportResult:
     try:
         paths: list[Path] = []
+        activation_evidence: list[
+            tuple[
+                ProximalCoefficient,
+                tuple[FedProxAlignmentEvidence, ...],
+                tuple[AbsorptionSeedObservation, ...],
+            ]
+        ] = []
         for coefficient in FEDPROX_COEFFICIENTS:
             observations = tuple(
                 build_fedprox_absorption_observation(
@@ -643,6 +653,15 @@ def _report_fedprox(experiment_id: ExperimentId) -> ReportResult:
                 ),
             )
             paths.append(output)
+            activation_evidence.append((coefficient, alignment, observations))
+        activation_path = fedprox_analysis_directory(FEDPROX_COEFFICIENTS[0], output_root=OUTPUTS_ROOT).parent / (
+            "fedprox_activation_report.md"
+        )
+        write_text_atomically(
+            activation_path,
+            FileContentText(fedprox_activation_report(tuple(activation_evidence))),
+        )
+        paths.append(activation_path)
     except ScientificContractError as error:
         raise ReportEvidenceError(
             ErrorMessage(str(error)), subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST
@@ -650,7 +669,7 @@ def _report_fedprox(experiment_id: ExperimentId) -> ReportResult:
     return ReportResult(
         experiment=experiment_id,
         paths=tuple(paths),
-        detail=DetailText(f"coefficients={len(paths)}"),
+        detail=DetailText(f"coefficients={len(FEDPROX_COEFFICIENTS)} activation={paths[-1]}"),
     )
 
 

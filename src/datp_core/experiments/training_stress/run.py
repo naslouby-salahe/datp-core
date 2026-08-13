@@ -21,6 +21,7 @@ from datp_core.analysis.mechanisms.model_alignment import (
     AlignmentReductionOutcome,
     ModelAlignmentClientScores,
     ModelAlignmentCondition,
+    ModelAlignmentMetric,
     ModelAlignmentResult,
     alignment_reductions,
     fedavg_alignment_grid_for_scores,
@@ -82,6 +83,8 @@ from datp_core.data.populations.publication import ConstructDeclaredPopulationRe
 from datp_core.data.preprocessing.models import FederatedPreprocessingOutcome, FederatedPreprocessingRequest
 from datp_core.data.preprocessing.service import preprocess_federated
 from datp_core.data.registry import population_capabilities
+from datp_core.detector.checkpoints.history import history_frames
+from datp_core.detector.checkpoints.identities import FederatedHistoryColumn
 from datp_core.detector.checkpoints.protocols import DIAGNOSTIC_SNAPSHOT_PROTOCOL
 from datp_core.detector.scoring.federated import publish_federated_scores
 from datp_core.detector.scoring.models import (
@@ -112,6 +115,7 @@ from datp_core.detector.training.protocols import (
     BATCH_SIZE,
     DITTO_ALTERNATIVE_ROUTE_DIFFERENCE,
     FEDAVG_LOCAL_FINE_TUNING_PROTOCOL,
+    FEDPROX_COEFFICIENTS,
     LEARNING_RATE,
     MODEL_ABSORPTION_DECISION_PROTOCOL,
     NBAIOT_AUTOENCODER,
@@ -332,6 +336,7 @@ class FedProxAlignmentEvidence:
     coefficient: ProximalCoefficient
     reference_alignment: ModelAlignmentResult
     alignment: ModelAlignmentResult
+    native_alignment: ModelAlignmentResult
     alignment_reductions: tuple[AlignmentReductionOutcome, ...]
 
 
@@ -1043,12 +1048,53 @@ def load_fedprox_alignment_evidence(
         ModelAlignmentCondition(client_scores=condition_clients, shared_threshold=shared_threshold),
         grid=grid,
     )
+    native_alignment = model_alignment(
+        ModelAlignmentCondition(client_scores=condition_clients, shared_threshold=shared_threshold),
+        grid=fedavg_alignment_grid_for_scores(condition_clients),
+    )
     return FedProxAlignmentEvidence(
         training_seed=training_seed,
         coefficient=coefficient,
         reference_alignment=reference_alignment,
         alignment=alignment,
+        native_alignment=native_alignment,
         alignment_reductions=alignment_reductions(reference_alignment, alignment),
+    )
+
+
+def fedprox_terminal50_rms_drift(
+    training_seed: Seed,
+    coefficient: ProximalCoefficient | None,
+) -> MetricValue:
+    """Return the prospectively fixed median RMS drift over rounds 151..200."""
+
+    coordinate = _fedprox_training_coordinate(training_seed, coefficient)
+    frame = history_frames(federated_training_directory(coordinate, OUTPUTS_ROOT)).client_rounds
+    columns = FederatedHistoryColumn
+    terminal = frame.filter(pl.col(columns.ROUND_NUMBER.value) >= 151).get_column(columns.RMS_DRIFT.value)
+    values = tuple(float(value) for value in terminal.to_list() if value is not None)
+    if not values:
+        raise ScientificContractError(
+            ErrorMessage("FedProx activation evidence requires persisted terminal-50 RMS drift values"),
+            subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
+        )
+    return MetricValue(float(np.median(np.asarray(values, dtype=np.float64))))
+
+
+def _fedprox_training_coordinate(
+    training_seed: Seed,
+    coefficient: ProximalCoefficient | None,
+) -> FederatedTrainingCoordinate:
+    requested_coefficient = FEDPROX_COEFFICIENTS[0] if coefficient is None else coefficient
+    shared_document = load_evaluation_document(
+        _fedprox_evaluation_path(training_seed, requested_coefficient, FederatedThresholdMethod.SHARED_THRESHOLD)
+    )
+    if coefficient is not None:
+        return shared_document.score_coordinate
+    return replace(
+        shared_document.score_coordinate,
+        model=TrainingModelId.FEDAVG_AUTOENCODER,
+        model_coefficient=None,
     )
 
 
@@ -1108,6 +1154,123 @@ def analyze_fedprox_absorption(
         evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
     )
     return cohort
+
+
+def fedprox_activation_report(
+    evidence_by_coefficient: tuple[
+        tuple[ProximalCoefficient, tuple[FedProxAlignmentEvidence, ...], tuple[AbsorptionSeedObservation, ...]], ...
+    ],
+) -> str:
+    """Render the mandatory FedAvg/FedProx activation view from seed-level evidence."""
+
+    lines = [
+        "# FedProx mechanism-activation view",
+        "",
+        "Terminal-50 RMS drift is the median over all client-round cells in rounds 151–200. "
+        "All quantities are descriptive training-stress diagnostics; threshold outcomes alone are not evidence "
+        "that the proximal mechanism was active.",
+        "",
+        "| condition | seed | D_terminal50 | DriftSuppression | DeltaH | H | ModelAlignmentH | "
+        "LocalThresholdDispersion | NormalizedSharedLocalThresholdDistance | DeltaScope | ScopeAbsorption |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    fedavg_written: set[Seed] = set()
+    for coefficient, alignments, observations in evidence_by_coefficient:
+        alignment_by_seed = {item.training_seed: item for item in alignments}
+        observation_by_seed = {item.seed: item for item in observations}
+        if set(alignment_by_seed) != set(observation_by_seed):
+            raise ScientificContractError(ErrorMessage("FedProx activation rows require aligned seed evidence"))
+        for seed in sorted(alignment_by_seed):
+            alignment_evidence = alignment_by_seed[seed]
+            observation = observation_by_seed[seed]
+            fedavg_drift = fedprox_terminal50_rms_drift(seed, None)
+            condition_drift = fedprox_terminal50_rms_drift(seed, coefficient)
+            reference_h = _alignment_metric_value(
+                alignment_evidence.reference_alignment, ModelAlignmentMetric.MODEL_ALIGNMENT_HETEROGENEITY
+            )
+            condition_h = _alignment_metric_value(
+                alignment_evidence.native_alignment, ModelAlignmentMetric.MODEL_ALIGNMENT_HETEROGENEITY
+            )
+            model_alignment_h = _alignment_metric_value(
+                alignment_evidence.alignment, ModelAlignmentMetric.MODEL_ALIGNMENT_HETEROGENEITY
+            )
+            local_dispersion = _alignment_metric_value(
+                alignment_evidence.alignment, ModelAlignmentMetric.LOCAL_THRESHOLD_DISPERSION
+            )
+            normalized_distance = _alignment_metric_value(
+                alignment_evidence.alignment,
+                ModelAlignmentMetric.NORMALIZED_SHARED_LOCAL_THRESHOLD_DISTANCE,
+            )
+            if seed not in fedavg_written:
+                lines.append(
+                    _activation_row(
+                        "FedAvg", seed, fedavg_drift, None, None, reference_h, reference_h,
+                        _alignment_metric_value(
+                            alignment_evidence.reference_alignment, ModelAlignmentMetric.LOCAL_THRESHOLD_DISPERSION
+                        ),
+                        _alignment_metric_value(
+                            alignment_evidence.reference_alignment,
+                            ModelAlignmentMetric.NORMALIZED_SHARED_LOCAL_THRESHOLD_DISTANCE,
+                        ),
+                        observation.reference_effect, None,
+                    )
+                )
+                fedavg_written.add(seed)
+            suppression = (
+                MetricValue(1.0 - condition_drift.value / fedavg_drift.value)
+                if fedavg_drift.value > 1e-12
+                else None
+            )
+            delta_h = (
+                MetricValue(condition_h.value - reference_h.value)
+                if condition_h is not None and reference_h is not None
+                else None
+            )
+            scope_absorption = (
+                MetricValue(1.0 - observation.personalized_effect.value / observation.reference_effect.value)
+                if observation.reference_effect.value > 1e-12
+                else None
+            )
+            lines.append(
+                _activation_row(
+                    f"FedProx(mu={coefficient.value:.12g})", seed, condition_drift, suppression, delta_h,
+                    condition_h, model_alignment_h, local_dispersion, normalized_distance,
+                    observation.personalized_effect, scope_absorption,
+                )
+            )
+    return "\n".join(lines) + "\n"
+
+
+def _alignment_metric_value(result: ModelAlignmentResult, metric: ModelAlignmentMetric) -> MetricValue | None:
+    return next(item.value for item in result.metrics if item.metric is metric)
+
+
+def _activation_row(
+    condition: str,
+    seed: Seed,
+    drift: MetricValue,
+    suppression: MetricValue | None,
+    delta_h: MetricValue | None,
+    heterogeneity: MetricValue | None,
+    model_alignment_h: MetricValue | None,
+    local_dispersion: MetricValue | None,
+    normalized_distance: MetricValue | None,
+    delta_scope: MetricValue,
+    scope_absorption: MetricValue | None,
+) -> str:
+    values = (
+        drift,
+        suppression,
+        delta_h,
+        heterogeneity,
+        model_alignment_h,
+        local_dispersion,
+        normalized_distance,
+        delta_scope,
+        scope_absorption,
+    )
+    rendered = (f"{item.value:.12g}" if item is not None else "UNAVAILABLE" for item in values)
+    return f"| {condition} | {seed.value} | " + " | ".join(rendered) + " |"
 
 
 def _fedprox_evaluation_path(

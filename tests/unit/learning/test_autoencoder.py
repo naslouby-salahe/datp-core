@@ -84,6 +84,14 @@ def test_model_state_owns_captured_and_exported_tensors() -> None:
     assert model_state.is_equivalent_to(AutoencoderModelState.from_torch_state_dict(expected))
 
 
+def test_model_state_l2_distance_uses_float64_parameter_deltas() -> None:
+    left = AutoencoderModelState.from_torch_state_dict({"weight": torch.tensor([1.0, 2.0], dtype=torch.float32)})
+    right = AutoencoderModelState.from_torch_state_dict({"weight": torch.tensor([4.0, 6.0], dtype=torch.float32)})
+
+    assert left.trainable_parameter_count == 2
+    assert left.l2_distance_to(right) == pytest.approx(5.0)
+
+
 def test_model_has_no_threshold_or_metric_attributes() -> None:
     model = ReconstructionAutoencoder(_ARCHITECTURE)
     forbidden = {"threshold", "quantile", "auroc", "fpr"}

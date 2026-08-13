@@ -69,6 +69,10 @@ def test_train_global_federated_reuses_persisted_evidence_across_separate_invoca
     assert second.termination_reason == first.termination_reason
     assert second.device_name == first.device_name
     assert second.batch_size_used == first.batch_size_used
+    client_result = second.history.rounds[0].client_results[0]
+    assert client_result.l2_drift is not None
+    assert client_result.rms_drift is not None
+    assert client_result.terminal_prox_penalty is None
 
 
 def test_train_global_federated_raises_explicitly_on_corrupt_persisted_history(
