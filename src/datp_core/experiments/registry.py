@@ -178,7 +178,7 @@ EXPERIMENTS = (
     ),
     _declare(
         ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP,
-        EvidenceRole.MECHANISM,
+        EvidenceRole.SUPPORTIVE,
         PopulationId.NBAIOT_DIRICHLET_CLIENTS,
         TrainingModelId.FEDAVG_AUTOENCODER,
         PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,

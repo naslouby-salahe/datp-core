@@ -469,7 +469,7 @@ def analyze_controlled_heterogeneity_sweep(*, overwrite: bool) -> Path:
             experiment=ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP,
             population=PopulationId.NBAIOT_DIRICHLET_CLIENTS,
             output_directory=output,
-            evidence_role=EvidenceRole.MECHANISM,
+            evidence_role=EvidenceRole.SUPPORTIVE,
             figures=figures,
         )
     return output
