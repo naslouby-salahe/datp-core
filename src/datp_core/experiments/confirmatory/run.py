@@ -116,6 +116,7 @@ from datp_core.presentation.target_attainment import (
 )
 from datp_core.runtime.configuration import OUTPUTS_ROOT
 from datp_core.thresholds.policies.cluster import GroupedThresholdResult
+from datp_core.thresholds.protocols import ClusterFingerprintFeature
 
 
 class ConfirmatoryAssetDirectory(StrEnum):
@@ -820,7 +821,12 @@ def _declaration_by_id(experiment_id: ExperimentId) -> ExperimentDeclaration:
     return matches[0]
 
 
-def _confirmatory_coordinate(training_seed: Seed, method: FederatedThresholdMethod) -> ExperimentCoordinate:
+def _confirmatory_coordinate(
+    training_seed: Seed,
+    method: FederatedThresholdMethod,
+    *,
+    cluster_fingerprint_omission: ClusterFingerprintFeature | None = None,
+) -> ExperimentCoordinate:
     declaration = _declaration_for_threshold_method(method)
     plan = expand_experiment_plan(declarations=(declaration,), seed_cohort=SeedCohort(values=(training_seed,)))
     matches = tuple(
@@ -828,6 +834,7 @@ def _confirmatory_coordinate(training_seed: Seed, method: FederatedThresholdMeth
         for entry in plan.entries
         if entry.coordinate.threshold_method is method
         and entry.coordinate.metric is MetricId.FPR_COEFFICIENT_OF_VARIATION
+        and entry.coordinate.cluster_fingerprint_omission is cluster_fingerprint_omission
     )
     if len(matches) != 1:
         raise ScientificContractError(
@@ -884,8 +891,17 @@ def absorption_corner_from_evaluation_document(
     )
 
 
-def _evaluation_path(training_seed: Seed, method: FederatedThresholdMethod) -> Path:
-    coordinate = _confirmatory_coordinate(training_seed, method)
+def _evaluation_path(
+    training_seed: Seed,
+    method: FederatedThresholdMethod,
+    *,
+    cluster_fingerprint_omission: ClusterFingerprintFeature | None = None,
+) -> Path:
+    coordinate = _confirmatory_coordinate(
+        training_seed,
+        method,
+        cluster_fingerprint_omission=cluster_fingerprint_omission,
+    )
     path = (
         evaluation_run_directory(OUTPUTS_ROOT, coordinate)
         / EvaluationRunAssetDirectory.EVALUATION
