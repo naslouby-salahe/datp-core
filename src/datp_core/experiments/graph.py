@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from re import fullmatch
 
 from datp_core.analysis.inference.contracts import PairedInferenceProtocol
 from datp_core.analysis.metrics.protocols import ATTACK_SENSITIVE_METRICS, SUPPRESSED_OPERATIONAL_METRICS
@@ -96,6 +97,7 @@ CANONICAL_PROTOCOL_GRAPH = ProtocolGraphInputs(
 
 
 def validate_protocol_graph(inputs: ProtocolGraphInputs) -> ResolvedProtocolGraph:
+    _validate_active_protocol_identities()
     _require_unique_declaration_ids(inputs.populations, inputs.experiments)
     suppressed_experiment_ids: list[ExperimentId] = []
     _validate_confirmatory_endpoint(
@@ -141,6 +143,13 @@ def _require_unique_declaration_ids(
     experiment_ids = tuple(experiment.id for experiment in experiments)
     if len(set(population_ids)) != len(population_ids) or len(set(experiment_ids)) != len(experiment_ids):
         raise ProtocolValidationError(ErrorMessage("Protocol declaration identifiers must be unique"))
+
+
+def _validate_active_protocol_identities() -> None:
+    if any(fullmatch(r"b\d+", method.value.casefold()) for method in FederatedThresholdMethod):
+        raise ProtocolValidationError(ErrorMessage("active threshold methods must not use opaque B-number identities"))
+    if any(fullmatch(r"[a-z]", population.value.casefold()) for population in PopulationId):
+        raise ProtocolValidationError(ErrorMessage("active populations must not use lettered alias identities"))
 
 
 def _population(

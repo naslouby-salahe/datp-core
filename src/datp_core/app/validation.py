@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from re import fullmatch
 
 from datp_core.app.recipes import anchor_gated_experiment_ids, registered_experiment_ids
 from datp_core.core.errors import (
@@ -9,7 +8,7 @@ from datp_core.core.errors import (
     ProtocolValidationError,
     ScientificContractError,
 )
-from datp_core.core.identifiers import ExperimentId, ExperimentReadiness, FederatedThresholdMethod, PopulationId
+from datp_core.core.identifiers import ExperimentId, ExperimentReadiness
 from datp_core.data.populations.declarations import POPULATIONS
 from datp_core.experiments.graph import (
     CANONICAL_PROTOCOL_GRAPH,
@@ -62,7 +61,6 @@ def require_experiment_execution_ready(experiment_id: ExperimentId) -> None:
 
 def validate_programme(experiment_id: ExperimentId | None) -> ValidationResult:
     graph = validate_protocol_graph(CANONICAL_PROTOCOL_GRAPH)
-    _validate_active_protocol_identities()
     registered = registered_experiment_ids()
     if len(registered) != len(frozenset(registered)):
         raise ProtocolValidationError(
@@ -113,10 +111,3 @@ def validate_programme(experiment_id: ExperimentId | None) -> ValidationResult:
         registered_recipes=tuple(item for item in experiment_ids if item in frozenset(registered)),
         suppressed_experiments=suppressed,
     )
-
-
-def _validate_active_protocol_identities() -> None:
-    if any(fullmatch(r"b\d+", method.value.casefold()) for method in FederatedThresholdMethod):
-        raise ProtocolValidationError(ErrorMessage("active threshold methods must not use opaque B-number identities"))
-    if any(fullmatch(r"[a-z]", population.value.casefold()) for population in PopulationId):
-        raise ProtocolValidationError(ErrorMessage("active populations must not use lettered alias identities"))
