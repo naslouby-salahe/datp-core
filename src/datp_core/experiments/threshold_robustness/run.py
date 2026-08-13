@@ -34,6 +34,7 @@ from datp_core.core.identifiers import (
     PreprocessingProtocolId,
     ScoreFrameColumn,
     ThresholdEstimator,
+    ValidationReasonText,
 )
 from datp_core.core.numeric import (
     CalibrationSize,
@@ -163,6 +164,8 @@ class EstimatorScopeSignCounts(StrictModel):
 
 class EstimatorScopeSummaryReport(StrictModel):
     experiment: ExperimentId
+    comparison_role: ValidationReasonText
+    claim_boundary: ValidationReasonText
     rows: tuple[EstimatorScopeSummary, ...]
     contrasts: tuple[EstimatorScopeContrast, ...]
     sign_counts: tuple[EstimatorScopeSignCounts, ...]
@@ -328,6 +331,8 @@ class ConformalCoverageRow(StrictModel):
 
 class ConformalCoverageReport(StrictModel):
     experiment: ExperimentId
+    interpretation: ValidationReasonText
+    claim_boundary: ValidationReasonText
     rows: tuple[ConformalCoverageRow, ...]
 
 
@@ -755,6 +760,12 @@ def report_threshold_estimator_scope_sensitivity(
     serialize_json_model(
         EstimatorScopeSummaryReport(
             experiment=experiment_id,
+            comparison_role=ValidationReasonText(
+                "The mean-plus-sample-standard-deviation estimator is a fixed-score scope sensitivity control."
+            ),
+            claim_boundary=ValidationReasonText(
+                "It does not reproduce or make fidelity claims about Meidan et al.'s complete detector."
+            ),
             rows=tuple(rows),
             contrasts=tuple(contrasts),
             sign_counts=_estimator_scope_sign_counts(tuple(contrasts)),
@@ -1533,7 +1544,17 @@ def report_local_conformal_coverage(
                 )
             )
     serialize_json_model(
-        ConformalCoverageReport(experiment=experiment_id, rows=tuple(rows)),
+        ConformalCoverageReport(
+            experiment=experiment_id,
+            interpretation=ValidationReasonText(
+                "Held-out benign coverage is a supportive finite-sample diagnostic for the local conformal threshold."
+            ),
+            claim_boundary=ValidationReasonText(
+                "This diagnostic does not establish arbitrary client-conditional validity beyond the retained client "
+                "calibration and held-out benign evidence."
+            ),
+            rows=tuple(rows),
+        ),
         _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
     )
     return finalize_analysis_report(
