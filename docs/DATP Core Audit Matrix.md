@@ -6187,7 +6187,7 @@ The implementation must distinguish at least these roadmap-defined scientific st
 | `GATE-N-001` | 6187 | Mechanism analyses use only pre-specified variables and populations. | `NOT_AUDITED` | — | — |
 | `GATE-N-002` | 6188 | Jensen–Shannon constructions use the exact locked binning/log convention from Part II. | `NOT_AUDITED` | — | — |
 | `GATE-N-003` | 6189 | Association analyses use associative, not causal, language. | `NOT_AUDITED` | — | — |
-| `GATE-N-004` | 6190 | `n < 5` association cases use the declared insufficient-evidence state rather than fabricated coefficients. | `NOT_AUDITED` | — | — |
+| `GATE-N-004` | 6190 | `n < 5` association cases use the declared insufficient-evidence state rather than fabricated coefficients. | `IMPLEMENTED` | `PASS` | The association owner now returns the typed insufficient-evidence state with no coefficients, p-values, or regression diagnostics for fewer than five observations. |
 | `GATE-N-005` | 6191 | Cluster stability reports memberships, sizes, empty clusters, singleton clusters, ARI, and switch behavior where specified. | `NOT_AUDITED` | — | — |
 | `GATE-N-006` | 6192 | Recovery-of-local-gap quantities are not clipped to `[0,1]`. | `NOT_AUDITED` | — | — |
 | `GATE-N-007` | 6193 | Non-positive SHARED_THRESHOLD→LOCAL_THRESHOLD denominators use the declared unavailable state. | `NOT_AUDITED` | — | — |
@@ -7443,7 +7443,7 @@ README_REPRODUCIBILITY.md
 | `DATASET-098` | IV | 6187 | 16. Gate N — Mechanism-analysis integrity | Mechanism analyses use only pre-specified variables and populations. | `NOT_AUDITED` | — |
 | `GLOBAL-124` | IV | 6188 | 16. Gate N — Mechanism-analysis integrity | Jensen–Shannon constructions use the exact locked binning/log convention from Part II. | `NOT_AUDITED` | — |
 | `GLOBAL-125` | IV | 6189 | 16. Gate N — Mechanism-analysis integrity | Association analyses use associative, not causal, language. | `NOT_AUDITED` | — |
-| `GLOBAL-126` | IV | 6190 | 16. Gate N — Mechanism-analysis integrity | `n < 5` association cases use the declared insufficient-evidence state rather than fabricated coefficients. | `NOT_AUDITED` | — |
+| `GLOBAL-126` | IV | 6190 | 16. Gate N — Mechanism-analysis integrity | `n < 5` association cases use the declared insufficient-evidence state rather than fabricated coefficients. | `PASS` | The association owner returns insufficient evidence without coefficients, p-values, or regression diagnostics below five observations. |
 | `REPORT-037` | IV | 6191 | 16. Gate N — Mechanism-analysis integrity | Cluster stability reports memberships, sizes, empty clusters, singleton clusters, ARI, and switch behavior where specified. | `NOT_AUDITED` | — |
 | `GLOBAL-127` | IV | 6192 | 16. Gate N — Mechanism-analysis integrity | Recovery-of-local-gap quantities are not clipped to `[0,1]`. | `NOT_AUDITED` | — |
 | `THRESHOLD-334` | IV | 6193 | 16. Gate N — Mechanism-analysis integrity | Non-positive SHARED_THRESHOLD→LOCAL_THRESHOLD denominators use the declared unavailable state. | `NOT_AUDITED` | — |

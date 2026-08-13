@@ -23,14 +23,12 @@ from datp_core.core.identifiers import (
 )
 from datp_core.core.numeric import MetricValue, PairedObservationCount, Ratio, Seed, is_numeric_zero
 
-MINIMUM_ASSOCIATION_OBSERVATIONS = PairedObservationCount(3)
 MINIMUM_PUBLICATION_OBSERVATIONS = PairedObservationCount(5)
 DEFAULT_ASSOCIATION_CONFIDENCE_LEVEL = Ratio(0.95)
 
 
 class AssociationIssue(StrEnum):
-    INSUFFICIENT_OBSERVATIONS = "association requires at least three observations"
-    INSUFFICIENT_EVIDENCE = "association is mathematically computable but scientifically underpowered for publication"
+    INSUFFICIENT_EVIDENCE = "association requires at least five observations for publication"
     NON_FINITE_OBSERVATION = "association observations must be finite"
     ZERO_HETEROGENEITY_VARIATION = "heterogeneity has zero variation"
     ZERO_BENEFIT_VARIATION = "benefit has zero variation"
@@ -43,8 +41,6 @@ class AssociationIssue(StrEnum):
             AssociationIssue.ZERO_BENEFIT_VARIATION,
         }:
             return AvailabilityStatus.UNDEFINED
-        if self is AssociationIssue.INSUFFICIENT_EVIDENCE:
-            return AvailabilityStatus.AVAILABLE
         return AvailabilityStatus.UNAVAILABLE
 
 
@@ -98,8 +94,7 @@ class AssociationResult(StrictModel):
     @model_validator(mode="after")
     def validate_result(self) -> "AssociationResult":
         if (self.statistics is None) == (self.issue is None):
-            if not (self.statistics is not None and self.issue is AssociationIssue.INSUFFICIENT_EVIDENCE):
-                raise ValueError("association result requires either statistics or one issue")
+            raise ValueError("association result requires either statistics or one issue")
         if self.statistics is not None:
             count = len(self.observations)
             if len(self.statistics.leverage) != count:
@@ -136,10 +131,10 @@ def heterogeneity_benefit_association(
     *,
     confidence_level: Ratio = DEFAULT_ASSOCIATION_CONFIDENCE_LEVEL,
 ) -> AssociationResult:
-    if len(observations) < MINIMUM_ASSOCIATION_OBSERVATIONS.value:
+    if len(observations) < MINIMUM_PUBLICATION_OBSERVATIONS.value:
         return _unavailable_association(
             observations,
-            AssociationIssue.INSUFFICIENT_OBSERVATIONS,
+            AssociationIssue.INSUFFICIENT_EVIDENCE,
         )
     x_values = np.fromiter(
         (item.heterogeneity.value for item in observations),
@@ -188,7 +183,6 @@ def heterogeneity_benefit_association(
     alpha = 1.0 - confidence_level.value
     t_critical = float(stats.t.ppf(1.0 - alpha / 2.0, df=max(x_values.size - 2, 1)))
     loo = _leave_one_out(x_values, y_values, regression.slope)
-    sufficient = len(observations) >= MINIMUM_PUBLICATION_OBSERVATIONS.value
     statistics = AssociationStatistics(
         spearman_rho=CorrelationCoefficient(spearman.statistic.value),
         spearman_p_value=PValue(spearman.p_value.value),
@@ -202,12 +196,12 @@ def heterogeneity_benefit_association(
         r_squared=Ratio(regression.rvalue.value**2),
         leverage=tuple(Ratio(float(value)) for value in leverage),
         leave_one_out_diagnostics=loo,
-        evidentiary_sufficient=sufficient,
+        evidentiary_sufficient=True,
     )
     return AssociationResult(
         observations=observations,
         statistics=statistics,
-        issue=None if sufficient else AssociationIssue.INSUFFICIENT_EVIDENCE,
+        issue=None,
     )
 
 
