@@ -127,6 +127,7 @@ class RuntimeEnvironmentEvidence(StrictModel):
 
 class EstimationSummaryReport(StrictModel):
     experiment: ExperimentId
+    comparator_claim_boundary: ValidationReasonText | None
     rows: tuple[EstimationSummary, ...]
 
 
@@ -540,7 +541,14 @@ def report_federated_benign_statistics_comparison(
         if loaded.summary is not None:
             rows.append(loaded.summary)
     serialize_json_model(
-        EstimationSummaryReport(experiment=experiment_id, rows=tuple(rows)),
+        EstimationSummaryReport(
+            experiment=experiment_id,
+            comparator_claim_boundary=ValidationReasonText(
+                "The benign-summary threshold is a declared comparator and does not claim faithful reproduction "
+                "of Laridi et al.'s complete method."
+            ),
+            rows=tuple(rows),
+        ),
         _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
     )
     return finalize_analysis_report(
@@ -598,7 +606,7 @@ def report_federated_quantile_estimation(
         if loaded.summary is not None:
             rows.append(loaded.summary)
     serialize_json_model(
-        EstimationSummaryReport(experiment=experiment_id, rows=tuple(rows)),
+        EstimationSummaryReport(experiment=experiment_id, comparator_claim_boundary=None, rows=tuple(rows)),
         _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
     )
     return finalize_analysis_report(
