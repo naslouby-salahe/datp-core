@@ -156,6 +156,22 @@ def test_release_builder_packages_explicit_retained_evidence_and_validates_it(tm
 
     assert len(release.entries) == 5
     assert (release.root / "METRICS" / "confirmatory.json").read_bytes() == source.read_bytes()
+    environment = (release.root / "ENVIRONMENT" / "runtime.txt").read_text(encoding="utf-8")
+    for key in (
+        "python=",
+        "os_kernel=",
+        "host_identifier=",
+        "cpu_model=",
+        "ram_bytes=",
+        "gpu_model=",
+        "gpu_count=",
+        "cuda_runtime=",
+        "gpu_driver=",
+        "cudnn_version=",
+        "dependency.torch=",
+        "dependency.flwr=",
+    ):
+        assert key in environment
 
 
 def test_release_evaluation_metadata_is_derived_from_the_persisted_coordinate(tmp_path: Path) -> None:

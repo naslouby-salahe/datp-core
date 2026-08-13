@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 from dataclasses import dataclass
 from datetime import date
 from enum import StrEnum
@@ -9,9 +10,10 @@ from hashlib import sha256
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as package_version
 from pathlib import Path
-from platform import platform, processor
+from platform import node, platform, processor
 from re import fullmatch
 from shutil import copy2
+from subprocess import CalledProcessError, TimeoutExpired, run
 from sys import argv, version
 
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
@@ -78,6 +80,31 @@ _MANIFEST_COLUMNS = (
     "training_seed",
     "threshold_policy",
     "experiment_id",
+)
+_DIRECT_DEPENDENCIES = (
+    "pydantic",
+    "filelock",
+    "networkx",
+    "numpy",
+    "pyarrow",
+    "polars",
+    "pandera",
+    "duckdb",
+    "datasketches",
+    "matplotlib",
+    "torch",
+    "scikit-learn",
+    "safetensors",
+    "scipy",
+    "structlog",
+    "pingouin",
+    "pandas",
+    "statsmodels",
+    "typer",
+    "rich",
+    "shellingham",
+    "skops",
+    "flwr",
 )
 
 
@@ -563,22 +590,7 @@ def _write_release_metadata(request: ReleaseBuildRequest) -> None:
         + "NA,fedavg_local_fine_tuning,derive_worker_seed(training_seed;dataset;population;client;purpose)\n",
         encoding="utf-8",
     )
-    (request.root / "ENVIRONMENT" / "runtime.txt").write_text(
-        "\n".join(
-            (
-                f"python={version.replace(chr(10), ' ')}",
-                f"os={platform()}",
-                f"cpu={processor() or 'NA'}",
-                f"numpy={_installed_version('numpy')}",
-                f"scipy={_installed_version('scipy')}",
-                f"scikit-learn={_installed_version('scikit-learn')}",
-                f"torch={_installed_version('torch')}",
-                f"datasketches={_installed_version('datasketches')}",
-            )
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+    (request.root / "ENVIRONMENT" / "runtime.txt").write_text("\n".join(_environment_lines()) + "\n", encoding="utf-8")
     (request.root / "README_REPRODUCIBILITY.md").write_text(
         "# Reproducibility release\n\n"
         f"State: `{request.state.value}`. Validate this bundle with `datp-core validate-release <root>`.\n",
@@ -597,6 +609,64 @@ def _installed_version(distribution: str) -> str:
         return package_version(distribution)
     except PackageNotFoundError:
         return "NA"
+
+
+def _environment_lines() -> tuple[str, ...]:
+    gpu_model, gpu_count, cuda_runtime, gpu_driver, cudnn_version = _gpu_environment()
+    return (
+        f"python={version.replace(chr(10), ' ')}",
+        f"os_kernel={platform()}",
+        f"host_identifier={node() or 'NA'}",
+        f"cpu_model={processor() or 'NA'}",
+        f"ram_bytes={_ram_bytes()}",
+        f"gpu_model={gpu_model}",
+        f"gpu_count={gpu_count}",
+        f"cuda_runtime={cuda_runtime}",
+        f"gpu_driver={gpu_driver}",
+        f"cudnn_version={cudnn_version}",
+        *(f"dependency.{distribution}={_installed_version(distribution)}" for distribution in _DIRECT_DEPENDENCIES),
+    )
+
+
+def _ram_bytes() -> str:
+    try:
+        return str(os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES"))
+    except (AttributeError, OSError, ValueError):
+        return "NA"
+
+
+def _gpu_environment() -> tuple[str, str, str, str, str]:
+    try:
+        import torch
+    except ImportError:
+        return ("NA", "0", "NA", "NA", "NA")
+    if not torch.cuda.is_available():
+        return ("NA", "0", torch.version.cuda or "NA", "NA", "NA")
+    count = torch.cuda.device_count()
+    models = ";".join(torch.cuda.get_device_name(index) for index in range(count)) or "NA"
+    cudnn = torch.backends.cudnn.version()
+    return (
+        models,
+        str(count),
+        torch.version.cuda or "NA",
+        _gpu_driver_version(),
+        str(cudnn) if cudnn is not None else "NA",
+    )
+
+
+def _gpu_driver_version() -> str:
+    try:
+        completed = run(
+            ["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (CalledProcessError, FileNotFoundError, OSError, TimeoutExpired):
+        return "NA"
+    values = tuple(sorted({line.strip() for line in completed.stdout.splitlines() if line.strip()}))
+    return ";".join(values) or "NA"
 
 
 def _write_manifest(root: Path, artifacts: tuple[ReleaseArtifact, ...]) -> None:
