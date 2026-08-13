@@ -3,6 +3,7 @@ from pathlib import Path
 
 from datp_core.analysis.metrics.federated import FederatedEvaluationArtifacts, FederatedEvaluationPublication
 from datp_core.artifacts.serializers.json import canonical_json_text
+from datp_core.core.errors import ErrorMessage, ScientificContractError
 from datp_core.core.identifiers import FileContentText
 from datp_core.runtime.filesystem import write_text_atomically
 
@@ -15,6 +16,10 @@ def write_federated_evaluation(
     publication: FederatedEvaluationPublication,
     directory: Path,
 ) -> FederatedEvaluationArtifacts:
+    if publication.document.execution_coordinate is None:
+        raise ScientificContractError(
+            ErrorMessage("persisted federated evaluation requires a complete execution coordinate")
+        )
     write_text_atomically(
         directory / FederatedEvaluationAssetName.DOCUMENT,
         FileContentText(canonical_json_text(publication.document)),

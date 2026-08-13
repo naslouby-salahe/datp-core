@@ -299,6 +299,23 @@ def test_release_evaluation_metadata_is_derived_from_the_persisted_coordinate(tm
     assert artifact.experiment_id == "shared_vs_local_confirmation"
 
 
+def test_release_rejects_evaluation_evidence_without_a_persisted_coordinate(tmp_path: Path) -> None:
+    document = cast(
+        FederatedEvaluationDocument,
+        SimpleNamespace(
+            score_coordinate=SimpleNamespace(
+                population=PopulationId.NBAIOT_NATURAL_DEVICES,
+                model=TrainingModelId.FEDAVG_AUTOENCODER,
+                training_seed=Seed(4),
+            ),
+            execution_coordinate=None,
+        ),
+    )
+
+    with pytest.raises(ArtifactIntegrityError, match="requires a persisted complete execution coordinate"):
+        release._release_artifact_from_document(tmp_path / "evaluation.json", Path("METRICS/evaluation.json"), document)
+
+
 def test_campaign_release_discovery_rejects_output_roots_without_evaluation_evidence(tmp_path: Path) -> None:
     with pytest.raises(ArtifactIntegrityError, match="requires persisted evaluation documents"):
         campaign_evaluation_release_artifacts(tmp_path)

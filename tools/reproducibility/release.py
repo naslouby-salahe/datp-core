@@ -508,6 +508,11 @@ def _release_artifact_from_document(
     document: FederatedEvaluationDocument,
 ) -> ReleaseArtifact:
     coordinate = document.score_coordinate
+    execution_coordinate = document.execution_coordinate
+    if execution_coordinate is None:
+        raise ArtifactIntegrityError(
+            ErrorMessage("released evaluation document requires a persisted complete execution coordinate")
+        )
     return ReleaseArtifact(
         source=source,
         relative_path=relative_path,
@@ -517,11 +522,7 @@ def _release_artifact_from_document(
         training_method=coordinate.model.value,
         training_seed=str(coordinate.training_seed.value),
         threshold_policy=document.threshold_method.value,
-        experiment_id=(
-            document.execution_coordinate.experiment.value
-            if document.execution_coordinate is not None
-            else document.execution_key.split("/")[0]
-        ),
+        experiment_id=execution_coordinate.experiment.value,
     )
 
 
