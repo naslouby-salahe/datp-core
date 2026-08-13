@@ -18,13 +18,19 @@ from datp_core.analysis.influence import leave_one_device_out_effects, summarize
 from datp_core.analysis.mechanisms import (
     AbsorptionCornerEvidence,
     AssociationObservation,
+    CalibrationSupportBurdenCampaignSummary,
+    CalibrationSupportBurdenDeviceReport,
     CalibrationSupportBurdenSeedEvidence,
+    CampaignFixedSupportStrata,
+    ClientImpactCampaignSummary,
     ClientScoreVector,
     EquityUtilityParetoView,
     FamilyRecallPolicyComparison,
     GroupDispersionObservation,
     GroupedDispersionResult,
     MechanismEvidence,
+    SupportStratumCampaignSummary,
+    SupportStratumOutcomeReport,
     ThresholdMovementCohort,
     calibration_support_burden_evidence,
     campaign_fixed_support_strata,
@@ -83,6 +89,10 @@ from datp_core.experiments.execution.layout import (
 )
 from datp_core.experiments.execution.models import ProgressHook
 from datp_core.experiments.registry import EXPERIMENTS, ExperimentDeclaration
+from datp_core.presentation.client_impact_tables import (
+    export_client_impact_strata_table,
+    export_support_burden_table,
+)
 from datp_core.presentation.export import export_confirmatory_publication, export_mechanism_publication
 from datp_core.presentation.figures import (
     FigureSpec,
@@ -203,9 +213,7 @@ def analyze_confirmatory_campaign() -> Path:
     mechanisms = _confirmatory_mechanisms()
     cluster_mechanisms = _confirmatory_cluster_mechanisms()
     all_mechanisms = mechanisms + cluster_mechanisms
-    contrasts = PairedContrasts(
-        values=tuple(_confirmatory_contrast(seed) for seed in CONFIRMATORY_SEED_COHORT.values)
-    )
+    contrasts = PairedContrasts(values=tuple(_confirmatory_contrast(seed) for seed in CONFIRMATORY_SEED_COHORT.values))
     lodo_effects = tuple(
         effect
         for seed in CONFIRMATORY_SEED_COHORT.values
@@ -245,6 +253,7 @@ def analyze_confirmatory_campaign() -> Path:
     export_prior_art_distinction_table(output / "prior_art_distinction_table.md")
     pareto_views = _confirmatory_pareto_views()
     export_target_attainment_table(pareto_views[0], output / "calibration_target_attainment.md")
+    _export_client_impact_synthesis_tables(all_mechanisms, output)
     if all_mechanisms:
         export_mechanism_publication(
             all_mechanisms,
@@ -254,6 +263,23 @@ def analyze_confirmatory_campaign() -> Path:
             evidence_role=EvidenceRole.MECHANISM,
         )
     return output
+
+
+def _export_client_impact_synthesis_tables(mechanisms: tuple[MechanismEvidence, ...], output: Path) -> None:
+    support_campaign = next(item for item in mechanisms if isinstance(item, CalibrationSupportBurdenCampaignSummary))
+    support_devices = next(item for item in mechanisms if isinstance(item, CalibrationSupportBurdenDeviceReport))
+    strata = next(item for item in mechanisms if isinstance(item, CampaignFixedSupportStrata))
+    stratum_outcomes = next(item for item in mechanisms if isinstance(item, SupportStratumOutcomeReport))
+    stratum_campaign = next(item for item in mechanisms if isinstance(item, SupportStratumCampaignSummary))
+    impact = next(item for item in mechanisms if isinstance(item, ClientImpactCampaignSummary))
+    export_support_burden_table(support_campaign, support_devices, output / "calibration_support_burden.md")
+    export_client_impact_strata_table(
+        strata,
+        stratum_outcomes,
+        stratum_campaign,
+        impact,
+        output / "natural_device_helped_harmed_strata.md",
+    )
 
 
 def _confirmatory_mechanisms() -> tuple[MechanismEvidence, ...]:
