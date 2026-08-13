@@ -112,7 +112,7 @@ def export_temporal_figure_sources(
     manifest = {
         "schema_version": "temporal_figure_sources_v1",
         "experiment": document.experiment.value,
-        "population": PopulationId.EDGE_TEMPORAL_GROUPS.value,
+        "population": PopulationId.EDGE_TEMPORAL_CLIENTS.value,
         "evidence_role": EvidenceRole.TEMPORAL_BOUNDARY.value,
         "threshold_method": document.threshold_method.value,
         "sources": (

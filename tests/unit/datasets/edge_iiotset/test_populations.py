@@ -12,7 +12,7 @@ from datp_core.data.edge_iiotset.populations import (
 )
 from datp_core.data.edge_iiotset.schema import EDGE_BENIGN_SENSOR_GROUPS
 from datp_core.data.populations.contracts import (
-    EDGE_SENSOR_GROUPS,
+    EDGE_SENSOR_CLIENTS,
     CapabilityStatus,
     ChronologicalPartitionDiagnosticsDocument,
     PopulationFeasibilityStatus,
@@ -36,8 +36,8 @@ def test_edge_static_includes_ten_groups_with_modbus(edge_canonical_root: Path) 
 
 def test_edge_static_capabilities_declare_no_attack_or_family_interpretation() -> None:
     capabilities = build_population_capabilities(
-        EDGE_SENSOR_GROUPS,
-        population_evidence_role(PopulationId.EDGE_SENSOR_GROUPS),
+        EDGE_SENSOR_CLIENTS,
+        population_evidence_role(PopulationId.EDGE_SENSOR_CLIENTS),
         EDGE_IIOTSET_CAPABILITIES,
     )
     assert capabilities.client_level_attack_assignment is CapabilityStatus.UNAVAILABLE

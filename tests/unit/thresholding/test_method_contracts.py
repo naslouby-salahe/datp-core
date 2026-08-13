@@ -41,13 +41,19 @@ from datp_core.thresholds.policies.family import (
 )
 from datp_core.thresholds.policies.local import LocalThresholdResult
 from datp_core.thresholds.policies.shared import SharedThresholdResult
-from datp_core.thresholds.protocols import CLUSTER_THRESHOLD_PROTOCOL, ClusterFingerprintFeature, KMeansInitialization
+from datp_core.thresholds.protocols import (
+    CLUSTER_THRESHOLD_PROTOCOL,
+    FEDERATED_STATISTICS_PROTOCOL,
+    ClusterFingerprintFeature,
+    KMeansInitialization,
+)
 from datp_core.thresholds.variants.conformal import (
     ConformalAssignment,
     ConformalThresholdResult,
 )
 from datp_core.thresholds.variants.federated_statistics import (
     PooledVarianceDecomposition,
+    construct_federated_benign_statistics,
 )
 from datp_core.thresholds.variants.shrinkage import (
     ShrinkageAssignment,
@@ -315,6 +321,35 @@ def test_federated_statistics_contracts_enforce_variance_identities() -> None:
         )
     with pytest.raises(ValueError, match="quantile"):
         Quantile(1.5)
+
+
+def test_federated_statistics_uses_the_locked_weighted_variance_decomposition() -> None:
+    result = construct_federated_benign_statistics(
+        (
+            client_scores("client_a", (0.0, 2.0)),
+            client_scores("client_b", (4.0, 6.0)),
+        ),
+        FEDERATED_STATISTICS_PROTOCOL,
+        Quantile(0.95),
+    )
+
+    decomposition = result.decomposition
+    assert decomposition.global_mean == ScoreMoment(3.0)
+    assert decomposition.within_client_variance == ScoreVariance(1.0)
+    assert decomposition.between_client_variance == ScoreVariance(4.0)
+    assert decomposition.full_pooled_variance == ScoreVariance(5.0)
+    assert decomposition.between_ratio is not None
+    assert decomposition.between_ratio.value == pytest.approx(0.8)
+
+    zero_variance_result = construct_federated_benign_statistics(
+        (
+            client_scores("client_a", (0.0, 0.0)),
+            client_scores("client_b", (0.0, 0.0)),
+        ),
+        FEDERATED_STATISTICS_PROTOCOL,
+        Quantile(0.95),
+    )
+    assert zero_variance_result.decomposition.between_ratio is None
 
 
 def test_unavailable_threshold_requires_human_readable_detail() -> None:

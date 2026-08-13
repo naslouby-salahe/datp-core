@@ -4,15 +4,18 @@ from pathlib import Path
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.analysis.operational.communication import (
     CommunicationMessageDiagnostic,
+    MessageDirection,
     ThresholdPayloadKind,
     ThresholdStageCommunicationDiagnostic,
 )
+from datp_core.core.errors import ErrorMessage, ScientificContractError
 from datp_core.core.identifiers import FederatedThresholdMethod, FileContentText
 from datp_core.runtime.filesystem import write_text_atomically
 
 
 def export_threshold_stage_accounting(documents: tuple[FederatedEvaluationDocument, ...], destination: Path) -> Path:
     """Publish persisted threshold-only transport and coordinator disclosure evidence."""
+    _require_one_threshold_accounting_cohort(documents)
     by_method: dict[FederatedThresholdMethod, list[FederatedEvaluationDocument]] = defaultdict(list)
     for document in documents:
         by_method[document.threshold_method].append(document)
@@ -22,10 +25,11 @@ def export_threshold_stage_accounting(documents: tuple[FederatedEvaluationDocume
         "All rows describe threshold construction after score arrays are materialized; detector scoring and disk I/O "
         "are excluded. Serialized byte counts are taken from persisted serializer-bound diagnostics.",
         "",
-        "| Policy | Seeds | Logical fields | Raw-field bytes by seed | Serialized bytes by seed | "
-        "Runtime ms by seed (median/IQR/p95) | Coordinator observes "
+        "| Policy | Seeds | Upload logical fields/client | Serialized upload bytes/client (total) | "
+        "Serialized response bytes/client (total) | Broadcast accounting | Threshold rounds | "
+        "Raw-field bytes by seed | Runtime ms by seed (median/IQR/p95) | Coordinator observes "
         "threshold / moments / fingerprint / sketch / family / cluster assignment | Raw calibration records |",
-        "| --- | ---: | --- | --- | --- | --- | --- | --- |",
+        "| --- | ---: | --- | --- | --- | --- | ---: | --- | --- | --- | --- |",
     ]
     for method, method_documents in sorted(by_method.items(), key=lambda item: item[0].value):
         ordered = tuple(sorted(method_documents, key=lambda item: item.score_coordinate.training_seed))
@@ -33,23 +37,26 @@ def export_threshold_stage_accounting(documents: tuple[FederatedEvaluationDocume
         if any(item is None for item in diagnostics):
             lines.append(
                 f"| `{method.value}` | {len(ordered)} | UNAVAILABLE | UNAVAILABLE | UNAVAILABLE | "
-                "UNAVAILABLE | UNAVAILABLE | no |"
+                "UNAVAILABLE | UNAVAILABLE | UNAVAILABLE | UNAVAILABLE | UNAVAILABLE | no |"
             )
             continue
         available = tuple(item for item in diagnostics if item is not None)
         kinds = frozenset(message.payload_kind for diagnostic in available for message in diagnostic.messages)
-        logical = ", ".join(
-            f"{diagnostic.training_seed.value}:{diagnostic.total_logical_element_count.value}"
-            for diagnostic in available
+        uploads = _directional_bytes_by_seed(available, MessageDirection.CLIENT_TO_COORDINATOR, logical=True)
+        responses = _directional_bytes_by_seed(available, MessageDirection.COORDINATOR_TO_CLIENT, logical=False)
+        response_accounting = ", ".join(
+            f"{diagnostic.training_seed.value}:{diagnostic.broadcast_accounting.value}" for diagnostic in available
         )
-        bytes_by_seed = ", ".join(
-            f"{diagnostic.training_seed.value}:{diagnostic.total_serialized_bytes.value}" for diagnostic in available
+        rounds = ", ".join(
+            f"{diagnostic.training_seed.value}:{diagnostic.communication_round_count.value}" for diagnostic in available
         )
         raw_bytes_by_seed = _raw_bytes_by_seed(available)
         runtime_by_seed = _runtime_by_seed(ordered)
         lines.append(
-            f"| `{method.value}` | {len(ordered)} | {logical or '0'} | {raw_bytes_by_seed} | "
-            f"{bytes_by_seed or '0'} | {runtime_by_seed} | "
+            f"| `{method.value}` | {len(ordered)} | {uploads[0] or '0'} | {uploads[1] or '0'} | "
+            f"{responses[0] or '0'} (total={responses[1] or '0'}) | "
+            f"{response_accounting or 'UNAVAILABLE'} | {rounds or '0'} | "
+            f"{raw_bytes_by_seed} | {runtime_by_seed} | "
             f"{_disclosures(kinds)} | no |"
         )
     lines.extend(
@@ -60,6 +67,34 @@ def export_threshold_stage_accounting(documents: tuple[FederatedEvaluationDocume
         )
     )
     return write_text_atomically(destination, FileContentText("\n".join(lines) + "\n"))
+
+
+def _require_one_threshold_accounting_cohort(documents: tuple[FederatedEvaluationDocument, ...]) -> None:
+    """Prevent a single accounting table from silently combining incomparable detector states."""
+
+    if not documents:
+        raise ScientificContractError(ErrorMessage("threshold-stage accounting requires evaluation documents"))
+    signatures = {_score_cohort_signature(document) for document in documents}
+    if len(signatures) != 1:
+        raise ScientificContractError(
+            ErrorMessage(
+                "threshold-stage accounting requires one population, split, preprocessing, and detector cohort"
+            )
+        )
+    cells = tuple((document.threshold_method, document.score_coordinate.training_seed) for document in documents)
+    if len(cells) != len(frozenset(cells)):
+        raise ScientificContractError(ErrorMessage("threshold-stage accounting cannot repeat a policy/seed cell"))
+
+
+def _score_cohort_signature(document: FederatedEvaluationDocument) -> tuple[object, ...]:
+    coordinate = document.score_coordinate
+    return (
+        coordinate.population,
+        coordinate.split_protocol,
+        coordinate.preprocessing_identity,
+        coordinate.model,
+        coordinate.model_coefficient,
+    )
 
 
 def _disclosures(kinds: frozenset[ThresholdPayloadKind]) -> str:
@@ -90,6 +125,29 @@ def _raw_bytes_by_seed(diagnostics: tuple[ThresholdStageCommunicationDiagnostic,
             total = sum(value for value in raw_bytes if value is not None)
             rendered.append(f"{diagnostic.training_seed.value}:{total}")
     return ", ".join(rendered) or "0"
+
+
+def _directional_bytes_by_seed(
+    diagnostics: tuple[ThresholdStageCommunicationDiagnostic, ...],
+    direction: MessageDirection,
+    *,
+    logical: bool,
+) -> tuple[str, str]:
+    rendered: list[str] = []
+    total_by_seed: list[str] = []
+    for diagnostic in diagnostics:
+        messages = tuple(item for item in diagnostic.messages if item.direction is direction)
+        by_client: dict[str, int] = defaultdict(int)
+        for message in messages:
+            if message.client is None:
+                raise ScientificContractError(ErrorMessage("threshold-stage messages require a client identity"))
+            value = message.payload.logical_element_count.value if logical else message.estimated_serialized_bytes.value
+            by_client[message.client.client_id.value] += value
+        per_client = ";".join(f"{client}:{value}" for client, value in sorted(by_client.items())) or "0"
+        total = sum(by_client.values())
+        rendered.append(f"{diagnostic.training_seed.value}:{per_client}")
+        total_by_seed.append(f"{diagnostic.training_seed.value}:{total}")
+    return ", ".join(rendered), ", ".join(total_by_seed)
 
 
 def _raw_message_bytes(message: CommunicationMessageDiagnostic) -> int | None:

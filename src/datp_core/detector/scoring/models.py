@@ -43,6 +43,7 @@ class FederatedScoreAssetName(StrEnum):
     CALIBRATION = "calibration.parquet"
     EVALUATION = "evaluation.parquet"
     FUTURE_RECALIBRATION = "future_recalibration.parquet"
+    MANIFEST = "score_manifest.json"
 
 
 class CentralizedScoreAssetName(StrEnum):

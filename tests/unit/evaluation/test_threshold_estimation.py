@@ -6,14 +6,17 @@ import pytest
 from tests.unit.learning.federated.helpers import client_identity, fedavg_coordinate
 from tests.unit.thresholding.helpers import client_scores
 
+from datp_core.analysis.metrics.models import MetricReason, MetricStatus
 from datp_core.analysis.metrics.threshold_estimation import (
     ThresholdEstimationDiagnostic,
     ThresholdEstimationProvenance,
+    evaluate_threshold_estimate,
     sample_efficiency_curve,
 )
-from datp_core.analysis.metrics.threshold_evidence import verify_held_out_benign_scores
+from datp_core.analysis.metrics.threshold_evidence import VerifiedHeldOutBenignScores, verify_held_out_benign_scores
 from datp_core.core.errors import ScientificContractError
-from datp_core.core.numeric import CalibrationSize, Quantile, ReplicateIndex, Seed, ThresholdValue
+from datp_core.core.identifiers import MetricId
+from datp_core.core.numeric import CalibrationSize, Quantile, ReplicateIndex, ScoreValue, Seed, ThresholdValue
 from datp_core.experiments.execution.workspace import _pooled_calibration_quantile
 from datp_core.thresholds.quantiles import exact_empirical_quantile
 
@@ -70,4 +73,55 @@ def test_sample_efficiency_uses_the_locked_sample_variance() -> None:
 
     point = sample_efficiency_curve(diagnostics)[0]
 
+    assert point.replicate_count.value == 3
+    assert point.mean_threshold.value == pytest.approx(2.0)
     assert point.threshold_variance_across_nested_replicates.value == pytest.approx(1.0)
+    assert point.threshold_standard_deviation_across_nested_replicates.value == pytest.approx(1.0)
+
+
+def test_threshold_estimation_preserves_oracle_error_and_attainment_semantics() -> None:
+    coordinate = fedavg_coordinate(Seed(5))
+    provenance = ThresholdEstimationProvenance(
+        client_identity("client_a"),
+        coordinate,
+        Seed(5),
+        CalibrationSize(10),
+        ReplicateIndex(0),
+        Quantile(0.8),
+    )
+    held_out_scores = cast(
+        VerifiedHeldOutBenignScores,
+        SimpleNamespace(
+            client=provenance.client,
+            coordinate=coordinate,
+            scores=tuple(SimpleNamespace(score=value) for value in (ScoreValue(0.1), ScoreValue(0.5))),
+        ),
+    )
+
+    diagnostic = evaluate_threshold_estimate(
+        provenance=provenance,
+        estimated_threshold=ThresholdValue(0.1),
+        exact_pooled_benign_quantile_reference=ThresholdValue(0.5),
+        verified_benign_scores=held_out_scores,
+    )
+    metrics = {metric.metric: metric for metric in diagnostic.metrics}
+
+    assert diagnostic.target_exceedance.value == pytest.approx(0.2)
+    assert diagnostic.achieved_benign_exceedance.value == pytest.approx(0.5)
+    absolute_threshold_error = metrics[MetricId.ABSOLUTE_THRESHOLD_ERROR]
+    relative_threshold_error = metrics[MetricId.RELATIVE_THRESHOLD_ERROR]
+    assert absolute_threshold_error.value is not None
+    assert absolute_threshold_error.value.value == pytest.approx(0.4)
+    assert relative_threshold_error.value is not None
+    assert relative_threshold_error.value.value == pytest.approx(0.8)
+    assert diagnostic.signed_attainment_error.value == pytest.approx(0.3)
+    assert diagnostic.absolute_attainment_error.value == pytest.approx(0.3)
+
+    zero_oracle = evaluate_threshold_estimate(
+        provenance=provenance,
+        estimated_threshold=ThresholdValue(0.1),
+        exact_pooled_benign_quantile_reference=ThresholdValue(0.0),
+        verified_benign_scores=held_out_scores,
+    )
+    assert zero_oracle.relative_threshold_error_status is MetricStatus.UNDEFINED
+    assert zero_oracle.relative_error_unavailable_reason is MetricReason.ZERO_MEAN

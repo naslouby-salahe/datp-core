@@ -67,7 +67,7 @@ class ExecutionIdentityDeclaration:
 EXECUTION_IDENTITY_DECLARATIONS = (
     ExecutionIdentityDeclaration(
         experiment=ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION,
-        population=PopulationId.EDGE_SENSOR_GROUPS,
+        population=PopulationId.EDGE_SENSOR_CLIENTS,
         evidence_role=EvidenceRole.EXTERNAL_VALIDATION,
         temporal_states=(None,),
     ),
@@ -79,7 +79,7 @@ EXECUTION_IDENTITY_DECLARATIONS = (
     ),
     ExecutionIdentityDeclaration(
         experiment=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
-        population=PopulationId.EDGE_TEMPORAL_GROUPS,
+        population=PopulationId.EDGE_TEMPORAL_CLIENTS,
         evidence_role=EvidenceRole.TEMPORAL_BOUNDARY,
         temporal_states=(
             TemporalState.STATIC_REFERENCE,

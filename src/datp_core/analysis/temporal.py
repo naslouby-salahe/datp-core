@@ -121,6 +121,24 @@ class TemporalClientTrajectory(StrictModel):
     macro_f1_recalibrated: MetricValue | None = None
     drift_js: MetricValue | None = None
 
+    @model_validator(mode="after")
+    def validate_eligibility(self) -> TemporalClientTrajectory:
+        if self.eligible != (self.exclusion_reason is None):
+            raise ValueError("temporal client eligibility and exclusion reason must agree")
+        if self.eligible and any(
+            value is None
+            for value in (
+                self.threshold_static,
+                self.threshold_frozen,
+                self.threshold_recalibrated,
+                self.fpr_static,
+                self.fpr_frozen,
+                self.fpr_recalibrated,
+            )
+        ):
+            raise ValueError("eligible temporal clients require all threshold and FPR observations")
+        return self
+
     @property
     def client_id(self) -> ClientIdentityToken:
         return self.client.client_id
@@ -688,6 +706,18 @@ class TemporalDeploymentProvenance(StrictModel):
             raise ValueError("temporal deployment state has an invalid partition binding")
         if self.split_protocol is not temporal_split_protocol(self.state):
             raise ValueError(f"{self.state.name.lower()} requires its designated split protocol")
+        if not self.calibration_records or not self.evaluation_records:
+            raise ValueError("temporal deployment provenance requires non-empty score evidence")
+        if any(record.partition_role is not self.calibration_role for record in self.calibration_records):
+            raise ValueError("temporal calibration records must match the declared calibration role")
+        if any(record.partition_role is not self.evaluation_role for record in self.evaluation_records):
+            raise ValueError("temporal evaluation records must match the declared evaluation role")
+        coordinate = training_coordinates(self.coordinate)
+        if any(record.coordinate not in coordinate for record in self.calibration_records + self.evaluation_records):
+            raise ValueError("temporal score records must match the declared detector coordinate")
+        clients = tuple(record.scored_client for record in self.calibration_records + self.evaluation_records)
+        if any(client.population is not coordinate[0].population for client in clients):
+            raise ValueError("temporal score records must match the detector population")
         return self
 
     @property

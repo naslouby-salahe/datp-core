@@ -61,12 +61,12 @@ def test_edge_clients_are_not_attack_evaluable() -> None:
             200,
             50,
             0,
-            population=PopulationId.EDGE_SENSOR_GROUPS,
+            population=PopulationId.EDGE_SENSOR_CLIENTS,
             identity_kind=PopulationIdentityKind.SOURCE_DEFINED_SENSOR_GROUPS,
         ),
     )
     manifest = build_evaluation_cohort_manifest(
-        population=PopulationId.EDGE_SENSOR_GROUPS,
+        population=PopulationId.EDGE_SENSOR_CLIENTS,
         partition_seed=Seed(0),
         client_counts=counts,
     )

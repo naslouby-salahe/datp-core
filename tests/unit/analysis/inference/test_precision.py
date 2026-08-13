@@ -37,6 +37,7 @@ def test_confirmatory_precision_diagnostics_use_sample_sd_and_all_loso_means() -
 
     diagnostics = confirmatory_precision_diagnostics(contrasts, interval)
 
+    assert tuple(delta.value for delta in contrasts.deltas) == tuple(range(1, 11))
     assert diagnostics.full_mean_delta == MetricValue(5.5)
     assert diagnostics.sample_standard_deviation.value == pytest.approx(math.sqrt(55.0 / 6.0))
     assert diagnostics.standard_error_proxy.value == pytest.approx(math.sqrt(11.0 / 12.0))

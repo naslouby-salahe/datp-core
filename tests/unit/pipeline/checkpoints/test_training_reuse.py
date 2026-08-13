@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -14,10 +15,11 @@ from tests.unit.learning.federated.helpers import (
 
 from datp_core.artifacts.serializers.safetensors import save_state_dict_tensors
 from datp_core.core.errors import ArtifactIntegrityError
-from datp_core.core.numeric import RoundNumber, Seed
+from datp_core.core.numeric import MetricValue, RoundNumber, Seed
 from datp_core.detector.autoencoder import AutoencoderModelState, build_reconstruction_autoencoder
 from datp_core.detector.checkpoints import publication as publication_module
 from datp_core.detector.checkpoints.contracts import DiagnosticSnapshotProtocol
+from datp_core.detector.checkpoints.history import read_parquet
 from datp_core.detector.checkpoints.identities import FederatedHistoryAssetName
 from datp_core.detector.checkpoints.publication import load_federated_training
 from datp_core.detector.training import federated as federated_module
@@ -27,7 +29,7 @@ from datp_core.detector.training.contracts import (
     FederatedClientDataResidency,
 )
 from datp_core.detector.training.engine import FederatedTrainingRequest
-from datp_core.detector.training.models import TrainingTerminationReason
+from datp_core.detector.training.models import FederatedTrainingExecution, TrainingTerminationReason
 
 FAST_PROTOCOL = DiagnosticSnapshotProtocol(diagnostic_rounds=(), maximum_round=RoundNumber(1))
 
@@ -54,6 +56,23 @@ def test_train_global_federated_reuses_persisted_evidence_across_separate_invoca
     require_cuda()
     request = _request(tmp_path)
 
+    original_training = federated_module.run_federated_training
+
+    def _training_with_validation_history(
+        training_request: FederatedTrainingRequest,
+    ) -> FederatedTrainingExecution:
+        execution = original_training(training_request)
+        history = replace(
+            execution.training_result.history,
+            rounds=tuple(
+                replace(round_result, aggregate_validation_loss=MetricValue(0.25))
+                for round_result in execution.training_result.history.rounds
+            ),
+        )
+        return replace(execution, training_result=replace(execution.training_result, history=history))
+
+    monkeypatch.setattr(federated_module, "run_federated_training", _training_with_validation_history)
+
     first = federated_module.train_global_federated(request)
     assert first.termination_reason is TrainingTerminationReason.FIXED_ROUND_BUDGET_COMPLETED
 
@@ -73,6 +92,7 @@ def test_train_global_federated_reuses_persisted_evidence_across_separate_invoca
     assert client_result.l2_drift is not None
     assert client_result.rms_drift is not None
     assert client_result.terminal_prox_penalty is None
+    assert all(round_result.aggregate_validation_loss == MetricValue(0.25) for round_result in second.history.rounds)
 
 
 def test_train_global_federated_raises_explicitly_on_corrupt_persisted_history(
@@ -108,6 +128,47 @@ def test_load_federated_training_returns_none_without_terminal_model_artifact(tm
     )
 
     assert result is None
+
+
+def test_load_federated_training_rejects_incomplete_persisted_evidence(tmp_path: Path) -> None:
+    directory = tmp_path / "training"
+    directory.mkdir()
+    (directory / FederatedHistoryAssetName.DEVICE_NAME.value).write_text("cuda:0", encoding="utf-8")
+
+    with pytest.raises(ArtifactIntegrityError):
+        load_federated_training(
+            fedavg_coordinate(Seed(0)),
+            directory,
+            clients=tuple(client_input.client for client_input in build_all_client_inputs(tmp_path)),
+            diagnostic_snapshot_protocol=FAST_PROTOCOL,
+            autoencoder=AUTOENCODER,
+            batch_size=BATCH_SIZE,
+        )
+
+
+def test_checkpoint_loaders_reject_symbolic_link_artifacts(tmp_path: Path) -> None:
+    target = tmp_path / "target.parquet"
+    target.write_bytes(b"not a parquet file")
+    linked_artifact = tmp_path / "linked.parquet"
+    linked_artifact.symlink_to(target)
+
+    with pytest.raises(ArtifactIntegrityError):
+        read_parquet(linked_artifact)
+
+    target_directory = tmp_path / "target_training"
+    target_directory.mkdir()
+    linked_directory = tmp_path / "linked_training"
+    linked_directory.symlink_to(target_directory, target_is_directory=True)
+
+    with pytest.raises(ArtifactIntegrityError):
+        load_federated_training(
+            fedavg_coordinate(Seed(0)),
+            linked_directory,
+            clients=tuple(client_input.client for client_input in build_all_client_inputs(tmp_path)),
+            diagnostic_snapshot_protocol=FAST_PROTOCOL,
+            autoencoder=AUTOENCODER,
+            batch_size=BATCH_SIZE,
+        )
 
 
 def test_load_federated_training_raises_on_architecture_mismatch(tmp_path: Path) -> None:

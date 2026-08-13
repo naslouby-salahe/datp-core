@@ -129,6 +129,18 @@ class TemporalStateResult:
     outcomes: tuple[TemporalMethodOutcome, ...]
     unavailable_methods: tuple[TemporalMethodUnavailability, ...]
 
+    def __post_init__(self) -> None:
+        if self.provenance.state is not self.state:
+            raise ValueError("temporal state result provenance must match its state")
+        completed = tuple(item.method for item in self.outcomes)
+        unavailable = tuple(item.method for item in self.unavailable_methods)
+        if self.completed_threshold_methods != completed:
+            raise ValueError("temporal completed methods must exactly match outcome methods")
+        if len(completed) != len(frozenset(completed)) or len(unavailable) != len(frozenset(unavailable)):
+            raise ValueError("temporal threshold methods must be unique within a state")
+        if frozenset(completed) & frozenset(unavailable):
+            raise ValueError("temporal threshold method cannot be completed and unavailable")
+
     def outcome_for(self, method: FederatedThresholdMethod) -> TemporalMethodOutcome:
         matches = tuple(outcome for outcome in self.outcomes if outcome.method is method)
         if len(matches) != 1:
@@ -161,6 +173,8 @@ class TemporalSeedResult:
 
     def __post_init__(self) -> None:
         methods = _common_completed_methods(self.static_reference, self.frozen_future, self.recalibrated_future)
+        if not methods:
+            raise ValueError("temporal seed result requires at least one completed threshold method")
         _require_matching_temporal_evaluation_cohorts(
             self.static_reference,
             self.frozen_future,
@@ -202,6 +216,9 @@ class TemporalCoordinateSet:
     static_reference: ExperimentCoordinate
     frozen_future: ExperimentCoordinate
     recalibrated_future: ExperimentCoordinate
+    static_reference_methods: tuple[ExperimentCoordinate, ...]
+    frozen_future_methods: tuple[ExperimentCoordinate, ...]
+    recalibrated_future_methods: tuple[ExperimentCoordinate, ...]
 
     def for_state(self, state: TemporalState) -> ExperimentCoordinate:
         match state:
@@ -211,6 +228,26 @@ class TemporalCoordinateSet:
                 return self.frozen_future
             case TemporalState.RECALIBRATED_FUTURE:
                 return self.recalibrated_future
+
+    def for_state_method(
+        self,
+        state: TemporalState,
+        method: FederatedThresholdMethod,
+    ) -> ExperimentCoordinate:
+        match state:
+            case TemporalState.STATIC_REFERENCE:
+                coordinates = self.static_reference_methods
+            case TemporalState.FROZEN_FUTURE:
+                coordinates = self.frozen_future_methods
+            case TemporalState.RECALIBRATED_FUTURE:
+                coordinates = self.recalibrated_future_methods
+        matches = tuple(coordinate for coordinate in coordinates if coordinate.threshold_method is method)
+        if len(matches) != 1:
+            raise ScientificContractError(
+                ErrorMessage(f"temporal state requires exactly one declared coordinate for {method.value}"),
+                subject=method,
+            )
+        return matches[0]
 
 
 def run_temporal_seed(
@@ -535,7 +572,12 @@ def _execute_temporal_states(
         started = time.monotonic()
         result = _evaluate_state(
             context=context,
-            execution_coordinate=coordinate,
+            method_coordinates=tuple(
+                coordinates.for_state_method(identity.temporal_state, method)
+                for method in declaration.federated_thresholds
+            )
+            if identity.temporal_state is not None
+            else (),
             identity=identity,
             scores=scores,
             calibration_role=calibration_role,
@@ -634,7 +676,7 @@ def _cluster_aggregation(method: FederatedThresholdMethod) -> ClusterThresholdAg
 def _evaluate_state(
     *,
     context: FederatedExecutionContext,
-    execution_coordinate: ExperimentCoordinate,
+    method_coordinates: tuple[ExperimentCoordinate, ...],
     identity: ExternalTemporalExecutionIdentity,
     scores: FederatedScoreArtifactManifest,
     calibration_role: PartitionRole,
@@ -651,6 +693,7 @@ def _evaluate_state(
     unavailable: list[TemporalMethodUnavailability] = []
     state_root = bounded_evidence_seed_directory(identity, context.coordinate.training_seed, output_root)
     for method in threshold_methods:
+        execution_coordinate = _method_coordinate(method_coordinates, method)
         threshold_publication = construct_and_publish_federated_thresholds(
             FederatedThresholdConstructionRequest(
                 request=ThresholdConstructionRequest(
@@ -1051,17 +1094,31 @@ def _declaration_identity(
 
 def _temporal_coordinates(partition_seed: Seed, declaration: ExperimentDeclaration) -> TemporalCoordinateSet:
     plan = expand_experiment_plan(declarations=(declaration,), seed_cohort=SeedCohort(values=(partition_seed,)))
+    static_reference_methods = _coordinates_for_state(plan, TemporalState.STATIC_REFERENCE)
+    frozen_future_methods = _coordinates_for_state(plan, TemporalState.FROZEN_FUTURE)
+    recalibrated_future_methods = _coordinates_for_state(plan, TemporalState.RECALIBRATED_FUTURE)
     return TemporalCoordinateSet(
-        static_reference=_coordinate_for_state(plan, TemporalState.STATIC_REFERENCE),
-        frozen_future=_coordinate_for_state(plan, TemporalState.FROZEN_FUTURE),
-        recalibrated_future=_coordinate_for_state(plan, TemporalState.RECALIBRATED_FUTURE),
+        static_reference=static_reference_methods[0],
+        frozen_future=frozen_future_methods[0],
+        recalibrated_future=recalibrated_future_methods[0],
+        static_reference_methods=static_reference_methods,
+        frozen_future_methods=frozen_future_methods,
+        recalibrated_future_methods=recalibrated_future_methods,
     )
 
 
-def _coordinate_for_state(plan: ExperimentPlan, state: TemporalState) -> ExperimentCoordinate:
+def _coordinates_for_state(plan: ExperimentPlan, state: TemporalState) -> tuple[ExperimentCoordinate, ...]:
     matches = tuple(entry.coordinate for entry in plan.entries if entry.coordinate.temporal_state is state)
     if not matches:
         raise ScientificContractError(ErrorMessage(f"no temporal coordinate is declared for {state.value}"))
+    by_method = tuple(
+        next(coordinate for coordinate in matches if coordinate.threshold_method is method)
+        for method in sorted({coordinate.threshold_method for coordinate in matches}, key=lambda method: method.value)
+    )
+    if len(by_method) != len({coordinate.threshold_method for coordinate in matches}):
+        raise ScientificContractError(
+            ErrorMessage(f"temporal state has duplicate method coordinates for {state.value}")
+        )
     first = matches[0]
     if any(
         candidate.dataset is not first.dataset
@@ -1074,7 +1131,18 @@ def _coordinate_for_state(plan: ExperimentPlan, state: TemporalState) -> Experim
         raise ScientificContractError(
             ErrorMessage(f"temporal coordinates disagree on detector identity for {state.value}")
         )
-    return first
+    return by_method
+
+
+def _method_coordinate(
+    coordinates: tuple[ExperimentCoordinate, ...], method: FederatedThresholdMethod
+) -> ExperimentCoordinate:
+    matches = tuple(coordinate for coordinate in coordinates if coordinate.threshold_method is method)
+    if len(matches) != 1:
+        raise ScientificContractError(
+            ErrorMessage(f"temporal execution requires exactly one coordinate for {method.value}"), subject=method
+        )
+    return matches[0]
 
 
 def _temporal_campaign_analysis_directory(method: FederatedThresholdMethod, output_root: Path) -> Path:

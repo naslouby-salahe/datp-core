@@ -91,7 +91,7 @@ def load_published_population_split(
     )
     validate_split_manifest(membership, assignments, split)
     if (
-        identity.population is PopulationId.EDGE_TEMPORAL_GROUPS
+        identity.population is PopulationId.EDGE_TEMPORAL_CLIENTS
         and identity.temporal_state is not TemporalState.STATIC_REFERENCE
     ):
         validate_no_future_history_leakage(

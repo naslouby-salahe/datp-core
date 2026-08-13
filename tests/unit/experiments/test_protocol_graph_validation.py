@@ -64,7 +64,7 @@ def test_graph_rejects_attack_metric_without_attack_assignment(metric: MetricId)
     experiment = ExperimentDeclaration(
         id=ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION,
         role=EvidenceRole.EXTERNAL_VALIDATION,
-        population=PopulationId.EDGE_SENSOR_GROUPS,
+        population=PopulationId.EDGE_SENSOR_CLIENTS,
         training_model=TrainingModelId.FEDAVG_AUTOENCODER,
         preprocessing_protocol=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
         federated_thresholds=(FederatedThresholdMethod.SHARED_THRESHOLD,),
@@ -80,7 +80,7 @@ def test_graph_rejects_alert_burden_without_evidence_outside_suppressed_operatio
     experiment = ExperimentDeclaration(
         id=ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION,
         role=EvidenceRole.EXTERNAL_VALIDATION,
-        population=PopulationId.EDGE_SENSOR_GROUPS,
+        population=PopulationId.EDGE_SENSOR_CLIENTS,
         training_model=TrainingModelId.FEDAVG_AUTOENCODER,
         preprocessing_protocol=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
         federated_thresholds=(FederatedThresholdMethod.SHARED_THRESHOLD,),
@@ -96,7 +96,7 @@ def test_graph_rejects_temporal_experiment_without_verified_chronology() -> None
     experiment = ExperimentDeclaration(
         id=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
         role=EvidenceRole.TEMPORAL_BOUNDARY,
-        population=PopulationId.EDGE_SENSOR_GROUPS,
+        population=PopulationId.EDGE_SENSOR_CLIENTS,
         training_model=TrainingModelId.FEDAVG_AUTOENCODER,
         preprocessing_protocol=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
         federated_thresholds=(FederatedThresholdMethod.SHARED_THRESHOLD,),

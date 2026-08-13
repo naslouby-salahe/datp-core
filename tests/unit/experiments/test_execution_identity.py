@@ -18,7 +18,7 @@ from datp_core.experiments.common.coordinates import (
 def test_temporal_identity_requires_its_declared_state() -> None:
     identity = ExternalTemporalExecutionIdentity(
         experiment=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
-        population=PopulationId.EDGE_TEMPORAL_GROUPS,
+        population=PopulationId.EDGE_TEMPORAL_CLIENTS,
         evidence_role=EvidenceRole.TEMPORAL_BOUNDARY,
         temporal_state=TemporalState.FROZEN_FUTURE,
     )
@@ -26,7 +26,7 @@ def test_temporal_identity_requires_its_declared_state() -> None:
     assert (
         require_execution_identity(
             identity,
-            PopulationId.EDGE_TEMPORAL_GROUPS,
+            PopulationId.EDGE_TEMPORAL_CLIENTS,
         )
         is identity
     )
@@ -36,7 +36,7 @@ def test_identity_rejects_cross_population_evidence_promotion() -> None:
     with pytest.raises(ScientificContractError, match="must be declared"):
         ExternalTemporalExecutionIdentity(
             experiment=ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION,
-            population=PopulationId.EDGE_SENSOR_GROUPS,
+            population=PopulationId.EDGE_SENSOR_CLIENTS,
             evidence_role=EvidenceRole.CONFIRMATORY,
             temporal_state=None,
         )

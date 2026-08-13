@@ -155,51 +155,51 @@ Every numbered Part I subsection below is independently auditable. The title is 
 | `GLOBAL-CONTRACT-002` | `GLOBAL` | Part I `1.2 DATP-Core in one paragraph` (lines 67–86) | 1.2 DATP-Core in one paragraph | domain/protocols/pipeline validation | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
 | `GLOBAL-CONTRACT-003` | `GLOBAL` | Part I `2.1 Unit of causal comparison` (lines 89–107) | 2.1 Unit of causal comparison | domain/protocols/pipeline validation | `IMPLEMENTED` | `PASS` | Immutable score/evaluation coordinates bind model, preprocessing, population, partitions, calibration evidence, and labels across policy comparisons. | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
 | `GLOBAL-CONTRACT-004` | `GLOBAL` | Part I `2.2 Fixed elements` (lines 108–128) | 2.2 Fixed elements | domain/protocols/pipeline validation | `IMPLEMENTED` | `PASS` | Typed protocol and execution coordinates lock model, training, split, seed, scoring, eligibility, and metric semantics. | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `THRESHOLD-CONTRACT-001` | `THRESHOLD` | Part I `2.2.3 Empirical-quantile definition lock` (lines 185–210) | 2.2.3 Empirical-quantile definition lock | thresholding | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
+| `THRESHOLD-CONTRACT-001` | `THRESHOLD` | Part I `2.2.3 Empirical-quantile definition lock` (lines 185–210) | 2.2.3 Empirical-quantile definition lock | thresholding | `IMPLEMENTED` | `PASS` | One float64 type-7 quantile owner is used by active empirical policies; conformal and KLL retain explicit distinct contracts. | `test_quantiles.py`, `test_method_contracts.py` | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
 | `GLOBAL-CONTRACT-005` | `GLOBAL` | Part I `2.3 Sole manipulated variable` (lines 211–229) | 2.3 Sole manipulated variable | domain/protocols/pipeline validation | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
 | `BOUNDARY-CONTRACT-001` | `BOUNDARY` | Part I `2.4 Prohibited causal contamination` (lines 230–244) | 2.4 Prohibited causal contamination | validation/reporting | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `CALIBRATION-CONTRACT-001` | `CALIBRATION` | Part I `3.1 Benign-only calibration` (lines 247–265) | 3.1 Benign-only calibration | calibration + thresholding contracts | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `CALIBRATION-CONTRACT-002` | `CALIBRATION` | Part I `3.2 Separation of calibration and evaluation` (lines 266–276) | 3.2 Separation of calibration and evaluation | calibration + thresholding contracts | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `CALIBRATION-CONTRACT-003` | `CALIBRATION` | Part I `3.2A Honest-calibration participant and message-integrity assumption` (lines 277–300) | 3.2A Honest-calibration participant and message-integrity assumption | calibration + thresholding contracts | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `CALIBRATION-CONTRACT-004` | `CALIBRATION` | Part I `3.3 Client eligibility` (lines 301–318) | 3.3 Client eligibility | calibration + thresholding contracts | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
+| `CALIBRATION-CONTRACT-001` | `CALIBRATION` | Part I `3.1 Benign-only calibration` (lines 247–265) | 3.1 Benign-only calibration | `thresholds/calibration` construction, eligibility, and service | `PASS` | `tests/unit/calibration`, `tests/unit/thresholding`, `tests/scientific/test_sample_starved_calibration_size_boundary.py` (105-calibration-suite checkpoint) | All threshold paths receive the typed benign calibration cohort only; attack-labelled rows are excluded from construction, eligibility, tuning, and support accounting. |
+| `CALIBRATION-CONTRACT-002` | `CALIBRATION` | Part I `3.2 Separation of calibration and evaluation` (lines 266–276) | 3.2 Separation of calibration and evaluation | population split integrity and calibration service | `PASS` | `tests/unit/datasets/partitioning`, `tests/unit/calibration`, `tests/unit/thresholding` (105-calibration-suite checkpoint) | Stable-row split validation requires distinct calibration/evaluation partitions; temporal ordering/leakage validation remains separate and explicit. |
+| `CALIBRATION-CONTRACT-003` | `CALIBRATION` | Part I `3.2A Honest-calibration participant and message-integrity assumption` (lines 277–300) | 3.2A Honest-calibration participant and message-integrity assumption | typed calibration artifacts, message diagnostics, and integrity validation | `PASS` | `tests/unit/calibration`, `tests/unit/thresholding`, `tests/unit/datasets/partitioning` (105-calibration-suite checkpoint) | Construction binds immutable calibration artifacts, identities, and support counts; mismatches are scientific-integrity failures, while no adversarial/Byzantine guarantee is modeled. |
+| `CALIBRATION-CONTRACT-004` | `CALIBRATION` | Part I `3.3 Client eligibility` (lines 301–318) | 3.3 Client eligibility | `thresholds/calibration/eligibility.py` and declared calibration-size cohorts | `PASS` | `tests/unit/calibration`, `tests/unit/experiments/test_calibration_size_intersection_cohorts.py`, `tests/scientific/test_sample_starved_calibration_size_boundary.py` (105-calibration-suite checkpoint) | Primary eligibility is the typed source-support rule `n_k_source >= 100`, fixed before evaluation and distinct from declared calibration-size-ablation support. |
 | `GLOBAL-CONTRACT-006` | `GLOBAL` | Part I `3.3A Federation regime, client persistence, and deployment identity` (lines 319–355) | 3.3A Federation regime, client persistence, and deployment identity | domain/protocols/pipeline validation | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
 | `GLOBAL-CONTRACT-007` | `GLOBAL` | Part I `3.4 Meaning of “fairness”` (lines 356–379) | 3.4 Meaning of “fairness” | domain/protocols/pipeline validation | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
 | `GLOBAL-CONTRACT-008` | `GLOBAL` | Part I `3.5 Primary operating-point concern` (lines 380–391) | 3.5 Primary operating-point concern | domain/protocols/pipeline validation | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
 | `GLOBAL-CONTRACT-009` | `GLOBAL` | Part I `3.6 Model-quality controls` (lines 392–414) | 3.6 Model-quality controls | domain/protocols/pipeline validation | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
 | `GLOBAL-CONTRACT-010` | `GLOBAL` | Part I `4.1 Centralized reference: CENTRALIZED_REFERENCE` (lines 417–432) | 4.1 Centralized reference: CENTRALIZED_REFERENCE | domain/protocols/pipeline validation | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `THRESHOLD-CONTRACT-002` | `THRESHOLD` | Part I `4.2 Shared threshold: SHARED_THRESHOLD` (lines 433–448) | 4.2 Shared threshold: SHARED_THRESHOLD | thresholding | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `THRESHOLD-CONTRACT-003` | `THRESHOLD` | Part I `4.3 Local threshold: LOCAL_THRESHOLD` (lines 449–462) | 4.3 Local threshold: LOCAL_THRESHOLD | thresholding | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `THRESHOLD-CONTRACT-004` | `THRESHOLD` | Part I `4.4 Family threshold: FAMILY_THRESHOLD` (lines 463–479) | 4.4 Family threshold: FAMILY_THRESHOLD | thresholding | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `THRESHOLD-CONTRACT-005` | `THRESHOLD` | Part I `4.5 Cluster threshold: CLUSTER_THRESHOLD` (lines 480–512) | 4.5 Cluster threshold: CLUSTER_THRESHOLD | thresholding | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
+| `THRESHOLD-CONTRACT-002` | `THRESHOLD` | Part I `4.2 Shared threshold: SHARED_THRESHOLD` (lines 433–448) | 4.2 Shared threshold: SHARED_THRESHOLD | thresholding | `IMPLEMENTED` | `PASS` | `construct_shared_threshold` owns the one unweighted aggregate of eligible local q95 thresholds. | `test_shared.py`, `test_dispatch.py` | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
+| `THRESHOLD-CONTRACT-003` | `THRESHOLD` | Part I `4.3 Local threshold: LOCAL_THRESHOLD` (lines 449–462) | 4.3 Local threshold: LOCAL_THRESHOLD | thresholding | `IMPLEMENTED` | `PASS` | `construct_local_threshold` owns one q95 threshold per eligible client. | `test_shared.py`, `test_dispatch.py` | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
+| `THRESHOLD-CONTRACT-004` | `THRESHOLD` | Part I `4.4 Family threshold: FAMILY_THRESHOLD` (lines 463–479) | 4.4 Family threshold: FAMILY_THRESHOLD | thresholding | `IMPLEMENTED` | `PASS` | `construct_family_threshold` owns family-scoped shared construction and typed taxonomy unavailability. | `test_method_contracts.py`, `test_dispatch.py` | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
+| `THRESHOLD-CONTRACT-005` | `THRESHOLD` | Part I `4.5 Cluster threshold: CLUSTER_THRESHOLD` (lines 480–512) | 4.5 Cluster threshold: CLUSTER_THRESHOLD | thresholding | `IMPLEMENTED` | `PASS` | `construct_grouped_threshold` owns the locked fingerprint/k-means grouped construction. | `test_method_contracts.py`, `test_dispatch.py` | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
 | `GLOBAL-CONTRACT-011` | `GLOBAL` | Part I `4.6 Ladder interpretation` (lines 513–529) | 4.6 Ladder interpretation | domain/protocols/pipeline validation | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `THRESHOLD-CONTRACT-006` | `THRESHOLD` | Part I `5.1 Quantile sensitivity` (lines 536–547) | 5.1 Quantile sensitivity | thresholding | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `GLOBAL-CONTRACT-012` | `GLOBAL` | Part I `5.1A Historical mean-plus-standard-deviation estimator sensitivity` (lines 548–601) | 5.1A Historical mean-plus-standard-deviation estimator sensitivity | domain/protocols/pipeline validation | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `THRESHOLD-CONTRACT-007` | `THRESHOLD` | Part I `5.2 Local–global shrinkage` (lines 602–646) | 5.2 Local–global shrinkage | thresholding | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `CALIBRATION-CONTRACT-005` | `CALIBRATION` | Part I `5.3 Calibration-size-aware shrinkage` (lines 647–668) | 5.3 Calibration-size-aware shrinkage | calibration + thresholding contracts | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `CALIBRATION-CONTRACT-006` | `CALIBRATION` | Part I `5.4 Split-conformal local threshold: LOCAL_CONFORMAL_THRESHOLD` (lines 669–696) | 5.4 Split-conformal local threshold: LOCAL_CONFORMAL_THRESHOLD | calibration + thresholding contracts | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `THRESHOLD-CONTRACT-008` | `THRESHOLD` | Part I `6.1 `FEDERATED_BENIGN_SUMMARY_THRESHOLD`` (lines 699–717) | 6.1 `FEDERATED_BENIGN_SUMMARY_THRESHOLD` | thresholding | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `THRESHOLD-CONTRACT-009` | `THRESHOLD` | Part I `6.1A `FEDERATED_KLL_SHARED_THRESHOLD`` (lines 718–757) | 6.1A `FEDERATED_KLL_SHARED_THRESHOLD` | thresholding | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
+| `THRESHOLD-CONTRACT-006` | `THRESHOLD` | Part I `5.1 Quantile sensitivity` (lines 536–547) | 5.1 Quantile sensitivity | thresholding | `IMPLEMENTED` | `PASS` | Declarative experiment coordinates carry the quantile and dispatch one canonical score workspace to each threshold variant. | `test_quantiles.py`, `test_dispatch.py` | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
+| `GLOBAL-CONTRACT-012` | `GLOBAL` | Part I `5.1A Historical mean-plus-standard-deviation estimator sensitivity` (lines 548–601) | 5.1A Historical mean-plus-standard-deviation estimator sensitivity | typed threshold estimator protocols and shared threshold dispatch | `PASS` | `tests/unit/thresholding/test_calibration_declarations.py`, `tests/unit/thresholding`, `tests/unit/calibration` (105-calibration-suite checkpoint) | `MEAN_PLUS_STANDARD_DEVIATION_ESTIMATOR` uses float64 `ddof=1` and executes only as the locked supportive 2-by-2 estimator/scope sensitivity on the fixed score artifact; it cannot replace q95 confirmation. |
+| `THRESHOLD-CONTRACT-007` | `THRESHOLD` | Part I `5.2 Local–global shrinkage` (lines 602–646) | 5.2 Local–global shrinkage | thresholding | `IMPLEMENTED` | `PASS` | Fixed and size-aware shrinkage have distinct typed protocol/result owners and dispatch branches. | `test_shrinkage.py`, `test_dispatch.py` | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
+| `CALIBRATION-CONTRACT-005` | `CALIBRATION` | Part I `5.3 Calibration-size-aware shrinkage` (lines 647–668) | 5.3 Calibration-size-aware shrinkage | calibration + thresholding contracts | `IMPLEMENTED` | `PASS` | Size-aware shrinkage consumes declared calibration support only and is not a hidden estimator fallback. | `test_shrinkage.py`, `test_calibration_declarations.py` | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
+| `CALIBRATION-CONTRACT-006` | `CALIBRATION` | Part I `5.4 Split-conformal local threshold: LOCAL_CONFORMAL_THRESHOLD` (lines 669–696) | 5.4 Split-conformal local threshold: LOCAL_CONFORMAL_THRESHOLD | calibration + thresholding contracts | `IMPLEMENTED` | `PASS` | `construct_local_conformal_threshold` owns the explicit finite-sample rank construction. | `test_method_contracts.py`, `test_quantiles.py` | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
+| `THRESHOLD-CONTRACT-008` | `THRESHOLD` | Part I `6.1 `FEDERATED_BENIGN_SUMMARY_THRESHOLD`` (lines 699–717) | 6.1 `FEDERATED_BENIGN_SUMMARY_THRESHOLD` | thresholding | `IMPLEMENTED` | `PASS` | Federated benign moments have one decomposition, matched threshold, and centralized-error diagnostic owner. | `test_method_contracts.py`, `test_dispatch.py` | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
+| `THRESHOLD-CONTRACT-009` | `THRESHOLD` | Part I `6.1A `FEDERATED_KLL_SHARED_THRESHOLD`` (lines 718–757) | 6.1A `FEDERATED_KLL_SHARED_THRESHOLD` | thresholding | `IMPLEMENTED` | `PASS` | `construct_federated_kll_shared_threshold` owns typed sketch build/merge/query evidence and the locked k-grid coordinates. | `test_method_contracts.py`, `test_dispatch.py` | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
 | `GLOBAL-CONTRACT-013` | `GLOBAL` | Part I `6.2 Relationship to Laridi et al.` (lines 758–774) | 6.2 Relationship to Laridi et al. | domain/protocols/pipeline validation | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `TRAIN-CONTRACT-001` | `TRAIN` | Part I `7.1 FedProx` (lines 781–808) | 7.1 FedProx | learning/training + pipeline | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `TRAIN-CONTRACT-002` | `TRAIN` | Part I `7.1A FedProx mechanism-activation diagnostics` (lines 809–864) | 7.1A FedProx mechanism-activation diagnostics | learning/training + pipeline | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `TRAIN-CONTRACT-003` | `TRAIN` | Part I `7.2 Ditto` (lines 865–897) | 7.2 Ditto | learning/training + pipeline | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `TRAIN-CONTRACT-004` | `TRAIN` | Part I `7.2A Post-FedAvg client-local fine-tuning stress test` (lines 898–955) | 7.2A Post-FedAvg client-local fine-tuning stress test | learning/training + pipeline | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `THRESHOLD-CONTRACT-010` | `THRESHOLD` | Part I `7.2B Common model-side score-alignment and threshold-absorption diagnostics` (lines 956–1106) | 7.2B Common model-side score-alignment and threshold-absorption diagnostics | thresholding | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `GLOBAL-CONTRACT-014` | `GLOBAL` | Part I `7.3 Fallback naming` (lines 1107–1119) | 7.3 Fallback naming | domain/protocols/pipeline validation | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `GLOBAL-CONTRACT-015` | `GLOBAL` | Part I `7.4 Separation from the core ladder` (lines 1120–1131) | 7.4 Separation from the core ladder | domain/protocols/pipeline validation | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
+| `TRAIN-CONTRACT-001` | `TRAIN` | Part I `7.1 FedProx` (lines 781–808) | 7.1 FedProx | `detector/training/fedprox.py`, training-stress runner, and protocols | `PASS` | `tests/unit/learning`, `tests/integration/learning`, `tests/e2e/test_fedprox_stress_pipeline.py` (34-training-suite checkpoint) | FedProx has a dedicated proximal objective and locked nonzero `mu` grid; it remains a complete training-side sensitivity rather than a selected replacement for FedAvg. |
+| `TRAIN-CONTRACT-002` | `TRAIN` | Part I `7.1A FedProx mechanism-activation diagnostics` (lines 809–864) | 7.1A FedProx mechanism-activation diagnostics | federated training drift records and terminal-drift analysis | `PASS` | `tests/unit/experiments/test_terminal_drift_summary.py`, `tests/e2e/test_fedprox_stress_pipeline.py` (34-training-suite checkpoint) | Float64 broadcast-to-client drift, terminal-50 summaries, client-level terminal diagnostics, and typed near-zero FedAvg denominator handling are retained as descriptive seed-level evidence. |
+| `TRAIN-CONTRACT-003` | `TRAIN` | Part I `7.2 Ditto` (lines 865–897) | 7.2 Ditto | `detector/training/ditto.py`, protocols, and training-stress runner | `PASS` | `tests/unit/learning`, `tests/integration/learning`, `tests/e2e/test_ditto_stress_pipeline.py` (34-training-suite checkpoint) | Genuine Ditto keeps a distinct global model and persistent proximal client states, never aggregates personalized states, and executes the full locked lambda grid. |
+| `TRAIN-CONTRACT-004` | `TRAIN` | Part I `7.2A Post-FedAvg client-local fine-tuning stress test` (lines 898–955) | 7.2A Post-FedAvg client-local fine-tuning stress test | `detector/training/fine_tuning.py` and terminal-checkpoint contracts | `PASS` | `tests/unit/learning/test_fine_tuning_contract.py`, `tests/unit/learning/test_training_declarations.py`, `tests/e2e/test_fedprox_stress_pipeline.py` (34-training-suite checkpoint) | `FEDAVG_LOCAL_FINE_TUNING` copies only the round-200 FedAvg terminal weights, uses fresh per-client optimizer state for exactly ten benign-train epochs, freezes the model, then shares its one score workspace across threshold policies. |
+| `THRESHOLD-CONTRACT-010` | `THRESHOLD` | Part I `7.2B Common model-side score-alignment and threshold-absorption diagnostics` (lines 956–1106) | 7.2B Common model-side score-alignment and threshold-absorption diagnostics | `analysis/mechanisms/model_alignment.py` and absorption analysis | `PASS` | `tests/unit/analysis/test_model_alignment.py`, `tests/e2e/test_fedprox_stress_pipeline.py`, `tests/e2e/test_ditto_stress_pipeline.py` (34-training-suite checkpoint) | All model-side stress routes use the common typed full-calibration score alignment, fixed FedAvg-grid JSD, dispersion, raw scope gain, un-clipped absorption, and typed denominator-unavailability diagnostics. |
+| `GLOBAL-CONTRACT-014` | `GLOBAL` | Part I `7.3 Fallback naming` (lines 1107–1119) | 7.3 Fallback naming | typed training-method identities and publication validation | `PASS` | `tests/unit/learning/test_training_declarations.py`, `tests/e2e/test_ditto_stress_pipeline.py` (34-training-suite checkpoint) | `DITTO` is a separate genuine implementation; no fallback or generic personalized alias is accepted as Ditto. |
+| `GLOBAL-CONTRACT-015` | `GLOBAL` | Part I `7.4 Separation from the core ladder` (lines 1120–1131) | 7.4 Separation from the core ladder | training-stress coordinates, score workspace, and analysis ownership | `PASS` | `tests/unit/learning`, `tests/unit/analysis/test_model_alignment.py`, `tests/e2e/test_fedprox_stress_pipeline.py`, `tests/e2e/test_ditto_stress_pipeline.py` (34-training-suite checkpoint) | Stress conditions use separately identified models/scores/evaluations and mandatory absorption diagnostics; they cannot alter the FedAvg confirmatory-ladder identity. |
 | `GLOBAL-CONTRACT-016` | `GLOBAL` | Part I `8.1 Sole confirmatory evidence` (lines 1134–1145) | 8.1 Sole confirmatory evidence | domain/protocols/pipeline validation | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
 | `CALIBRATION-CONTRACT-007` | `CALIBRATION` | Part I `8.2 Supporting evidence families` (lines 1146–1170) | 8.2 Supporting evidence families | calibration + thresholding contracts | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
 | `GLOBAL-CONTRACT-017` | `GLOBAL` | Part I `8.3 Honest negative evidence` (lines 1171–1176) | 8.3 Honest negative evidence | domain/protocols/pipeline validation | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `DATASET-CONTRACT-001` | `DATASET` | Part I `9.1 N-BaIoT physical-device anchor` (lines 1181–1194) | 9.1 N-BaIoT physical-device anchor | datasets/populations | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `DATASET-CONTRACT-002` | `DATASET` | Part I `9.2 CICIoT2023 available-data boundary` (lines 1195–1215) | 9.2 CICIoT2023 available-data boundary | datasets/populations | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `DATASET-CONTRACT-003` | `DATASET` | Part I `9.3 Controlled heterogeneity population` (lines 1216–1223) | 9.3 Controlled heterogeneity population | datasets/populations | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `DATASET-CONTRACT-004` | `DATASET` | Part I `9.4 Edge-IIoTset external validation` (lines 1224–1243) | 9.4 Edge-IIoTset external validation | datasets/populations | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `DATASET-CONTRACT-005` | `DATASET` | Part I `9.5 Temporal external population` (lines 1244–1258) | 9.5 Temporal external population | datasets/populations | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `DATASET-CONTRACT-006` | `DATASET` | Part I `9.6 Dataset expansion limit` (lines 1259–1268) | 9.6 Dataset expansion limit | datasets/populations | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `REPORT-CONTRACT-001` | `REPORT` | Part I `9.7 Heterogeneity taxonomy and claim boundary` (lines 1269–1297) | 9.7 Heterogeneity taxonomy and claim boundary | reporting/claims | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
+| `DATASET-CONTRACT-001` | `DATASET` | Part I `9.1 N-BaIoT physical-device anchor` (lines 1181–1194) | 9.1 N-BaIoT physical-device anchor | N-BaIoT capabilities, declarations, and registry | `PASS` | `tests/unit/datasets/nbaiot`, `tests/unit/datasets/test_population_declarations.py`, `tests/unit/datasets/test_registry.py` (82-dataset-suite checkpoint) | Confirmatory physical-device identity is fixed to the nine audited N-BaIoT devices, with all device identities and the source taxonomy retained. |
+| `DATASET-CONTRACT-002` | `DATASET` | Part I `9.2 CICIoT2023 available-data boundary` (lines 1195–1215) | 9.2 CICIoT2023 available-data boundary | CICIoT2023 capabilities, materialization, and registry | `PASS` | `tests/unit/datasets/ciciot2023`, `tests/unit/datasets/test_dataset_capabilities.py`, `tests/unit/datasets/test_registry.py` (82-dataset-suite checkpoint) | Only `CICIOT_FILE_CLIENTS` is accepted; physical identities, family taxonomy, chronology, and client-level attack assignment are typed unavailable, with an exclusion-only eligibility gate. |
+| `DATASET-CONTRACT-003` | `DATASET` | Part I `9.3 Controlled heterogeneity population` (lines 1216–1223) | 9.3 Controlled heterogeneity population | controlled population declaration and integrity validation | `PASS` | `tests/unit/datasets/test_population_declarations.py`, `tests/unit/datasets/test_registry.py`, `tests/unit/datasets/partitioning` (82-dataset-suite checkpoint) | `NBAIOT_DIRICHLET_CLIENTS` is separately typed synthetic, requires an explicit condition, and preserves source-row identity; it does not replace natural devices. |
+| `DATASET-CONTRACT-004` | `DATASET` | Part I `9.4 Edge-IIoTset external validation` (lines 1224–1243) | 9.4 Edge-IIoTset external validation | Edge-IIoTset capabilities, population construction, and chronology validation | `PASS` | `tests/unit/datasets/edge_iiotset`, `tests/unit/datasets/test_dataset_capabilities.py`, `tests/unit/datasets/test_registry.py` (82-dataset-suite checkpoint) | Edge is external benign operating-point validation: FPR metrics are available, while cross-client attack-sensitive metrics and family thresholds are explicitly unavailable without defensible assignment/taxonomy. |
+| `DATASET-CONTRACT-005` | `DATASET` | Part I `9.5 Temporal external population` (lines 1244–1258) | 9.5 Temporal external population | Edge chronology, temporal split protocol, and leakage validation | `PASS` | `tests/unit/datasets/edge_iiotset/test_chronology.py`, `tests/integration/temporal`, `tests/integration/datasets/test_temporal_split_no_future_leakage.py` (82-dataset-suite checkpoint) | The verified Edge temporal population supports only one-shot recalibration with per-row PCAP alignment and no future-history leakage; CICIoT temporal capability is unavailable. |
+| `DATASET-CONTRACT-006` | `DATASET` | Part I `9.6 Dataset expansion limit` (lines 1259–1268) | 9.6 Dataset expansion limit | typed dataset registry and population catalogue | `PASS` | `tests/unit/datasets/test_registry.py`, `tests/unit/datasets/test_population_declarations.py` (82-dataset-suite checkpoint) | The registry exposes only N-BaIoT, CICIoT2023, and Edge-IIoTset populations; no additional external dataset is constructible. |
+| `REPORT-CONTRACT-001` | `REPORT` | Part I `9.7 Heterogeneity taxonomy and claim boundary` (lines 1269–1297) | 9.7 Heterogeneity taxonomy and claim boundary | population identity kinds, capability statuses, and presentation labels | `PASS` | `tests/unit/datasets/test_population_declarations.py`, `tests/unit/datasets/test_dataset_capabilities.py`, `tests/unit/datasets/test_registry.py` (82-dataset-suite checkpoint) | Population identity kinds and capability statuses keep observed natural devices, manipulated Dirichlet clients, file-defined applicability, and temporal boundary roles distinct in reporting. |
 | `GLOBAL-CONTRACT-018` | `GLOBAL` | Part I `10.A.1 External validation` (lines 1306–1309) | 10.A.1 External validation | domain/protocols/pipeline validation | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
 | `THRESHOLD-CONTRACT-011` | `THRESHOLD` | Part I `10.A.2 Federated threshold comparison` (lines 1310–1313) | 10.A.2 Federated threshold comparison | thresholding | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `TRAIN-CONTRACT-005` | `TRAIN` | Part I `10.A.3 Training-side robustness` (lines 1314–1323) | 10.A.3 Training-side robustness | learning/training + pipeline | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
+| `TRAIN-CONTRACT-005` | `TRAIN` | Part I `10.A.3 Training-side robustness` (lines 1314–1323) | 10.A.3 Training-side robustness | training-stress experiment registry and typed method declarations | `PASS` | `tests/unit/learning/test_training_declarations.py`, `tests/e2e/test_fedprox_stress_pipeline.py`, `tests/e2e/test_ditto_stress_pipeline.py` (34-training-suite checkpoint) | FedProx, `FEDAVG_LOCAL_FINE_TUNING`, and genuine Ditto are separate bounded stress routes outside the causal ladder; the two client-specific model routes do not authorize a broad PFL benchmark. |
 | `THRESHOLD-CONTRACT-012` | `THRESHOLD` | Part I `10.A.4 Threshold-estimation depth` (lines 1324–1333) | 10.A.4 Threshold-estimation depth | thresholding | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
 | `TEMPORAL-CONTRACT-001` | `TEMPORAL` | Part I `10.A.5 Temporal boundary` (lines 1334–1337) | 10.A.5 Temporal boundary | temporal analysis/pipeline | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
 | `GLOBAL-CONTRACT-019` | `GLOBAL` | Part I `10.A.6 Mechanism analysis` (lines 1338–1350) | 10.A.6 Mechanism analysis | domain/protocols/pipeline validation | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
@@ -216,24 +216,24 @@ Every numbered Part I subsection below is independently auditable. The title is 
 | `THRESHOLD-CONTRACT-013` | `THRESHOLD` | Part I `10.C.2 Threshold-policy identifiers` (lines 1466–1487) | 10.C.2 Threshold-policy identifiers | thresholding | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
 | `THRESHOLD-CONTRACT-014` | `THRESHOLD` | Part I `10.C.3 Threshold-variant identifiers` (lines 1488–1501) | 10.C.3 Threshold-variant identifiers | thresholding | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
 | `GLOBAL-CONTRACT-028` | `GLOBAL` | Part I `10.C.4 Laridi naming` (lines 1502–1521) | 10.C.4 Laridi naming | domain/protocols/pipeline validation | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `GLOBAL-CONTRACT-029` | `GLOBAL` | Part I `10.C.5 Personalized-model naming` (lines 1522–1542) | 10.C.5 Personalized-model naming | domain/protocols/pipeline validation | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `TRAIN-CONTRACT-006` | `TRAIN` | Part I `10.C.5A Simple local-fine-tuning naming` (lines 1543–1546) | 10.C.5A Simple local-fine-tuning naming | learning/training + pipeline | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `DATASET-CONTRACT-007` | `DATASET` | Part I `10.C.6 Population identifiers` (lines 1547–1566) | 10.C.6 Population identifiers | datasets/populations | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
+| `GLOBAL-CONTRACT-029` | `GLOBAL` | Part I `10.C.5 Personalized-model naming` (lines 1522–1542) | 10.C.5 Personalized-model naming | typed training-method identities and publication validation | `PASS` | `tests/unit/learning/test_training_declarations.py`, `tests/e2e/test_ditto_stress_pipeline.py` (34-training-suite checkpoint) | The `DITTO` identity is reserved for the genuine persistent proximal-personalization implementation; generic or substitute names are not active routes. |
+| `TRAIN-CONTRACT-006` | `TRAIN` | Part I `10.C.5A Simple local-fine-tuning naming` (lines 1543–1546) | 10.C.5A Simple local-fine-tuning naming | typed training-method identities and fine-tuning implementation | `PASS` | `tests/unit/learning/test_fine_tuning_contract.py`, `tests/unit/learning/test_training_declarations.py` (34-training-suite checkpoint) | The simple ten-epoch stress route is exactly `FEDAVG_LOCAL_FINE_TUNING`; it is model personalization before scoring and never a Ditto/FedPer/local-only/threshold-method alias. |
+| `DATASET-CONTRACT-007` | `DATASET` | Part I `10.C.6 Population identifiers` (lines 1547–1566) | 10.C.6 Population identifiers | typed identifiers, registry, and presentation labels | `PASS` | `tests/unit/domain/test_enums.py`, `tests/unit/datasets/test_population_declarations.py`, `tests/unit/datasets/test_registry.py` (full 697-test checkpoint) | The five active population identifiers now use the locked names `NBAIOT_NATURAL_DEVICES`, `CICIOT_FILE_CLIENTS`, `NBAIOT_DIRICHLET_CLIENTS`, `EDGE_SENSOR_CLIENTS`, and `EDGE_TEMPORAL_CLIENTS`; their identity kinds remain separately typed. |
 | `STAT-CONTRACT-001` | `STAT` | Part I `10.C.7 Statistical and equity language` (lines 1567–1592) | 10.C.7 Statistical and equity language | analysis/inference | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
 | `CALIBRATION-CONTRACT-009` | `CALIBRATION` | Part I `10.C.7A Calibration-object taxonomy — mandatory at first manuscript use` (lines 1593–1608) | 10.C.7A Calibration-object taxonomy — mandatory at first manuscript use | calibration + thresholding contracts | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `REPORT-CONTRACT-002` | `REPORT` | Part I `10.C.8 Novelty language` (lines 1609–1626) | 10.C.8 Novelty language | reporting/claims | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `REPORT-CONTRACT-003` | `REPORT` | Part I `10.D.1 Permitted central framing` (lines 1631–1640) | 10.D.1 Permitted central framing | reporting/claims | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `REPORT-CONTRACT-004` | `REPORT` | Part I `10.D.2 Prohibited central framing` (lines 1641–1655) | 10.D.2 Prohibited central framing | reporting/claims | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `SCORE-CONTRACT-001` | `SCORE` | Part I `10.D.3 AUROC language` (lines 1656–1667) | 10.D.3 AUROC language | scoring + provenance | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `METRIC-CONTRACT-001` | `METRIC` | Part I `10.D.4 Macro-F1 language` (lines 1668–1679) | 10.D.4 Macro-F1 language | evaluation | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `GLOBAL-CONTRACT-030` | `GLOBAL` | Part I `10.D.5 External validation language` (lines 1680–1691) | 10.D.5 External validation language | domain/protocols/pipeline validation | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `TEMPORAL-CONTRACT-003` | `TEMPORAL` | Part I `10.D.6 Temporal language` (lines 1692–1701) | 10.D.6 Temporal language | temporal analysis/pipeline | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `GLOBAL-CONTRACT-031` | `GLOBAL` | Part I `10.D.7 Privacy language` (lines 1702–1711) | 10.D.7 Privacy language | domain/protocols/pipeline validation | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `GLOBAL-CONTRACT-032` | `GLOBAL` | Part I `10.D.8 Deployment language` (lines 1712–1725) | 10.D.8 Deployment language | domain/protocols/pipeline validation | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `REPORT-CONTRACT-005` | `REPORT` | Part I `10.D.9 Novelty boundary and mandatory prior-art audit` (lines 1726–1799) | 10.D.9 Novelty boundary and mandatory prior-art audit | reporting/claims | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
+| `REPORT-CONTRACT-002` | `REPORT` | Part I `10.C.8 Novelty language` (lines 1609–1626) | 10.C.8 Novelty language | `presentation/validation.py` | `PASS` | `tests/unit/presentation/test_claim_validation.py` (full 707-test checkpoint) | Claim validation rejects novelty claims for established primitives. |
+| `REPORT-CONTRACT-003` | `REPORT` | Part I `10.D.1 Permitted central framing` (lines 1631–1640) | 10.D.1 Permitted central framing | `presentation/validation.py` | `PASS` | `tests/unit/presentation/test_claim_validation.py` (full 707-test checkpoint) | Typed claim validation preserves the permitted threshold-scope framing. |
+| `REPORT-CONTRACT-004` | `REPORT` | Part I `10.D.2 Prohibited central framing` (lines 1641–1655) | 10.D.2 Prohibited central framing | `presentation/validation.py` | `PASS` | `tests/unit/presentation/test_claim_validation.py` (full 707-test checkpoint) | Central-model and overall-detection improvement wording is suppressed. |
+| `SCORE-CONTRACT-001` | `SCORE` | Part I `10.D.3 AUROC language` (lines 1656–1667) | 10.D.3 AUROC language | `presentation/validation.py` | `PASS` | `tests/unit/presentation/test_claim_validation.py` (full 707-test checkpoint) | Claims that threshold scope improves AUROC are suppressed because fixed scores cannot change AUROC. |
+| `METRIC-CONTRACT-001` | `METRIC` | Part I `10.D.4 Macro-F1 language` (lines 1668–1679) | 10.D.4 Macro-F1 language | fixed-score claim validation and evaluation evidence | `PASS` | `tests/unit/presentation/test_claim_validation.py`, full checkpoint | Overall detection-performance claims are suppressed; metric controls remain bounded fixed-score evidence. |
+| `GLOBAL-CONTRACT-030` | `GLOBAL` | Part I `10.D.5 External validation language` (lines 1680–1691) | 10.D.5 External validation language | claim validation and dataset capabilities | `PASS` | `tests/unit/presentation/test_claim_validation.py`, full checkpoint | External claims retain the typed benign-equity/attack-assignment boundary. |
+| `TEMPORAL-CONTRACT-003` | `TEMPORAL` | Part I `10.D.6 Temporal language` (lines 1692–1701) | 10.D.6 Temporal language | temporal claim validation | `PASS` | `tests/scientific/test_temporal_claim_scope.py`, `tests/unit/presentation/test_claim_validation.py` | One-shot temporal claims cannot become continuous adaptation or drift-resolution claims. |
+| `GLOBAL-CONTRACT-031` | `GLOBAL` | Part I `10.D.7 Privacy language` (lines 1702–1711) | 10.D.7 Privacy language | `presentation/validation.py` | `PASS` | `tests/unit/presentation/test_claim_validation.py` (full 707-test checkpoint) | `privacy preserving` is explicitly suppressed; data locality is not a formal privacy guarantee. |
+| `GLOBAL-CONTRACT-032` | `GLOBAL` | Part I `10.D.8 Deployment language` (lines 1712–1725) | 10.D.8 Deployment language | `presentation/validation.py` | `PASS` | `tests/unit/presentation/test_claim_validation.py` (full 707-test checkpoint) | Lightweight, edge-ready, and constrained-device deployment claims are explicitly suppressed. |
+| `REPORT-CONTRACT-005` | `REPORT` | Part I `10.D.9 Novelty boundary and mandatory prior-art audit` (lines 1726–1799) | 10.D.9 Novelty boundary and mandatory prior-art audit | claim validation and prior-art publication records | `PASS` | `tests/unit/presentation/test_claim_validation.py`, full checkpoint | Established local/federated/conformal/cluster primitives cannot be presented as DATP-Core inventions. |
 | `REPORT-CONTRACT-006` | `REPORT` | Part I `10.D.9A Submission-time novelty-survival literature gate` (lines 1800–1834) | 10.D.9A Submission-time novelty-survival literature gate | reporting/claims | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
 | `REPORT-CONTRACT-007` | `REPORT` | Part I `10.D.9B Mandatory source-grounded prior-art distinction table` (lines 1835–1887) | 10.D.9B Mandatory source-grounded prior-art distinction table | reporting/claims | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
-| `REPORT-CONTRACT-008` | `REPORT` | Part I `10.D.10 Claim-survival rules` (lines 1888–1902) | 10.D.10 Claim-survival rules | reporting/claims | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
+| `REPORT-CONTRACT-008` | `REPORT` | Part I `10.D.10 Claim-survival rules` (lines 1888–1902) | 10.D.10 Claim-survival rules | publication source manifests and claim validation | `PASS` | `tests/unit/presentation/test_publication_manifest.py`, `tests/unit/presentation/test_claim_validation.py` (full 710-test checkpoint) | Publication manifests now retain each generated confirmatory, external, temporal, and mechanism report, including typed null/reversed/unavailable evidence, for release discovery and claim-to-evidence validation. |
 | `GLOBAL-CONTRACT-033` | `GLOBAL` | Part I `10.D.11 Negative evidence that must remain publishable` (lines 1903–1924) | 10.D.11 Negative evidence that must remain publishable | domain/protocols/pipeline validation | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
 | `DATASET-CONTRACT-008` | `DATASET` | Part I `10.E.1 Small natural client population` (lines 1929–1934) | 10.E.1 Small natural client population | datasets/populations | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
 | `DATASET-CONTRACT-009` | `DATASET` | Part I `10.E.2 One external dataset` (lines 1935–1938) | 10.E.2 One external dataset | datasets/populations | `NOT_AUDITED` | — | DERIVE_FROM_ATOMIC_CHILD_REQUIREMENTS |
@@ -2236,7 +2236,7 @@ TestTargetError_{k,p}-CalibrationTargetError_{k,p}
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `_fpr_aggregates` | `PASS` | Arithmetic mean across FPR-evaluable clients. | `test_population_metrics.py` |
 
 ### FORMULA-149 — III / source lines 5088–5096
 
@@ -2254,7 +2254,7 @@ TestTargetError_{k,p}-CalibrationTargetError_{k,p}
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `_fpr_aggregates` | `PASS` | Sample standard deviation with `ddof=1`; unavailable below two clients. | `test_population_metrics.py` |
 
 ### FORMULA-150 — III / source lines 5113–5117
 
@@ -2268,7 +2268,7 @@ CV(FPR)
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `_fpr_aggregates` | `PASS` | Sample FPR standard deviation divided by mean FPR, with zero-mean unavailability. | `test_population_metrics.py` |
 
 ### FORMULA-151 — III / source lines 5133–5137
 
@@ -2282,7 +2282,7 @@ Q_{0.75}(FPR)-Q_{0.25}(FPR)
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `_fpr_aggregates` | `PASS` | Type-7 (`linear`) Q75 minus Q25. | `test_population_metrics.py` |
 
 ### FORMULA-152 — III / source lines 5139–5143
 
@@ -2296,7 +2296,7 @@ Range(FPR)
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `_fpr_aggregates` | `PASS` | Maximum FPR minus minimum FPR. | `test_population_metrics.py` |
 
 ### FORMULA-153 — III / source lines 5145–5149
 
@@ -2310,7 +2310,7 @@ WorstFPR
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `_fpr_aggregates` | `PASS` | Maximum FPR across FPR-evaluable clients. | `test_population_metrics.py` |
 
 ### FORMULA-154 — III / source lines 5155–5160
 
@@ -2325,7 +2325,7 @@ CV(TPR)
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `_coefficient_of_variation` | `PASS` | Attack-evaluable client TPR sample CV uses `ddof=1`, with typed zero-mean and insufficient-support outcomes. | `test_population_metrics.py` |
 
 ### FORMULA-155 — III / source lines 5164–5168
 
@@ -2339,7 +2339,7 @@ Q_{0.10}(MacroF1_k)
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `_quantile_or_unavailable` | `PASS` | Type-7 (`linear`) P10 over attack-evaluable client Macro-F1 values. | `test_population_metrics.py` |
 
 ### FORMULA-156 — III / source lines 5170–5174
 
@@ -2353,7 +2353,7 @@ WorstBA
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `_minimum_or_unavailable` | `PASS` | Minimum balanced accuracy over attack-evaluable clients. | `test_population_metrics.py` |
 
 ### FORMULA-157 — III / source lines 5186–5194
 
@@ -2371,7 +2371,7 @@ K_e\sum_k FPR_k^2
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `_equity_index_metrics` | `PASS` | Jain index from the unweighted FPR-evaluable client values, with typed zero-total unavailability. | `test_population_metrics.py` |
 
 ### FORMULA-158 — III / source lines 5200–5208
 
@@ -2389,7 +2389,7 @@ Gini(FPR)
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `_equity_index_metrics` | `PASS` | Equivalent sorted-rank Gini implementation over unweighted FPR-evaluable client values, with typed zero-total unavailability. | `test_population_metrics.py` |
 
 ### FORMULA-159 — III / source lines 5258–5263
 
@@ -2404,7 +2404,7 @@ MeanClientMacroF1
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `_mean_or_unavailable` | `PASS` | Arithmetic mean Macro-F1 over attack-evaluable clients only. | `test_population_metrics.py` |
 
 ### FORMULA-160 — III / source lines 5279–5284
 
@@ -2419,7 +2419,7 @@ MeanClientBA
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `_mean_or_unavailable` | `PASS` | Arithmetic mean balanced accuracy over attack-evaluable clients only. | `test_population_metrics.py` |
 
 ### FORMULA-161 — III / source lines 5300–5304
 
@@ -2433,7 +2433,7 @@ AbsoluteThresholdError
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `evaluate_threshold_estimate` | `PASS` | Absolute difference from the exact pooled benign-quantile reference. | `test_threshold_estimation.py` |
 
 ### FORMULA-162 — III / source lines 5306–5314
 
@@ -2451,7 +2451,7 @@ RelativeThresholdError
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `evaluate_threshold_estimate` | `PASS` | Absolute threshold error divided by absolute oracle threshold, with typed zero-oracle unavailability. | `test_threshold_estimation.py` |
 
 ### FORMULA-163 — III / source lines 5322–5324
 
@@ -2463,7 +2463,7 @@ TargetExceedance = 1-q
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `evaluate_threshold_estimate` | `PASS` | Target exceedance is the exact float64 complement of the declared quantile. | `test_threshold_estimation.py` |
 
 ### FORMULA-164 — III / source lines 5326–5330
 
@@ -2477,7 +2477,7 @@ AchievedBenignExceedance-(1-q)
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `evaluate_threshold_estimate` | `PASS` | Strict held-out benign exceedance minus target exceedance. | `test_threshold_estimation.py` |
 
 ### FORMULA-165 — III / source lines 5332–5336
 
@@ -2491,7 +2491,7 @@ AbsoluteAttainmentError
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `evaluate_threshold_estimate` | `PASS` | Absolute value of the signed attainment error. | `test_threshold_estimation.py` |
 
 ### FORMULA-166 — III / source lines 5344–5346
 
@@ -2503,7 +2503,7 @@ AbsoluteAttainmentError
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `sample_efficiency_curve` | `PASS` | Arithmetic mean threshold within each `(seed, client, m)` nested-replicate cell. | `test_threshold_estimation.py` |
 
 ### FORMULA-167 — III / source lines 5348–5351
 
@@ -2516,7 +2516,7 @@ ThresholdVariance_{s,k,m}
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `sample_efficiency_curve` | `PASS` | Per-cell sample variance with `ddof=1` over uniquely indexed nested replicates. | `test_threshold_estimation.py` |
 
 ### FORMULA-168 — III / source lines 5353–5355
 
@@ -2528,7 +2528,7 @@ ThresholdSD_{s,k,m}=\sqrt{ThresholdVariance_{s,k,m}}.
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `sample_efficiency_curve` | `PASS` | Typed threshold standard deviation is the non-negative square root of the same per-cell sample variance. | `test_threshold_estimation.py` |
 
 ### FORMULA-169 — III / source lines 5388–5396
 
@@ -2546,7 +2546,7 @@ ThresholdSD_{s,k,m}=\sqrt{ThresholdVariance_{s,k,m}}.
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `_decomposition` | `PASS` | Calibration-row-count weighted client-summary mean. | `test_method_contracts.py` |
 
 ### FORMULA-170 — III / source lines 5400–5408
 
@@ -2564,7 +2564,7 @@ within
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `_decomposition` | `PASS` | Calibration-row-count weighted within-client population variance. | `test_method_contracts.py` |
 
 ### FORMULA-171 — III / source lines 5410–5418
 
@@ -2582,7 +2582,7 @@ between
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `_decomposition` | `PASS` | Calibration-row-count weighted between-client mean-shift term. | `test_method_contracts.py` |
 
 ### FORMULA-172 — III / source lines 5420–5422
 
@@ -2594,7 +2594,7 @@ between
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `_decomposition` and `PooledVarianceDecomposition` | `PASS` | Full pooled variance is the exact within-plus-between decomposition and is constructor-validated. | `test_method_contracts.py` |
 
 ### FORMULA-173 — III / source lines 5428–5432
 
@@ -2608,7 +2608,7 @@ between\_ratio
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `_decomposition` | `PASS` | Between variance divided by full variance, represented as unavailable when the full variance is zero. | `test_method_contracts.py` |
 
 ### FORMULA-174 — III / source lines 5446–5452
 
@@ -2624,7 +2624,7 @@ BenignDecisions_{k,day}
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `calculate_alert_burden` | `PASS` | Per-client held-out FPR multiplied by validated per-client benign decisions/day; the diagnostic retains typed suppression when evidence is absent or inapplicable. | `test_operational.py`, `test_traffic_rates.py` |
 
 ### FORMULA-175 — III / source lines 5494–5500
 
@@ -2640,7 +2640,7 @@ CV(FPR)_{\mathrm{local},s}
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `PairedContrast.delta` | `PASS` | Seed-matched shared CV(FPR) minus local CV(FPR), with fixed-score identity validation at contrast construction. | `test_precision.py` |
 
 ### FORMULA-176 — III / source lines 5504–5509
 
@@ -2655,7 +2655,7 @@ CV(FPR)_{\mathrm{local},s}
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `summarize_values` / `confirmatory_precision_diagnostics` | `PASS` | Arithmetic mean across the declared ten paired seed deltas. | `test_precision.py` |
 
 ### FORMULA-177 — III / source lines 5517–5520
 
@@ -2668,7 +2668,7 @@ RelativeCVReduction_s
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `ConfirmatoryDescriptiveEffect` | `PASS` | Locked shared-minus-local relative CV reduction with explicit `<=1e-12` unavailability. | `test_confirmatory_descriptive_effects.py` |
 
 ### FORMULA-178 — III / source lines 5526–5529
 
@@ -2681,7 +2681,7 @@ DeltaWorstFPR_s
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `_confirmatory_descriptive_effects` | `PASS` | Per-seed shared-minus-local worst-client FPR, loaded from the fixed-score paired evaluation documents. | `test_confirmatory_descriptive_effects.py` |
 
 ### FORMULA-179 — III / source lines 5531–5534
 
@@ -2694,7 +2694,7 @@ DeltaIQR_s
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `_confirmatory_descriptive_effects` | `PASS` | Per-seed shared-minus-local FPR IQR, loaded from the same fixed-score paired evaluation documents. | `test_confirmatory_descriptive_effects.py` |
 
 ### FORMULA-180 — III / source lines 5557–5565
 
@@ -2712,7 +2712,7 @@ SignConsistency
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `PairedDifferenceCounts.positive_proportion` | `PASS` | Positive paired-delta count divided by the complete declared paired cohort, retaining zero deltas in the denominator. | `test_sign_test.py` |
 
 ### FORMULA-181 — III / source lines 5587–5593
 
@@ -2728,7 +2728,7 @@ p_{sign}
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `exact_paired_sign_test` | `PASS` | Exact two-sided binomial tail over nonzero paired signs, with no approximation and explicit all-zero unavailability. | `test_sign_test.py` |
 
 ### FORMULA-182 — III / source lines 5685–5689
 
@@ -2742,7 +2742,7 @@ frozen\_future\_cv-static\_reference\_cv
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `TemporalRecoveryResult.drift_excess` | `PASS` | Frozen-future CV(FPR) minus static-reference CV(FPR). | `test_temporal_claim_scope.py` |
 
 ### FORMULA-183 — III / source lines 5691–5695
 
@@ -2756,7 +2756,7 @@ frozen\_future\_cv-recalibrated\_future\_cv
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `TemporalRecoveryResult.recovered_amount` | `PASS` | Frozen-future CV(FPR) minus recalibrated-future CV(FPR). | `test_temporal_claim_scope.py` |
 
 ### FORMULA-184 — III / source lines 5697–5705
 
@@ -2774,7 +2774,7 @@ drift\_excess
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `TemporalRecoveryResult.recovery_ratio` | `PASS` | Recovered amount divided by drift excess only above the locked `0.05` positive-materiality threshold; otherwise typed undefined. | `test_temporal_claim_scope.py` |
 
 ### FORMULA-185 — III / source lines 5727–5729
 
@@ -2786,7 +2786,7 @@ DeltaTau_k=\tau_{k,recalibrated}-\tau_{k,historical},
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `TemporalClientTrajectory.threshold_movement_recalibrated` | `PASS` | Recalibrated minus historical client threshold. | `test_temporal_claim_scope.py` |
 
 ### FORMULA-186 — III / source lines 5731–5733
 
@@ -2798,7 +2798,7 @@ FrozenFPRDeterioration_k=FPR_{k,frozen}-FPR_{k,static},
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `TemporalClientTrajectory.fpr_movement_frozen` | `PASS` | Frozen-future minus static-reference client FPR. | `test_temporal_claim_scope.py` |
 
 ### FORMULA-187 — III / source lines 5735–5737
 
@@ -2810,7 +2810,7 @@ RecoveryFPR_k=FPR_{k,frozen}-FPR_{k,recalibrated}.
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `TemporalClientTrajectory.fpr_recovery` | `PASS` | Frozen-future minus recalibrated-future client FPR. | `test_temporal_claim_scope.py` |
 
 ### FORMULA-188 — III / source lines 5751–5753
 
@@ -2822,7 +2822,7 @@ SE_{proxy}=\frac{s_\Delta}{\sqrt{10}},
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `confirmatory_precision_diagnostics` | `PASS` | Sample-SD standard-error proxy over the fixed ten paired seed deltas. | `test_precision.py` |
 
 ### FORMULA-189 — III / source lines 5757–5759
 
@@ -2834,7 +2834,7 @@ H_{normal}=1.96\,SE_{proxy}.
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `confirmatory_precision_diagnostics` | `PASS` | Descriptive normal-reference half-width with the locked `1.96` multiplier. | `test_precision.py` |
 
 ### FORMULA-190 — III / source lines 5765–5767
 
@@ -2846,7 +2846,7 @@ BCaWidth=U_{BCa}-L_{BCa}.
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `confirmatory_precision_diagnostics` | `PASS` | BCa upper bound minus lower bound, retained separately from the decision. | `test_precision.py` |
 
 ### FORMULA-191 — III / source lines 5771–5774
 
@@ -2859,7 +2859,7 @@ BCaWidth=U_{BCa}-L_{BCa}.
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `confirmatory_precision_diagnostics` | `PASS` | One arithmetic leave-one-seed-out mean for every retained confirmatory seed. | `test_precision.py` |
 
 ### FORMULA-192 — III / source lines 5776–5779
 
@@ -2872,7 +2872,7 @@ MaxLOSOShift
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `confirmatory_precision_diagnostics` | `PASS` | Maximum absolute leave-one-seed-out shift from the full paired mean. | `test_precision.py` |
 
 ### FORMULA-193 — III / source lines 5795–5798
 
@@ -2885,7 +2885,7 @@ Delta_{s,-j}
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `LeaveOneDeviceEffect.delta` | `PASS` | Per-seed omitted-device shared CV(FPR) minus local CV(FPR). | `test_precision.py` |
 
 ### FORMULA-194 — III / source lines 5802–5804
 
@@ -2897,7 +2897,7 @@ Delta_{s,-j}
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `summarize_leave_one_device_out_effects` | `PASS` | Arithmetic mean of one omitted-device delta per declared seed. | `test_precision.py` |
 
 ### FORMULA-195 — III / source lines 5808–5812
 
@@ -2911,7 +2911,7 @@ MaxLODOMean=\max_j \overline{Delta}_{-j},
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `summarize_leave_one_device_out_effects` | `PASS` | Minimum and maximum device-wise seed means. | `test_precision.py` |
 
 ### FORMULA-196 — III / source lines 5814–5816
 
@@ -2923,7 +2923,7 @@ MaxLODOShift=\max_j|\overline{Delta}_{-j}-\overline{Delta}|.
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `summarize_leave_one_device_out_effects` | `PASS` | Maximum absolute omitted-device mean shift from the full paired mean. | `test_precision.py` |
 
 ### FORMULA-197 — III / source lines 5827–5830
 
@@ -2936,7 +2936,7 @@ RelativeMaxLODOShift
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `summarize_leave_one_device_out_effects` | `PASS` | Maximum LODO shift divided by absolute full mean, with a typed near-zero unavailable state. | `test_precision.py` |
 
 ### FORMULA-198 — III / source lines 5902–5904
 
@@ -2948,7 +2948,7 @@ RelativeMaxLODOShift
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `confirmatory_paired_effect_figure` | `PASS` | Renders the retained seed-level shared-minus-local paired deltas with explicit zero-reference evidence. | `test_figures.py` |
 
 ## 4. Complete literal / grid / enum / pseudocode ledger
 
@@ -7353,13 +7353,13 @@ README_REPRODUCIBILITY.md
 | `TRAIN-085` | IV | 6063 | 8. Gate F — Training and terminal-detector integrity | Diagnostic checkpoints are observational and never become score sources. | `PASS` | Threshold variants consume the one terminal fixed-score workspace. |
 | `THRESHOLD-310` | IV | 6064 | 8. Gate F — Training and terminal-detector integrity | SHARED_THRESHOLD/LOCAL_THRESHOLD/FAMILY_THRESHOLD/CLUSTER_THRESHOLD do not trigger policy-specific retraining. | `PASS` | Stage runner reuses training and score evidence by training coordinate. |
 | `PREPROCESS-053` | IV | 6065 | 8. Gate F — Training and terminal-detector integrity | FedAvg confirmatory models are distinct from FedProx, Ditto, centralized, preprocessing-sensitivity, and post-FedAvg fine-tuned client states where the protocol requires separate detector identities. | `NOT_AUDITED` | — |
-| `SCORE-022` | IV | 6066 | 8. Gate F — Training and terminal-detector integrity | No test AUROC, test label, threshold result, DATP effect, or external result changes the terminal detector. | `NOT_AUDITED` | — |
+| `SCORE-022` | IV | 6066 | 8. Gate F — Training and terminal-detector integrity | No test AUROC, test label, threshold result, DATP effect, or external result changes the terminal detector. | `PASS` | Persisted score reuse cryptographically binds the exact terminal detector tensor state and rejects an otherwise same-coordinate request with a different state. |
 | `TRAIN-086` | IV | 6067 | 8. Gate F — Training and terminal-detector integrity | FedProx executes the complete locked `mu` grid. | `NOT_AUDITED` | — |
 | `TRAIN-087` | IV | 6068 | 8. Gate F — Training and terminal-detector integrity | FedProx persists broadcast/returned state identity and produces `L2Drift`, `RMSDrift`, terminal-50 drift summaries, and `DriftSuppression` exactly as Part I §7.1A requires. | `NOT_AUDITED` | — |
 | `TRAIN-088` | IV | 6069 | 8. Gate F — Training and terminal-detector integrity | Client-round FedProx drift cells remain nested diagnostics and are never treated as independent inferential observations. | `NOT_AUDITED` | — |
 | `TRAIN-089` | IV | 6070 | 8. Gate F — Training and terminal-detector integrity | Ditto executes the complete locked `lambda_D` grid and preserves genuine persistent-personalized-state semantics before using the name Ditto. | `NOT_AUDITED` | — |
 | `CALIBRATION-222` | IV | 6072 | 8. Gate F — Training and terminal-detector integrity | `FEDAVG_LOCAL_FINE_TUNING` initializes every client from the exact seed-matched FedAvg round-200 model, uses a fresh optimizer state, exactly 10 benign-training epochs, no early stopping, and no calibration/evaluation/attack-label access. | `PASS` | Fine-tuning source and protocol enforce round-200/ten-epoch requirements and client training input is role-scoped. |
-| `SCORE-023` | IV | 6073 | 8. Gate F — Training and terminal-detector integrity | Fine-tuned client models are frozen before scoring and are never re-fine-tuned per threshold policy. | `NOT_AUDITED` | — |
+| `SCORE-023` | IV | 6073 | 8. Gate F — Training and terminal-detector integrity | Fine-tuned client models are frozen before scoring and are never re-fine-tuned per threshold policy. | `PASS` | Fine-tuning freezes per-client terminal states before canonical score artifacts; state-bound score-manifest reuse rejects drifted model identity. |
 | `TRAIN-090` | IV | 6074 | 8. Gate F — Training and terminal-detector integrity | The deterministic fine-tuning seed identity includes `(dataset_id,population_id,training_seed,client_id)` with purpose `FEDAVG_LOCAL_FINE_TUNING`. | `NOT_AUDITED` | — |
 | `PREPROCESS-054` | IV | 6078 | 9. Gate G — Fixed-score and scoring integrity | Exactly one canonical evaluation-score artifact exists per fixed detector / preprocessing / population / seed coordinate. | `PASS` | Fixed workspace and persisted score-manifest identity bind one artifact. |
 | `SCORE-024` | IV | 6079 | 9. Gate G — Fixed-score and scoring integrity | SHARED_THRESHOLD/LOCAL_THRESHOLD/FAMILY_THRESHOLD/CLUSTER_THRESHOLD reference that same score artifact identity within a ladder. | `PASS` | Fixed-score control requires identical manifest/content evidence. |

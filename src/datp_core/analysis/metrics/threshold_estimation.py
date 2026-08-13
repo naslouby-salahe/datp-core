@@ -27,6 +27,7 @@ from datp_core.core.numeric import (
     ReplicateIndex,
     Seed,
     SubsampleReplicateCount,
+    ThresholdStandardDeviation,
     ThresholdValue,
     ThresholdVariance,
     is_numeric_zero,
@@ -142,6 +143,7 @@ class SampleEfficiencyPoint:
     replicate_count: SubsampleReplicateCount
     mean_threshold: ThresholdValue
     threshold_variance_across_nested_replicates: ThresholdVariance
+    threshold_standard_deviation_across_nested_replicates: ThresholdStandardDeviation
 
     def __post_init__(self) -> None:
         if (
@@ -233,6 +235,7 @@ def sample_efficiency_curve(
 
         values = np.fromiter((item.estimated_threshold.value for item in replicate_group), dtype=np.float64)
 
+        variance = ThresholdVariance(float(np.var(values, ddof=1)))
         points.append(
             SampleEfficiencyPoint(
                 client=key[0],
@@ -241,7 +244,10 @@ def sample_efficiency_curve(
                 calibration_size=key[3],
                 replicate_count=SubsampleReplicateCount(len(replicate_group)),
                 mean_threshold=ThresholdValue(float(np.mean(values))),
-                threshold_variance_across_nested_replicates=ThresholdVariance(float(np.var(values, ddof=1))),
+                threshold_variance_across_nested_replicates=variance,
+                threshold_standard_deviation_across_nested_replicates=ThresholdStandardDeviation(
+                    float(np.sqrt(variance.value))
+                ),
             )
         )
 

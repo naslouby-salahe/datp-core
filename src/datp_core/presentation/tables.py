@@ -30,6 +30,8 @@ class TableCell:
             object.__setattr__(self, "evidence", EvidenceText(self.evidence))
         if not isinstance(self.rendered_value, TableCellRenderedValue):
             object.__setattr__(self, "rendered_value", TableCellRenderedValue(self.rendered_value))
+        if self.availability is AvailabilityStatus.AVAILABLE and not self.rendered_value:
+            raise ValueError("available table cells require a rendered value")
         if self.availability is not AvailabilityStatus.AVAILABLE and self.rendered_value:
             raise ValueError("unavailable table cells must not contain fabricated values")
 

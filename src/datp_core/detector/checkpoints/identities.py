@@ -15,6 +15,7 @@ class FederatedHistoryAssetName(StrEnum):
 class FederatedHistoryColumn(StrEnum):
     ROUND_NUMBER = "round_number"
     AGGREGATE_LOSS = "aggregate_loss"
+    AGGREGATE_VALIDATION_LOSS = "aggregate_validation_loss"
     UPLOAD_BYTES = "upload_bytes"
     DOWNLOAD_BYTES = "download_bytes"
     STATE_BYTES = "state_bytes"
@@ -36,6 +37,7 @@ class ParquetColumnSpec:
 ROUND_SUMMARY_SCHEMA = (
     ParquetColumnSpec(identity=FederatedHistoryColumn.ROUND_NUMBER, dtype=pl.Int64),
     ParquetColumnSpec(identity=FederatedHistoryColumn.AGGREGATE_LOSS, dtype=pl.Float64),
+    ParquetColumnSpec(identity=FederatedHistoryColumn.AGGREGATE_VALIDATION_LOSS, dtype=pl.Float64),
     ParquetColumnSpec(identity=FederatedHistoryColumn.UPLOAD_BYTES, dtype=pl.Int64),
     ParquetColumnSpec(identity=FederatedHistoryColumn.DOWNLOAD_BYTES, dtype=pl.Int64),
     ParquetColumnSpec(identity=FederatedHistoryColumn.STATE_BYTES, dtype=pl.Int64),

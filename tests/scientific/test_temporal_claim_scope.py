@@ -6,13 +6,16 @@ import pytest
 
 from datp_core.analysis.scientific_decision import ScientificDecision
 from datp_core.analysis.temporal import (
+    LOCKED_TEMPORAL_DECISION_PROTOCOL,
     TemporalClientTrajectory,
-    _TemporalInterpretationCounts,
+    TemporalRecoveryResult,
     _campaign_decision_from_counts,
+    _TemporalInterpretationCounts,
     temporal_drift_js,
 )
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import (
+    AvailabilityStatus,
     ClientIdentityToken,
     FederatedThresholdMethod,
     PopulationId,
@@ -105,7 +108,7 @@ def test_temporal_client_trajectory_uses_locked_historical_and_future_formulae()
     trajectory = TemporalClientTrajectory(
         seed=Seed(0),
         client=ClientIdentity(
-            population=PopulationId.EDGE_TEMPORAL_GROUPS,
+            population=PopulationId.EDGE_TEMPORAL_CLIENTS,
             client_id=ClientIdentityToken("sensor_a"),
             identity_kind=PopulationIdentityKind.VERIFIED_TEMPORAL_GROUPS,
         ),
@@ -126,3 +129,49 @@ def test_temporal_client_trajectory_uses_locked_historical_and_future_formulae()
     assert trajectory.fpr_movement_frozen.value == pytest.approx(0.20)
     assert trajectory.fpr_recovery is not None
     assert trajectory.fpr_recovery.value == pytest.approx(0.15)
+
+
+def test_eligible_temporal_client_cannot_silently_omit_a_required_fpr() -> None:
+    with pytest.raises(ValueError, match="eligible temporal clients"):
+        TemporalClientTrajectory(
+            seed=Seed(0),
+            client=ClientIdentity(
+                population=PopulationId.EDGE_TEMPORAL_CLIENTS,
+                client_id=ClientIdentityToken("sensor_a"),
+                identity_kind=PopulationIdentityKind.VERIFIED_TEMPORAL_GROUPS,
+            ),
+            threshold_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
+            eligible=True,
+            exclusion_reason=None,
+            threshold_static=MetricValue(0.20),
+            threshold_frozen=MetricValue(0.35),
+            threshold_recalibrated=MetricValue(0.25),
+            fpr_static=MetricValue(0.10),
+            fpr_frozen=None,
+            fpr_recalibrated=MetricValue(0.15),
+        )
+
+
+def test_temporal_recovery_uses_the_locked_drift_and_recovery_formulae() -> None:
+    recovery = TemporalRecoveryResult.model_construct(
+        static_reference_cv=MetricValue(0.10),
+        frozen_future_cv=MetricValue(0.40),
+        recalibrated_future_cv=MetricValue(0.25),
+        decision_protocol=LOCKED_TEMPORAL_DECISION_PROTOCOL,
+        unavailable_reason=None,
+    )
+
+    assert recovery.drift_excess.value == pytest.approx(0.30)
+    assert recovery.recovered_amount.value == pytest.approx(0.15)
+    assert recovery.recovery_ratio is not None
+    assert recovery.recovery_ratio.value == pytest.approx(0.5)
+
+    nonmaterial = TemporalRecoveryResult.model_construct(
+        static_reference_cv=MetricValue(0.10),
+        frozen_future_cv=MetricValue(0.15),
+        recalibrated_future_cv=MetricValue(0.10),
+        decision_protocol=LOCKED_TEMPORAL_DECISION_PROTOCOL,
+        unavailable_reason=None,
+    )
+    assert nonmaterial.recovery_ratio is None
+    assert nonmaterial.availability is AvailabilityStatus.UNDEFINED

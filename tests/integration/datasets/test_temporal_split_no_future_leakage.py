@@ -19,7 +19,7 @@ def test_temporal_split_preserves_history_before_future(edge_temporal_eligible_r
     split = split_membership(
         SplitConstructionRequest(
             membership=membership,
-            population=PopulationId.EDGE_TEMPORAL_GROUPS,
+            population=PopulationId.EDGE_TEMPORAL_CLIENTS,
             dataset=DatasetId.EDGE_IIOTSET,
             partition_seed=Seed(0),
             split_protocol=SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE,

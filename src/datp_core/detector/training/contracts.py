@@ -172,6 +172,11 @@ def _require_model_coefficient(
             )
 
 
+class TrainingProtocolVariant(StrEnum):
+    STANDARD = "standard"
+    HISTORICAL_ANCHOR = "historical_anchor"
+
+
 @dataclass(frozen=True, slots=True)
 class FederatedTrainingCoordinate:
     population: PopulationId
@@ -180,11 +185,20 @@ class FederatedTrainingCoordinate:
     preprocessing_identity: PreprocessingProtocolId
     model: TrainingModelId
     model_coefficient: ProximalCoefficient | DittoRegularization | None
+    protocol_variant: TrainingProtocolVariant = TrainingProtocolVariant.STANDARD
     controlled_partition_kind: ControlledPartitionKind | None = None
     dirichlet_concentration: DirichletConcentration | None = None
 
     def __post_init__(self) -> None:
         _require_model_coefficient(self.model, self.model_coefficient)
+        if (
+            self.protocol_variant is TrainingProtocolVariant.HISTORICAL_ANCHOR
+            and self.model is not TrainingModelId.FEDAVG_AUTOENCODER
+        ):
+            raise ScientificContractError(
+                ErrorMessage("the historical anchor training variant requires FedAvg"),
+                subject=ContractSubject.TRAINING,
+            )
         if self.dirichlet_concentration is not None:
             if self.controlled_partition_kind is None:
                 raise ScientificContractError(

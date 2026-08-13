@@ -93,6 +93,19 @@ class AssociationResult(StrictModel):
 
     @model_validator(mode="after")
     def validate_result(self) -> "AssociationResult":
+        if all(
+            hasattr(item, field)
+            for item in self.observations
+            for field in ("seed", "experiment", "population", "regime_label")
+        ):
+            identities = tuple(
+                (item.seed, item.experiment, item.population, item.regime_label)
+                for item in self.observations
+            )
+            if len(identities) != len(frozenset(identities)):
+                raise ValueError(
+                    "association observations must be unique by seed, experiment, population, and regime"
+                )
         if (self.statistics is None) == (self.issue is None):
             raise ValueError("association result requires either statistics or one issue")
         if self.statistics is not None:

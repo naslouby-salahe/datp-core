@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import polars as pl
+import pytest
 
 from datp_core.core.identifiers import (
     DatasetId,
@@ -16,6 +17,7 @@ from datp_core.data.populations.contracts import (
     PARTITION_ROLE_COLUMN,
     STABLE_ROW_ID_COLUMN,
 )
+from datp_core.data.preprocessing.ciciot_file_clients import _client_group_key
 from datp_core.data.preprocessing.client_partitions import (
     client_partitions,
     exclude_nonfinite_model_input_rows,
@@ -70,7 +72,7 @@ def test_excludes_row_with_null_numeric_model_input_feature() -> None:
         joined,
         _feature_names("feature_one", "feature_two"),
         dataset=DatasetId.EDGE_IIOTSET,
-        population=PopulationId.EDGE_SENSOR_GROUPS,
+        population=PopulationId.EDGE_SENSOR_CLIENTS,
     )
 
     assert result.eligible_rows.get_column("stable_row_id").to_list() == ["a", "c"]
@@ -90,7 +92,7 @@ def test_excludes_row_with_non_finite_numeric_model_input_feature() -> None:
         joined,
         _feature_names("feature_one"),
         dataset=DatasetId.EDGE_IIOTSET,
-        population=PopulationId.EDGE_SENSOR_GROUPS,
+        population=PopulationId.EDGE_SENSOR_CLIENTS,
     )
 
     assert result.eligible_rows.get_column("stable_row_id").to_list() == ["a"]
@@ -109,7 +111,7 @@ def test_never_fills_or_fabricates_a_replacement_value() -> None:
         joined,
         _feature_names("feature_one"),
         dataset=DatasetId.EDGE_IIOTSET,
-        population=PopulationId.EDGE_SENSOR_GROUPS,
+        population=PopulationId.EDGE_SENSOR_CLIENTS,
     )
 
     assert result.eligible_rows.get_column("feature_one").null_count() == 0
@@ -128,7 +130,7 @@ def test_all_rows_retained_when_every_feature_is_finite() -> None:
         joined,
         _feature_names("feature_one"),
         dataset=DatasetId.EDGE_IIOTSET,
-        population=PopulationId.EDGE_SENSOR_GROUPS,
+        population=PopulationId.EDGE_SENSOR_CLIENTS,
     )
 
     assert result.eligible_rows.height == joined.height
@@ -146,10 +148,18 @@ def test_exclusion_evidence_is_persisted_with_stable_row_identities(tmp_path: Pa
         joined,
         _feature_names("feature_one"),
         dataset=DatasetId.EDGE_IIOTSET,
-        population=PopulationId.EDGE_SENSOR_GROUPS,
+        population=PopulationId.EDGE_SENSOR_CLIENTS,
     )
     destination = tmp_path / "model_input_exclusions.json"
     write_model_input_exclusion_evidence(destination, result.exclusion_evidence)
     payload = destination.read_text(encoding="utf-8")
     assert "row_b" in payload
     assert "nonfinite_or_null_numeric_model_input_feature" in payload
+def test_ciciot_client_group_key_normalizes_polars_single_column_keys() -> None:
+    assert _client_group_key(("Merged01",)) == "Merged01"
+    assert _client_group_key("Merged01") == "Merged01"
+
+
+def test_ciciot_client_group_key_rejects_multiple_group_columns() -> None:
+    with pytest.raises(ValueError, match="exactly one key"):
+        _client_group_key(("Merged01", "unexpected"))

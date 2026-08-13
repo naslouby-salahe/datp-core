@@ -99,7 +99,7 @@ EDGE_IIOTSET_CAPABILITIES = DatasetCapabilities(
         ValidationReasonText("It cannot establish cross-client attack-detection generalization."),
         (EvidenceRole.EXTERNAL_VALIDATION,),
     ),
-    valid_populations=(PopulationId.EDGE_SENSOR_GROUPS, PopulationId.EDGE_TEMPORAL_GROUPS),
+    valid_populations=(PopulationId.EDGE_SENSOR_CLIENTS, PopulationId.EDGE_TEMPORAL_CLIENTS),
     threshold_methods=(
         ThresholdMethodCapability(
             status=CapabilityStatus.SUPPORTED,

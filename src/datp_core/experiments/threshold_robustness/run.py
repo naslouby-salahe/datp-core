@@ -403,6 +403,11 @@ def _complete_marker(experiment_id: ExperimentId, population: PopulationId) -> P
     return _analysis_directory(experiment_id, population) / ThresholdRobustnessArtifactName.COMPLETE
 
 
+def _complete_marker_present(experiment_id: ExperimentId, population: PopulationId) -> bool:
+    marker = _complete_marker(experiment_id, population)
+    return marker.is_file() and marker.stat().st_size > 0
+
+
 def _summary_path(experiment_id: ExperimentId, population: PopulationId) -> Path:
     return _analysis_directory(experiment_id, population) / ThresholdRobustnessArtifactName.SUMMARY
 
@@ -539,14 +544,6 @@ def report_shared_construction_sensitivity(
         report,
         _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
     )
-    return finalize_analysis_report(
-        AnalysisReportFinalizationInput(
-            directory=directory,
-            marker=_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
-            missing_count=SeedObservationCount(missing),
-            marker_text=AnalysisMarkerText(ThresholdRobustnessAnalysisMarker.THRESHOLD_ESTIMATOR_SCOPE_SENSITIVITY),
-        )
-    )
     write_text_atomically(
         _shared_construction_panel_path(PopulationId.NBAIOT_NATURAL_DEVICES),
         FileContentText(_render_shared_construction_panel(report)),
@@ -598,7 +595,7 @@ def _panel_value(value: MetricValue | float | None) -> str:
 
 
 def shared_construction_sensitivity_analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    return _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES).is_file()
+    return _complete_marker_present(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
 
 
 def run_quantile_sensitivity_seed(
@@ -660,7 +657,7 @@ def report_quantile_sensitivity(
 
 
 def quantile_sensitivity_analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    return _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES).is_file()
+    return _complete_marker_present(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
 
 
 def run_threshold_estimator_scope_sensitivity_seed(
@@ -831,7 +828,7 @@ def _moment_scope_gain_interval(contrasts: tuple[EstimatorScopeContrast, ...]) -
 
 
 def threshold_estimator_scope_sensitivity_analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    return _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES).is_file()
+    return _complete_marker_present(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
 
 
 def run_calibration_size_ablation_seed(
@@ -929,7 +926,7 @@ def report_calibration_cold_start_onboarding(
 
 
 def calibration_cold_start_onboarding_analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    return _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES).is_file()
+    return _complete_marker_present(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
 
 
 def run_shared_calibration_contributor_availability_seed(
@@ -1072,7 +1069,7 @@ def report_shared_calibration_contributor_availability(
 
 
 def shared_calibration_contributor_availability_analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    return _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES).is_file()
+    return _complete_marker_present(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
 
 
 def report_calibration_size_ablation(
@@ -1262,7 +1259,7 @@ def _threshold_order_rows_for_seed(
 
 
 def calibration_size_ablation_analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    return _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES).is_file()
+    return _complete_marker_present(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
 
 
 def run_fixed_shrinkage_curve_seed(
@@ -1341,7 +1338,7 @@ def report_fixed_shrinkage_curve(
 
 
 def fixed_shrinkage_curve_analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    return _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES).is_file()
+    return _complete_marker_present(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
 
 
 def run_size_aware_shrinkage_seed(
@@ -1453,7 +1450,7 @@ def report_size_aware_shrinkage(
 
 
 def size_aware_shrinkage_analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    return _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES).is_file()
+    return _complete_marker_present(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
 
 
 def run_local_conformal_coverage_seed(
@@ -1568,7 +1565,7 @@ def report_local_conformal_coverage(
 
 
 def local_conformal_coverage_analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    return _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES).is_file()
+    return _complete_marker_present(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
 
 
 def run_preprocessing_geometry_sensitivity_seed(
@@ -1725,4 +1722,4 @@ def report_preprocessing_geometry_sensitivity(
 
 
 def preprocessing_geometry_sensitivity_analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    return _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES).is_file()
+    return _complete_marker_present(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)

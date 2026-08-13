@@ -7,6 +7,7 @@ from datp_core.core.errors import ErrorMessage, ScientificContractError
 from datp_core.core.identifiers import ContractSubject, PartitionRole, ScoreFrameColumn, StableRowId
 from datp_core.core.numeric import CalibrationSize, ReplicateIndex, RowCount, SubsampleReplicateCount
 from datp_core.data.populations.contracts import ClientIdentity, EligibleCohort
+from datp_core.data.registry import resolve_population
 from datp_core.detector.scoring.models import FederatedScoreArtifactManifest, FederatedScoreRecord
 from datp_core.thresholds.calibration.eligibility import (
     CalibrationSampleReference,
@@ -115,12 +116,14 @@ def calibrate(request: CalibrationRequest) -> CalibrationResult:
     eligible = eligible_clients(decisions_tuple)
 
     coordinate = score_manifest.coordinate
+    dataset = resolve_population(coordinate.population).declaration.dataset
     training_seed = coordinate.training_seed
     calib_sizes = request.calibration_sizes
 
     replicate_manifests = tuple(
         build_calibration_replicate(
             client=client,
+            dataset=dataset,
             coordinate=coordinate,
             training_seed=training_seed,
             replicate_index=ReplicateIndex(replicate_index),

@@ -1,4 +1,5 @@
 from enum import StrEnum
+from hashlib import sha256
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -13,6 +14,7 @@ from datp_core.core.identifiers import (
     ExperimentReadiness,
     FileContentText,
     PreprocessingProtocolId,
+    Sha256Digest,
 )
 from datp_core.data.populations.declarations import split_protocol_for_population
 from datp_core.experiments.anchor.contracts import (
@@ -166,12 +168,15 @@ def persist_anchor_gate_diagnostics(decision: AnchorGateDecision, diagnostics_di
         diagnostics_directory / AnchorArtifactFileName.DISCREPANCIES.value,
         FileContentText(canonical_json_text(decision.reproduction.discrepancies)),
     )
+    handoff_path = diagnostics_directory / AnchorArtifactFileName.CONFIRMATORY_HANDOFF.value
     if decision.status in {AnchorGateStatus.PASS, AnchorGateStatus.PASS_WITH_DECLARED_DISCREPANCY}:
         handoff = build_anchor_confirmatory_handoff(decision=decision, diagnostics_directory=diagnostics_directory)
         write_text_atomically(
-            diagnostics_directory / AnchorArtifactFileName.CONFIRMATORY_HANDOFF.value,
+            handoff_path,
             FileContentText(canonical_json_text(handoff)),
         )
+    elif handoff_path.exists():
+        handoff_path.unlink()
 
 
 def build_anchor_confirmatory_handoff(
@@ -187,6 +192,7 @@ def build_anchor_confirmatory_handoff(
         )
 
     endpoint = CONFIRMATORY_ENDPOINT
+    gate_path = diagnostics_directory / AnchorArtifactFileName.GATE_DECISION.value
     return validate_handoff_against_confirmatory_programme(
         AnchorConfirmatoryHandoff(
             anchor_experiment=ANCHOR_EXPERIMENT,
@@ -200,6 +206,7 @@ def build_anchor_confirmatory_handoff(
             threshold_protocol_identities=(endpoint.shared_threshold, endpoint.local_threshold),
             verified_gate_status=decision.status,
             diagnostics_directory=ArtifactDirectoryPathText(str(diagnostics_directory.resolve())),
+            gate_decision_sha256=_sha256_file(gate_path),
         )
     )
 
@@ -232,7 +239,7 @@ def load_anchor_confirmatory_handoff(
     verified_gate: VerifiedAnchorGateArtifact,
 ) -> AnchorConfirmatoryHandoff:
 
-    if not diagnostics_directory.is_dir():
+    if not diagnostics_directory.is_dir() or diagnostics_directory.is_symlink():
         raise AnchorReproductionError(
             ErrorMessage(f"anchor-gate diagnostics directory is missing: {diagnostics_directory}"),
             reason=AnchorArtifactValidationFailure.MISSING,
@@ -240,7 +247,7 @@ def load_anchor_confirmatory_handoff(
 
     handoff_path = diagnostics_directory / AnchorArtifactFileName.CONFIRMATORY_HANDOFF.value
 
-    if not handoff_path.is_file():
+    if not handoff_path.is_file() or handoff_path.is_symlink():
         raise AnchorReproductionError(
             ErrorMessage(f"anchor confirmatory handoff artifact is missing: {handoff_path}"),
             reason=AnchorArtifactValidationFailure.MISSING,
@@ -258,6 +265,24 @@ def load_anchor_confirmatory_handoff(
         raise AnchorReproductionError(
             ErrorMessage(f"anchor confirmatory handoff gate status does not match the verified gate: {handoff_path}"),
             reason=AnchorArtifactValidationFailure.STATUS_MISMATCH,
+        )
+
+    gate_path = diagnostics_directory / AnchorArtifactFileName.GATE_DECISION.value
+    if not gate_path.is_file() or gate_path.is_symlink():
+        raise AnchorReproductionError(
+            ErrorMessage(f"anchor-gate decision artifact is missing or unsafe: {gate_path}"),
+            reason=AnchorArtifactValidationFailure.MISSING,
+        )
+    loaded_gate = _load_gate_decision(diagnostics_directory)
+    if loaded_gate != verified_gate.decision:
+        raise AnchorReproductionError(
+            ErrorMessage(f"anchor confirmatory handoff is not bound to the verified gate: {handoff_path}"),
+            reason=AnchorArtifactValidationFailure.STALE_OR_MISMATCHED,
+        )
+    if handoff.gate_decision_sha256 != _sha256_file(gate_path):
+        raise AnchorReproductionError(
+            ErrorMessage(f"anchor confirmatory handoff gate digest does not match the gate decision: {handoff_path}"),
+            reason=AnchorArtifactValidationFailure.STALE_OR_MISMATCHED,
         )
 
     if str(handoff.diagnostics_directory) != str(diagnostics_directory.resolve()):
@@ -304,14 +329,14 @@ def validate_handoff_against_confirmatory_programme(
 
 
 def _load_gate_decision(diagnostics_directory: Path) -> AnchorGateDecision:
-    if not diagnostics_directory.is_dir():
+    if not diagnostics_directory.is_dir() or diagnostics_directory.is_symlink():
         raise AnchorReproductionError(
             ErrorMessage(f"anchor-gate diagnostics directory is missing: {diagnostics_directory}"),
             reason=AnchorArtifactValidationFailure.MISSING,
         )
 
     gate_path = diagnostics_directory / AnchorArtifactFileName.GATE_DECISION.value
-    if not gate_path.is_file():
+    if not gate_path.is_file() or gate_path.is_symlink():
         raise AnchorReproductionError(
             ErrorMessage(f"anchor-gate decision artifact is missing: {gate_path}"),
             reason=AnchorArtifactValidationFailure.MISSING,
@@ -326,3 +351,7 @@ def _load_gate_decision(diagnostics_directory: Path) -> AnchorGateDecision:
         ) from error
 
     return decision
+
+
+def _sha256_file(path: Path) -> Sha256Digest:
+    return Sha256Digest(sha256(path.read_bytes()).hexdigest())

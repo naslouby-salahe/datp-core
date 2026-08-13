@@ -71,8 +71,11 @@ class RelativeAssetPath(str):
             raise ValueError("relative asset path must be a non-empty string")
         if "=" in path_text:
             raise ValueError("prepared-data paths must not contain key=value segments")
-        if Path(path_text).is_absolute():
+        path = Path(path_text)
+        if path.is_absolute():
             raise ValueError("relative asset path must not be absolute")
+        if any(part in {".", ".."} for part in path.parts):
+            raise ValueError("relative asset path must not traverse its publication directory")
         return super().__new__(cls, path_text)
 
     @classmethod

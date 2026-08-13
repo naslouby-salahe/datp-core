@@ -68,6 +68,27 @@ _REQUIRED_DIRECTORIES = (
     "AUDIT_REPORTS",
     "ENVIRONMENT",
 )
+_REQUIRED_RECONSTRUCTION_DIRECTORIES = frozenset(
+    {
+        "DATA_PROVENANCE",
+        "SPLIT_IDENTITY",
+        "PREPROCESSING",
+        "MODELS",
+        "SCORES",
+        "THRESHOLDS",
+        "METRICS",
+        "STATISTICS",
+        "FIGURE_TABLE_DATA",
+        "AUDIT_REPORTS",
+    }
+)
+_REQUIRED_PUBLICATION_ARTIFACT_TYPES = frozenset(
+    {
+        "publication_source_manifest",
+        "publication",
+        "table_figure_source_data",
+    }
+)
 _REQUIRED_FILES = (
     _ROADMAP_LOCK_FILENAME,
     _MANIFEST_FILENAME,
@@ -487,8 +508,15 @@ def campaign_publication_release_artifacts(output_root: Path) -> tuple[ReleaseAr
         relative = manifest.relative_to(output_root)
         artifacts.append(ReleaseArtifact(manifest, Path("FIGURE_TABLE_DATA") / relative, "publication_source_manifest"))
         publication = manifest.parent / "publication.md"
-        if not publication.is_file():
+        if not _is_regular_file(publication):
             raise ArtifactIntegrityError(ErrorMessage(f"publication source manifest has no publication: {manifest}"))
+        try:
+            payload = json.loads(manifest.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as error:
+            raise ArtifactIntegrityError(
+                ErrorMessage(f"publication source manifest is unreadable: {manifest}")
+            ) from error
+        _validate_declared_publication(manifest, payload, publication)
         artifacts.append(
             ReleaseArtifact(
                 publication,
@@ -520,14 +548,77 @@ def _publication_source_paths(manifest: Path) -> tuple[Path, ...]:
         if not isinstance(source, dict) or not isinstance(filename := source.get("filename"), str):
             raise ArtifactIntegrityError(ErrorMessage(f"publication source manifest has an invalid source: {manifest}"))
         path = Path(filename)
-        if path.is_absolute() or ".." in path.parts or len(path.parts) != 1 or not (manifest.parent / path).is_file():
+        if (
+            path.is_absolute()
+            or ".." in path.parts
+            or len(path.parts) != 1
+            or not _is_regular_file(manifest.parent / path)
+        ):
             raise ArtifactIntegrityError(
                 ErrorMessage(f"publication source is missing or invalid: {manifest} / {filename}")
             )
+        _validate_declared_publication_source(manifest, source, manifest.parent / path)
         paths.append(manifest.parent / path)
     if len(paths) != len(set(paths)):
         raise ArtifactIntegrityError(ErrorMessage(f"publication source manifest repeats a source: {manifest}"))
     return tuple(paths)
+
+
+def _validate_declared_publication(manifest: Path, payload: object, publication: Path) -> None:
+    """Bind the rendered claim text itself to the source manifest before release assembly."""
+
+    if not isinstance(payload, dict):
+        raise ArtifactIntegrityError(ErrorMessage(f"publication source manifest is invalid: {manifest}"))
+    declared_name = payload.get("publication")
+    if declared_name != publication.name:
+        raise ArtifactIntegrityError(
+            ErrorMessage(f"publication source manifest names an invalid publication: {manifest}")
+        )
+    declared_bytes = payload.get("publication_bytes")
+    if not isinstance(declared_bytes, int) or declared_bytes != publication.stat().st_size:
+        raise ArtifactIntegrityError(ErrorMessage(f"publication byte count does not match: {manifest}"))
+    declared_digest = payload.get("publication_sha256")
+    if (
+        not isinstance(declared_digest, str)
+        or fullmatch(r"[0-9a-f]{64}", declared_digest) is None
+        or declared_digest != _sha256_file(publication)
+    ):
+        raise ArtifactIntegrityError(ErrorMessage(f"publication digest does not match: {manifest}"))
+
+
+def _validate_declared_publication_source(manifest: Path, source: object, path: Path) -> None:
+    """Verify optional export-time source integrity fields before a release copies the bytes."""
+
+    if not isinstance(source, dict):
+        return
+    declared_bytes = source.get("bytes")
+    if declared_bytes is not None and (not isinstance(declared_bytes, int) or declared_bytes != path.stat().st_size):
+        raise ArtifactIntegrityError(
+            ErrorMessage(f"publication source byte count does not match: {manifest} / {path.name}")
+        )
+    declared_digest = source.get("sha256")
+    if declared_digest is not None and (
+        not isinstance(declared_digest, str)
+        or fullmatch(r"[0-9a-f]{64}", declared_digest) is None
+        or declared_digest != _sha256_file(path)
+    ):
+        raise ArtifactIntegrityError(
+            ErrorMessage(f"publication source digest does not match: {manifest} / {path.name}")
+        )
+    declared_rows = source.get("row_count")
+    if declared_rows is not None and (
+        not isinstance(declared_rows, int) or declared_rows != _publication_source_row_count(path)
+    ):
+        raise ArtifactIntegrityError(
+            ErrorMessage(f"publication source row count does not match: {manifest} / {path.name}")
+        )
+
+
+def _publication_source_row_count(path: Path) -> int:
+    if path.suffix != ".csv":
+        return 1
+    with path.open(encoding="utf-8", newline="") as stream:
+        return sum(1 for _ in csv.DictReader(stream))
 
 
 def _release_artifact_from_document(
@@ -751,8 +842,8 @@ def build_release_bundle(request: ReleaseBuildRequest) -> ReleaseValidation:
 
 
 def _require_payload_layout(root: Path) -> None:
-    missing = tuple(name for name in _REQUIRED_FILES if not (root / name).is_file())
-    missing_directories = tuple(name for name in _REQUIRED_DIRECTORIES if not (root / name).is_dir())
+    missing = tuple(name for name in _REQUIRED_FILES if not _is_regular_file(root / name))
+    missing_directories = tuple(name for name in _REQUIRED_DIRECTORIES if not _is_regular_directory(root / name))
     if missing or missing_directories:
         raise ArtifactIntegrityError(
             ErrorMessage(
@@ -767,7 +858,7 @@ def _require_unique_release_artifacts(artifacts: tuple[ReleaseArtifact, ...]) ->
     if len(paths) != len(frozenset(paths)):
         raise ArtifactIntegrityError(ErrorMessage("release artifact destinations must be unique"))
     for artifact in artifacts:
-        if not artifact.source.is_file():
+        if not _is_regular_file(artifact.source):
             raise ArtifactIntegrityError(ErrorMessage(f"release source artifact is missing: {artifact.source}"))
         _require_relative_artifact_path(artifact.relative_path)
         _require_descriptive_scientific_metadata(
@@ -795,7 +886,11 @@ def _validate_withheld_artifacts(request: ReleaseBuildRequest) -> None:
     if len(paths) != len(frozenset(paths)):
         raise ArtifactIntegrityError(ErrorMessage("withheld artifact records must have unique original paths"))
     for artifact in withheld:
-        if not artifact.source.is_file() or not artifact.license_reason or not artifact.reconstruction_instructions:
+        if (
+            not _is_regular_file(artifact.source)
+            or not artifact.license_reason
+            or not artifact.reconstruction_instructions
+        ):
             raise ArtifactIntegrityError(ErrorMessage("withheld artifact record is incomplete"))
         _require_relative_artifact_path(artifact.original_relative_path)
 
@@ -804,15 +899,13 @@ def _write_release_metadata(request: ReleaseBuildRequest) -> None:
     roadmap_digest = _sha256_file(request.roadmap)
     (request.root / _ROADMAP_LOCK_FILENAME).write_bytes(
         (
-            _ROADMAP_LOCK_TITLE
-            + "\n\n"
-        f"- Roadmap SHA-256: `{roadmap_digest}`\n"
-        f"- Code revision: `{request.code_revision}`\n"
-        f"- Literature search date: `{request.literature_search_date.isoformat()}`\n"
-        f"- Submission date: `{request.submission_date.isoformat() if request.submission_date else 'NOT_APPLICABLE'}`\n"
-        f"- Release state: `{request.state.value}`\n\n"
-            + _ROADMAP_SNAPSHOT_HEADING
-            + "\n\n"
+            _ROADMAP_LOCK_TITLE + "\n\n"
+            f"- Roadmap SHA-256: `{roadmap_digest}`\n"
+            f"- Code revision: `{request.code_revision}`\n"
+            f"- Literature search date: `{request.literature_search_date.isoformat()}`\n"
+            "- Submission date: `"
+            f"{request.submission_date.isoformat() if request.submission_date else 'NOT_APPLICABLE'}`\n"
+            f"- Release state: `{request.state.value}`\n\n" + _ROADMAP_SNAPSHOT_HEADING + "\n\n"
         ).encode()
         + request.roadmap.read_bytes()
     )
@@ -846,6 +939,26 @@ def _copy_release_artifact(root: Path, artifact: ReleaseArtifact) -> None:
     destination = root / artifact.relative_path
     destination.parent.mkdir(parents=True, exist_ok=True)
     copy2(artifact.source, destination)
+    if not _is_regular_file(destination) or _sha256_file(destination) != _sha256_file(artifact.source):
+        raise ArtifactIntegrityError(
+            ErrorMessage(f"release artifact copy is not byte-identical: {artifact.relative_path}")
+        )
+    if (
+        artifact.artifact_type == "federated_evaluation_document"
+        and artifact.relative_path.name == FederatedEvaluationAssetName.DOCUMENT.value
+    ):
+        persisted = _release_artifact_from_document(
+            destination,
+            artifact.relative_path,
+            _load_evaluation_document(destination),
+        )
+        if _release_artifact_metadata(persisted) != _release_artifact_metadata(artifact):
+            raise ArtifactIntegrityError(
+                ErrorMessage(
+                    "release evaluation artifact coordinate does not match persisted document: "
+                    f"{artifact.relative_path}"
+                )
+            )
 
 
 def _write_withheld_artifact_records(root: Path, artifacts: tuple[WithheldReleaseArtifact, ...]) -> None:
@@ -1073,6 +1186,8 @@ def _require_descriptive_scientific_metadata(values: tuple[str, ...]) -> None:
 
 def _require_relative_artifact_path(relative_path: Path) -> None:
     if (
+        relative_path == Path(".")
+        or
         relative_path.is_absolute()
         or ".." in relative_path.parts
         or relative_path.name
@@ -1092,6 +1207,11 @@ def _required_value(row: dict[str, str | None], column: str) -> str:
 
 
 def _validate_manifest_files(root: Path, entries: tuple[ReleaseManifestEntry, ...]) -> None:
+    links = tuple(path.relative_to(root) for path in root.rglob("*") if path.is_symlink())
+    if links:
+        raise ArtifactIntegrityError(
+            ErrorMessage("release bundle must not contain symbolic links: " + ",".join(str(path) for path in links))
+        )
     listed = frozenset(entry.relative_path for entry in entries)
     actual = frozenset(
         path.relative_to(root)
@@ -1106,12 +1226,109 @@ def _validate_manifest_files(root: Path, entries: tuple[ReleaseManifestEntry, ..
                 f"unexpected={','.join(str(path) for path in sorted(listed - actual)) or 'none'}"
             )
         )
+    represented_directories = frozenset(
+        entry.relative_path.parts[0]
+        for entry in entries
+        if entry.relative_path.parts and entry.relative_path.parts[0] in _REQUIRED_RECONSTRUCTION_DIRECTORIES
+    )
+    missing_evidence = tuple(sorted(_REQUIRED_RECONSTRUCTION_DIRECTORIES - represented_directories))
+    if missing_evidence:
+        raise ArtifactIntegrityError(
+            ErrorMessage(
+                "release manifest is missing required reconstruction evidence directories: "
+                + ",".join(missing_evidence)
+            )
+        )
+    _validate_publication_output_inventory(root, entries)
     for entry in entries:
         path = root / entry.relative_path
+        if not _is_regular_file(path):
+            raise ArtifactIntegrityError(ErrorMessage(f"release artifact is not a regular file: {entry.relative_path}"))
         if path.stat().st_size != entry.byte_count:
             raise ArtifactIntegrityError(ErrorMessage(f"release artifact byte count mismatch: {entry.relative_path}"))
         if _sha256_file(path) != entry.digest:
             raise ArtifactIntegrityError(ErrorMessage(f"release artifact digest mismatch: {entry.relative_path}"))
+
+
+def _validate_publication_output_inventory(root: Path, entries: tuple[ReleaseManifestEntry, ...]) -> None:
+    """Require every published figure/table source chain to be explicitly reconstructable."""
+
+    artifact_types = frozenset(entry.artifact_type for entry in entries)
+    missing_types = tuple(sorted(_REQUIRED_PUBLICATION_ARTIFACT_TYPES - artifact_types))
+    if missing_types:
+        raise ArtifactIntegrityError(
+            ErrorMessage("release manifest is missing publication output artifacts: " + ",".join(missing_types))
+        )
+    listed = frozenset(entry.relative_path for entry in entries)
+    entries_by_path = {entry.relative_path: entry for entry in entries}
+    manifests = tuple(entry for entry in entries if entry.artifact_type == "publication_source_manifest")
+    publications = frozenset(entry.relative_path for entry in entries if entry.artifact_type == "publication")
+    declared_publications: set[Path] = set()
+    for manifest in manifests:
+        if manifest.relative_path.parts[:1] != ("FIGURE_TABLE_DATA",):
+            raise ArtifactIntegrityError(ErrorMessage("publication source manifest is outside FIGURE_TABLE_DATA"))
+        try:
+            payload = json.loads((root / manifest.relative_path).read_text(encoding="utf-8"))
+            publication_name = payload["publication"]
+            sources = payload["sources"]
+        except (OSError, ValueError, KeyError) as error:
+            raise ArtifactIntegrityError(
+                ErrorMessage(f"released publication source manifest is unreadable: {manifest.relative_path}")
+            ) from error
+        if not isinstance(publication_name, str) or not isinstance(sources, list) or not sources:
+            raise ArtifactIntegrityError(
+                ErrorMessage(f"released publication source manifest is incomplete: {manifest.relative_path}")
+            )
+        publication = manifest.relative_path.parent / publication_name
+        publication_path = Path(publication_name)
+        if (
+            publication_path.is_absolute()
+            or ".." in publication_path.parts
+            or len(publication_path.parts) != 1
+            or publication not in publications
+        ):
+            raise ArtifactIntegrityError(
+                ErrorMessage(
+                    f"released publication source manifest has no listed publication: {manifest.relative_path}"
+                )
+            )
+        declared_publications.add(publication)
+        _validate_declared_publication(root / manifest.relative_path, payload, root / publication)
+        declared_sources: set[Path] = set()
+        for source in sources:
+            if not isinstance(source, dict) or not isinstance(filename := source.get("filename"), str):
+                raise ArtifactIntegrityError(
+                    ErrorMessage(
+                        f"released publication source manifest has an invalid source: {manifest.relative_path}"
+                    )
+                )
+            source_path = Path(filename)
+            resolved = manifest.relative_path.parent / source_path
+            if (
+                source_path.is_absolute()
+                or ".." in source_path.parts
+                or len(source_path.parts) != 1
+                or resolved not in listed
+                or entries_by_path[resolved].artifact_type != "table_figure_source_data"
+            ):
+                raise ArtifactIntegrityError(
+                    ErrorMessage(
+                        "released publication source is missing, invalid, or not retained as "
+                        f"table/figure source data: {manifest.relative_path} / {filename}"
+                    )
+                )
+            _validate_declared_publication_source(
+                root / manifest.relative_path,
+                source,
+                root / resolved,
+            )
+            declared_sources.add(resolved)
+        if len(declared_sources) != len(sources):
+            raise ArtifactIntegrityError(
+                ErrorMessage(f"released publication source manifest repeats a source: {manifest.relative_path}")
+            )
+    if publications != declared_publications:
+        raise ArtifactIntegrityError(ErrorMessage("every released publication must have exactly one source manifest"))
 
 
 def _sha256_file(path: Path) -> str:
@@ -1120,6 +1337,27 @@ def _sha256_file(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _release_artifact_metadata(artifact: ReleaseArtifact) -> tuple[Path, str, str, str, str, str, str, str]:
+    return (
+        artifact.relative_path,
+        artifact.artifact_type,
+        artifact.dataset_id,
+        artifact.population_id,
+        artifact.training_method,
+        artifact.training_seed,
+        artifact.threshold_policy,
+        artifact.experiment_id,
+    )
+
+
+def _is_regular_file(path: Path) -> bool:
+    return path.is_file() and not path.is_symlink()
+
+
+def _is_regular_directory(path: Path) -> bool:
+    return path.is_dir() and not path.is_symlink()
 
 
 def main() -> None:

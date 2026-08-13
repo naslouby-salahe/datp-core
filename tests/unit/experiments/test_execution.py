@@ -85,6 +85,21 @@ def test_execute_declared_experiment_seed_raises_on_empty_campaign(tmp_path: Pat
         )
 
 
+def test_execute_declared_experiment_seed_rejects_infeasible_cells_instead_of_omitting_them(tmp_path: Path) -> None:
+    declaration = _declaration(ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY).model_copy(
+        update={"federated_thresholds": (FederatedThresholdMethod.FAMILY_THRESHOLD,)}
+    )
+
+    with pytest.raises(ScientificContractError, match="contains non-executable coordinates and cannot omit them"):
+        execute_declared_experiment_seed(
+            declaration=declaration,
+            seed_cohort=SeedCohort(values=(Seed(0),)),
+            reason=PlanReason("fixture"),
+            output_root=tmp_path,
+            overwrite=False,
+        )
+
+
 def test_pipeline_runner_shares_fixed_detector_evidence_only_within_one_campaign(monkeypatch, tmp_path: Path) -> None:
     declaration = _declaration(ExperimentId.SHARED_VS_LOCAL_CONFIRMATION)
     plan = expand_experiment_plan(
@@ -161,7 +176,15 @@ def test_pipeline_runner_releases_completed_training_coordinate_evidence(tmp_pat
 
 def test_campaign_builder_collapses_metric_variants_for_every_declared_experiment() -> None:
     plan = expand_experiment_plan(
-        declarations=EXPERIMENTS,
+        declarations=tuple(
+            declaration
+            for declaration in EXPERIMENTS
+            if declaration.id
+            not in {
+                ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
+                ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
+            }
+        ),
         seed_cohort=SeedCohort(values=(Seed(0),)),
         evidence=tuple(
             PlanningEvidence(
@@ -176,6 +199,31 @@ def test_campaign_builder_collapses_metric_variants_for_every_declared_experimen
     campaign = build_campaign(plan)
 
     assert len(frozenset(entry.coordinate.execution_key for entry in campaign.entries)) == len(campaign.entries)
+
+
+@pytest.mark.parametrize(
+    "experiment",
+    (
+        ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
+        ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
+    ),
+)
+def test_campaign_builder_rejects_coordinates_owned_by_dedicated_routes(experiment: ExperimentId) -> None:
+    declaration = _declaration(experiment)
+    plan = expand_experiment_plan(
+        declarations=(declaration,),
+        seed_cohort=SeedCohort(values=(Seed(0),)),
+        evidence=(
+            PlanningEvidence(
+                experiment=declaration.id,
+                disposition=PlanDisposition.EXECUTABLE,
+                reason=PlanReason("fixture"),
+            ),
+        ),
+    )
+
+    with pytest.raises(ScientificContractError, match="generic campaign construction cannot omit it"):
+        build_campaign(plan)
 
 
 def test_pipeline_runner_reuses_existing_canonical_dataset(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

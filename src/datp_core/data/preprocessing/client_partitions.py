@@ -56,8 +56,8 @@ _FINITE_ELIGIBLE_COLUMN = "__eligible"
 
 _EDGE_PUBLISHED_POPULATIONS = frozenset(
     {
-        PopulationId.EDGE_TEMPORAL_GROUPS,
-        PopulationId.EDGE_SENSOR_GROUPS,
+        PopulationId.EDGE_TEMPORAL_CLIENTS,
+        PopulationId.EDGE_SENSOR_CLIENTS,
     }
 )
 
@@ -157,7 +157,7 @@ def join_published_handoff(
         )
     asset_role = (
         EdgeAssetRole.TEMPORAL_BENIGN
-        if identity.population is PopulationId.EDGE_TEMPORAL_GROUPS
+        if identity.population is PopulationId.EDGE_TEMPORAL_CLIENTS
         else EdgeAssetRole.STATIC_BENIGN
     )
     assignments = handoff.assignments

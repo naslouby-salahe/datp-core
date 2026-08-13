@@ -42,6 +42,7 @@ from datp_core.detector.training.contracts import (
     FedAvgProtocol,
     FederatedClientDataResidency,
     FedProxProtocol,
+    TrainingProtocolVariant,
 )
 from datp_core.detector.training.models import (
     ClientTrainingInput,
@@ -247,6 +248,11 @@ def training_coordinate_for(coordinate: ExperimentCoordinate) -> FederatedTraini
         preprocessing_identity=coordinate.preprocessing_protocol,
         model=coordinate.training_model,
         model_coefficient=federated_model_coefficient(coordinate),
+        protocol_variant=(
+            TrainingProtocolVariant.HISTORICAL_ANCHOR
+            if coordinate.experiment is ExperimentId.HISTORICAL_DATP_REPRODUCTION
+            else TrainingProtocolVariant.STANDARD
+        ),
         controlled_partition_kind=coordinate.controlled_partition_kind,
         dirichlet_concentration=coordinate.dirichlet_concentration,
     )

@@ -51,7 +51,7 @@ def _summary(seed_value: int, cv_fpr: float | None) -> ExternalBenignStatisticsS
 def _report() -> ExternalBenignStatisticsReport:
     return ExternalBenignStatisticsReport(
         experiment=ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION,
-        population=PopulationId.EDGE_SENSOR_GROUPS,
+        population=PopulationId.EDGE_SENSOR_CLIENTS,
         evidence_role=EvidenceRole.EXTERNAL_VALIDATION,
         rows=(_summary(0, 0.25), _summary(1, None)),
     )
@@ -90,7 +90,7 @@ def test_external_benign_statistics_report_round_trips_typed_summary() -> None:
     loaded = ExternalBenignStatisticsReport.model_validate_json(payload)
 
     assert loaded.experiment is ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION
-    assert loaded.population is PopulationId.EDGE_SENSOR_GROUPS
+    assert loaded.population is PopulationId.EDGE_SENSOR_CLIENTS
     assert loaded.rows[0].cv_fpr == MetricValue(0.25)
     assert loaded.rows[0].fpr_iqr == MetricValue(0.125)
     assert loaded.rows[0].fpr_range == MetricValue(0.75)

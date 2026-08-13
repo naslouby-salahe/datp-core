@@ -641,9 +641,9 @@ def population_evidence_role(population_id: PopulationId) -> EvidenceRole:
             return EvidenceRole.MECHANISM
         case PopulationId.CICIOT_FILE_CLIENTS:
             return EvidenceRole.APPLICABILITY_BOUNDARY
-        case PopulationId.EDGE_SENSOR_GROUPS:
+        case PopulationId.EDGE_SENSOR_CLIENTS:
             return EvidenceRole.EXTERNAL_VALIDATION
-        case PopulationId.EDGE_TEMPORAL_GROUPS:
+        case PopulationId.EDGE_TEMPORAL_CLIENTS:
             return EvidenceRole.TEMPORAL_BOUNDARY
 
 
@@ -666,9 +666,9 @@ def population_allowed_evidence_roles(population_id: PopulationId) -> frozenset[
             return frozenset({EvidenceRole.MECHANISM, EvidenceRole.SUPPORTIVE, EvidenceRole.EXPLORATORY})
         case PopulationId.CICIOT_FILE_CLIENTS:
             return frozenset({EvidenceRole.APPLICABILITY_BOUNDARY})
-        case PopulationId.EDGE_SENSOR_GROUPS:
+        case PopulationId.EDGE_SENSOR_CLIENTS:
             return frozenset({EvidenceRole.EXTERNAL_VALIDATION, EvidenceRole.SUPPORTIVE})
-        case PopulationId.EDGE_TEMPORAL_GROUPS:
+        case PopulationId.EDGE_TEMPORAL_CLIENTS:
             return frozenset({EvidenceRole.TEMPORAL_BOUNDARY})
 
 
@@ -875,8 +875,8 @@ NBAIOT_DIRICHLET_CLIENTS = PopulationDeclaration(
     requires_client_attack_assignment=True,
     is_confirmatory_population=False,
 )
-EDGE_SENSOR_GROUPS = PopulationDeclaration(
-    id=PopulationId.EDGE_SENSOR_GROUPS,
+EDGE_SENSOR_CLIENTS = PopulationDeclaration(
+    id=PopulationId.EDGE_SENSOR_CLIENTS,
     dataset=DatasetId.EDGE_IIOTSET,
     identity_kind=PopulationIdentityKind.SOURCE_DEFINED_SENSOR_GROUPS,
     client_count=EDGE_STATIC_SENSOR_GROUP_COUNT,
@@ -885,8 +885,8 @@ EDGE_SENSOR_GROUPS = PopulationDeclaration(
     requires_client_attack_assignment=False,
     is_confirmatory_population=False,
 )
-EDGE_TEMPORAL_GROUPS = PopulationDeclaration(
-    id=PopulationId.EDGE_TEMPORAL_GROUPS,
+EDGE_TEMPORAL_CLIENTS = PopulationDeclaration(
+    id=PopulationId.EDGE_TEMPORAL_CLIENTS,
     dataset=DatasetId.EDGE_IIOTSET,
     identity_kind=PopulationIdentityKind.VERIFIED_TEMPORAL_GROUPS,
     client_count=EDGE_TEMPORAL_SENSOR_GROUP_COUNT,
@@ -899,6 +899,6 @@ POPULATIONS = (
     NBAIOT_NATURAL_DEVICES,
     CICIOT_FILE_CLIENTS,
     NBAIOT_DIRICHLET_CLIENTS,
-    EDGE_SENSOR_GROUPS,
-    EDGE_TEMPORAL_GROUPS,
+    EDGE_SENSOR_CLIENTS,
+    EDGE_TEMPORAL_CLIENTS,
 )

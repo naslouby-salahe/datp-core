@@ -103,11 +103,11 @@ def test_population_capabilities_derive_from_protocol_and_dataset() -> None:
     assert cic.client_level_attack_assignment is CapabilityStatus.UNAVAILABLE
     assert cic.evidentiary_role is EvidenceRole.APPLICABILITY_BOUNDARY
 
-    edge = population_capabilities(PopulationId.EDGE_SENSOR_GROUPS)
+    edge = population_capabilities(PopulationId.EDGE_SENSOR_CLIENTS)
     assert edge.attack_sensitive_evaluation is CapabilityStatus.UNAVAILABLE
     assert edge.evidentiary_role is EvidenceRole.EXTERNAL_VALIDATION
 
-    temporal = population_capabilities(PopulationId.EDGE_TEMPORAL_GROUPS)
+    temporal = population_capabilities(PopulationId.EDGE_TEMPORAL_CLIENTS)
     assert temporal.chronology is CapabilityStatus.CONDITIONAL
     assert temporal.temporal_support is CapabilityStatus.SUPPORTED
     assert temporal.evidentiary_role is EvidenceRole.TEMPORAL_BOUNDARY
@@ -117,5 +117,5 @@ def test_declarations_match_locked_client_counts() -> None:
     assert population_declaration(PopulationId.NBAIOT_NATURAL_DEVICES).client_count.value == 9
     assert population_declaration(PopulationId.NBAIOT_DIRICHLET_CLIENTS).client_count.value == 20
     assert population_declaration(PopulationId.CICIOT_FILE_CLIENTS).client_count.value == 63
-    assert population_declaration(PopulationId.EDGE_SENSOR_GROUPS).client_count.value == 10
-    assert population_declaration(PopulationId.EDGE_TEMPORAL_GROUPS).client_count.value == 9
+    assert population_declaration(PopulationId.EDGE_SENSOR_CLIENTS).client_count.value == 10
+    assert population_declaration(PopulationId.EDGE_TEMPORAL_CLIENTS).client_count.value == 9

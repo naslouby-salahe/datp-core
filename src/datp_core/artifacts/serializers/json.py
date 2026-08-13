@@ -8,7 +8,8 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, TypeAdapter
 
-from datp_core.core.identifiers import SerializedDocumentText
+from datp_core.core.identifiers import FileContentText, SerializedDocumentText
+from datp_core.runtime.filesystem import write_text_atomically
 
 if TYPE_CHECKING:
     from _typeshed import DataclassInstance
@@ -73,9 +74,8 @@ def canonical_json_text(value: object) -> SerializedDocumentText:
 
 
 def serialize_json_model(model: BaseModel, destination: Path) -> None:
-    destination.parent.mkdir(parents=True, exist_ok=True)
     payload = canonical_json_text(model)
-    destination.write_text(payload, encoding="utf-8")
+    write_text_atomically(destination, FileContentText(payload))
 
 
 def _canonical_dataclass_value(value: "DataclassInstance") -> CanonicalValue:

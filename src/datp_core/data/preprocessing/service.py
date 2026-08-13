@@ -235,7 +235,7 @@ def _validate_federated_request(
         )
     if (
         request.split_protocol is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
-        and request.population is not PopulationId.EDGE_TEMPORAL_GROUPS
+        and request.population is not PopulationId.EDGE_TEMPORAL_CLIENTS
     ):
         raise ScientificContractError(
             ErrorMessage("chronological preprocessing is defined only for Edge temporal groups"),
@@ -251,7 +251,7 @@ def _validate_artifact_request(
             ErrorMessage("federated preprocessing requires a federated preprocessing identity"),
             subject=request.preprocessing_identity,
         )
-    if request.execution_identity.population is PopulationId.EDGE_TEMPORAL_GROUPS:
+    if request.execution_identity.population is PopulationId.EDGE_TEMPORAL_CLIENTS:
         _capture_timestamp_column_for(
             request.execution_identity.population,
             SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE,

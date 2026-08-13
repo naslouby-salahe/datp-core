@@ -47,6 +47,7 @@ def federated_training_directory(coordinate: FederatedTrainingCoordinate, output
         / str(coordinate.training_seed.value)
         / coordinate.split_protocol.value
         / coordinate.preprocessing_identity.value
+        / coordinate.protocol_variant.value
         / coordinate.model.value
         / coefficient
         / partition

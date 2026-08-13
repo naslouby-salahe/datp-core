@@ -38,14 +38,17 @@ def export_support_burden_table(
     lines.extend(
         (
             "",
-            "| Device | Median support | Mean shared FPR | Mean target burden | Mean personalization relief |",
-            "| --- | ---: | ---: | ---: | ---: |",
+            "| Device | Median support | Mean shared FPR | Median shared FPR | "
+            "Mean target burden | Median target burden | Mean personalization relief | "
+            "Median personalization relief |",
+            "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
         )
     )
     lines.extend(
         f"| `{row.client.client_id.value}` | {row.median_source_benign_calibration_count.value:.12g} | "
-        f"{row.mean_shared_false_positive_rate.value:.12g} | {row.mean_shared_target_burden.value:.12g} | "
-        f"{row.mean_personalization_relief.value:.12g} |"
+        f"{row.mean_shared_false_positive_rate.value:.12g} | {row.median_shared_false_positive_rate.value:.12g} | "
+        f"{row.mean_shared_target_burden.value:.12g} | {row.median_shared_target_burden.value:.12g} | "
+        f"{row.mean_personalization_relief.value:.12g} | {row.median_personalization_relief.value:.12g} |"
         for row in devices.devices
     )
     return write_text_atomically(destination, FileContentText("\n".join(lines) + "\n"))

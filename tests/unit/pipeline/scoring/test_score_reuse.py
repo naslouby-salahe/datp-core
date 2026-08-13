@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import polars as pl
 import pytest
 from tests.unit.learning.federated.helpers import (
     AUTOENCODER,
@@ -27,6 +28,7 @@ from datp_core.detector.training.engine import (
     FederatedTrainingRequest,
     run_federated_training,
 )
+from datp_core.detector.training.models import FederatedTrainingResult
 
 FAST_PROTOCOL = DiagnosticSnapshotProtocol(diagnostic_rounds=(), maximum_round=RoundNumber(1))
 CLIENT_IDS = ("client_a", "client_b")
@@ -137,3 +139,45 @@ def test_load_federated_scores_raises_on_incomplete_persisted_evidence(tmp_path:
 
     with pytest.raises(ArtifactIntegrityError):
         scoring_federated.load_federated_scores(_request(tmp_path, training))
+
+
+def test_load_federated_scores_rejects_cached_label_provenance_drift(tmp_path: Path) -> None:
+    require_cuda()
+    training = _trained_result(tmp_path)
+    request = _request(tmp_path, training)
+    scoring_federated.publish_federated_scores(request)
+
+    path = request.output_directory / CLIENT_IDS[0] / "evaluation.parquet"
+    pl.read_parquet(path).with_columns(pl.lit("tampered").alias("outcome_label")).write_parquet(path)
+
+    with pytest.raises(ArtifactIntegrityError, match="source provenance"):
+        scoring_federated.load_federated_scores(_request(tmp_path, training))
+
+
+def test_publish_federated_scores_rejects_reuse_for_a_different_terminal_detector(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    require_cuda()
+    training = _trained_result(tmp_path)
+    scoring_federated.publish_federated_scores(_request(tmp_path, training))
+    changed_state = training.terminal_model_state.to_torch_state_dict()
+    changed_state[next(iter(changed_state))].add_(1.0)
+    altered_training = FederatedTrainingResult(
+        coordinate=training.coordinate,
+        autoencoder=training.autoencoder,
+        diagnostic_snapshot_protocol=training.diagnostic_snapshot_protocol,
+        history=training.history,
+        termination_reason=training.termination_reason,
+        terminal_model_state=training.terminal_model_state.from_torch_state_dict(changed_state),
+        device_name=training.device_name,
+        batch_size_used=training.batch_size_used,
+    )
+
+    monkeypatch.setattr(
+        scoring_federated,
+        "_generate_federated_scores",
+        lambda _request, _device: pytest.fail("stale score artifacts must not be regenerated implicitly"),
+    )
+
+    with pytest.raises(ArtifactIntegrityError, match="terminal detector"):
+        scoring_federated.publish_federated_scores(_request(tmp_path, altered_training))

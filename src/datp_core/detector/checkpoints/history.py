@@ -67,6 +67,7 @@ class _PersonalizedRoundRow:
 class RoundSummaryRecord:
     round_number: RoundNumber
     aggregate_loss: MetricValue
+    aggregate_validation_loss: MetricValue | None
     upload_bytes: ByteCount
     download_bytes: ByteCount
     state_bytes: ByteCount
@@ -81,6 +82,11 @@ class FederatedHistoryFrames:
 
 
 def read_parquet(path: Path) -> pl.DataFrame:
+    if path.is_symlink():
+        raise ArtifactIntegrityError(
+            ErrorMessage(f"required Parquet artifact cannot be a symbolic link: {path.name}"),
+            subject=ContractSubject.ARTIFACT_PATH,
+        )
     if not path.is_file():
         raise ArtifactIntegrityError(
             ErrorMessage(f"required Parquet artifact is missing: {path.name}"),
@@ -210,6 +216,7 @@ def persist_federated_training_history(
 
     r_nums: list[int] = []
     a_losses: list[float] = []
+    a_validation_losses: list[float | None] = []
     u_bytes: list[int] = []
     d_bytes: list[int] = []
     s_bytes: list[int] = []
@@ -228,6 +235,9 @@ def persist_federated_training_history(
     for item in history.rounds:
         r_nums.append(item.round_number.value)
         a_losses.append(item.aggregate_loss.value)
+        a_validation_losses.append(
+            None if item.aggregate_validation_loss is None else item.aggregate_validation_loss.value
+        )
         u_bytes.append(item.communication.estimated_upload_bytes.value)
         d_bytes.append(item.communication.estimated_download_bytes.value)
         s_bytes.append(item.communication.state_bytes.value)
@@ -255,6 +265,7 @@ def persist_federated_training_history(
         {
             FederatedHistoryColumn.ROUND_NUMBER.value: r_nums,
             FederatedHistoryColumn.AGGREGATE_LOSS.value: a_losses,
+            FederatedHistoryColumn.AGGREGATE_VALIDATION_LOSS.value: a_validation_losses,
             FederatedHistoryColumn.UPLOAD_BYTES.value: u_bytes,
             FederatedHistoryColumn.DOWNLOAD_BYTES.value: d_bytes,
             FederatedHistoryColumn.STATE_BYTES.value: s_bytes,
@@ -306,6 +317,11 @@ def history_frames(directory: Path) -> FederatedHistoryFrames:
 
 def load_published_device_name(directory: Path) -> CudaDeviceName:
     path = directory / FederatedHistoryAssetName.DEVICE_NAME.value
+    if path.is_symlink():
+        raise ArtifactIntegrityError(
+            ErrorMessage("published CUDA device name cannot be a symbolic link"),
+            subject=ContractSubject.CUDA,
+        )
     try:
         value = path.read_text(encoding="utf-8").strip()
     except (OSError, UnicodeError) as error:
@@ -431,6 +447,9 @@ def _round_summaries(frame: pl.DataFrame) -> tuple[RoundSummaryRecord, ...]:
         RoundSummaryRecord(
             round_number=RoundNumber(int(round_number)),
             aggregate_loss=MetricValue(float(aggregate_loss)),
+            aggregate_validation_loss=(
+                None if aggregate_validation_loss is None else MetricValue(float(aggregate_validation_loss))
+            ),
             upload_bytes=ByteCount(int(upload_bytes)),
             download_bytes=ByteCount(int(download_bytes)),
             state_bytes=ByteCount(int(state_bytes)),
@@ -439,6 +458,7 @@ def _round_summaries(frame: pl.DataFrame) -> tuple[RoundSummaryRecord, ...]:
         for (
             round_number,
             aggregate_loss,
+            aggregate_validation_loss,
             upload_bytes,
             download_bytes,
             state_bytes,
@@ -447,6 +467,7 @@ def _round_summaries(frame: pl.DataFrame) -> tuple[RoundSummaryRecord, ...]:
             (
                 column.ROUND_NUMBER.value,
                 column.AGGREGATE_LOSS.value,
+                column.AGGREGATE_VALIDATION_LOSS.value,
                 column.UPLOAD_BYTES.value,
                 column.DOWNLOAD_BYTES.value,
                 column.STATE_BYTES.value,
@@ -484,6 +505,7 @@ def _round_result(
         round_number=summary.round_number,
         client_results=client_results,
         aggregate_loss=summary.aggregate_loss,
+        aggregate_validation_loss=summary.aggregate_validation_loss,
         communication=CommunicationRecord(
             round_number=summary.round_number,
             estimated_upload_bytes=summary.upload_bytes,

@@ -123,6 +123,11 @@ class ThresholdConstructionRequest:
     cluster_fingerprint_omission: ClusterFingerprintFeature | None = None
 
     def __post_init__(self) -> None:
+        if self.capabilities.population is not self.coordinate.population:
+            raise ScientificContractError(
+                ErrorMessage("threshold capabilities must belong to the request population"),
+                subject=ContractSubject.COORDINATE,
+            )
         if not self.eligible:
             raise ScientificContractError(
                 ErrorMessage("threshold construction requires at least one eligible client"),

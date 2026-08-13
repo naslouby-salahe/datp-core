@@ -9,6 +9,7 @@ from datp_core.core.errors import ErrorMessage, ScientificContractError
 from datp_core.core.identifiers import (
     CaptureTimestampColumn,
     DatasetId,
+    FileContentText,
     PopulationId,
     SplitProtocolId,
     ValidationReasonText,
@@ -28,11 +29,16 @@ from datp_core.data.populations.contracts import (
     SplitManifestDocument,
     client_identities,
 )
-from datp_core.data.populations.integrity import validate_split_manifest
+from datp_core.data.populations.integrity import validate_population_manifest, validate_split_manifest
 from datp_core.data.populations.splits import split_membership
-from datp_core.data.registry import construct_population
+from datp_core.data.registry import construct_population, population_capabilities, population_declaration
 from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity, require_execution_identity
-from datp_core.runtime.filesystem import cleanup_staging_on_failure, create_staging_directory, replace_directory
+from datp_core.runtime.filesystem import (
+    cleanup_staging_on_failure,
+    create_staging_directory,
+    replace_directory,
+    write_text_atomically,
+)
 
 _POPULATION_MANIFEST = "population_manifest.json"
 _MEMBERSHIP = "membership.parquet"
@@ -73,6 +79,8 @@ def construct_declared_population(request: ConstructDeclaredPopulationRequest) -
             request.controlled_condition,
         )
     )
+    if construction.manifest.document.dataset is not request.dataset:
+        raise ScientificContractError(ErrorMessage("declared population dataset must match its constructed manifest"))
     split = split_membership(
         SplitConstructionRequest(
             membership=construction.membership,
@@ -119,7 +127,7 @@ class ConstructPublishedPopulationResult:
 def construct_published_population(request: ConstructPublishedPopulationRequest) -> ConstructPublishedPopulationResult:
     require_execution_identity(request.execution_identity, request.population)
     if request.output_directory.exists() and not request.overwrite:
-        return _load_population(request.output_directory)
+        return _load_population(request.output_directory, request)
     construction = construct_population(
         PopulationConstructionRequest(
             request.population,
@@ -129,11 +137,20 @@ def construct_published_population(request: ConstructPublishedPopulationRequest)
             None,
         )
     )
+    result = _population_result(construction)
+    _validate_loaded_population(
+        result.population_manifest,
+        result.membership,
+        result.chronology,
+        result.matched_static_reference_manifest,
+        result.matched_static_reference_membership,
+        request,
+    )
     temporary = create_staging_directory(request.output_directory)
     with cleanup_staging_on_failure(temporary):
         _write_population(temporary, construction)
         replace_directory(temporary, request.output_directory)
-    return _population_result(construction)
+    return result
 
 
 @dataclass(slots=True, eq=False, kw_only=True)
@@ -158,11 +175,14 @@ class ConstructPublishedSplitResult:
 
 
 def construct_published_split(request: ConstructPublishedSplitRequest) -> ConstructPublishedSplitResult:
+    require_execution_identity(request.execution_identity, request.population)
     if request.output_directory.exists() and not request.overwrite:
-        return _load_split(request.output_directory)
+        return _load_split(request.output_directory, request)
     document = request.population_manifest.document
     if document.population is not request.population:
         raise ScientificContractError(ErrorMessage("split request population must match its manifest"))
+    if document.partition_seed != request.partition_seed:
+        raise ScientificContractError(ErrorMessage("split request seed must match its population manifest"))
     split = split_membership(
         SplitConstructionRequest(
             membership=request.membership,
@@ -183,6 +203,21 @@ def construct_published_split(request: ConstructPublishedSplitRequest) -> Constr
         static_membership = request.matched_static_reference_membership
         if static_membership is None:
             raise ScientificContractError(ErrorMessage("matched reference membership is required"))
+        static_document = request.matched_static_reference_manifest.document
+        if (
+            static_document.population is not request.population
+            or static_document.dataset is not document.dataset
+            or static_document.partition_seed != request.partition_seed
+        ):
+            raise ScientificContractError(
+                ErrorMessage("matched reference manifest coordinates disagree with the request")
+            )
+        validate_population_manifest(
+            request.matched_static_reference_manifest,
+            static_membership,
+            population_declaration(request.population),
+            population_capabilities(request.population),
+        )
         _require_matching_reference_rows(request.membership, static_membership)
         static = split_membership(
             SplitConstructionRequest(
@@ -239,7 +274,9 @@ def _write_population(directory: Path, construction: PopulationConstructionResul
         _write_json(directory / _EXCLUSIONS, construction.model_input_exclusions)
 
 
-def _load_population(directory: Path) -> ConstructPublishedPopulationResult:
+def _load_population(
+    directory: Path, request: ConstructPublishedPopulationRequest
+) -> ConstructPublishedPopulationResult:
     document = _read_json(directory / _POPULATION_MANIFEST, PopulationManifestDocument)
     manifest = _manifest(document)
     membership = _read_parquet(directory / _MEMBERSHIP)
@@ -261,6 +298,7 @@ def _load_population(directory: Path) -> ConstructPublishedPopulationResult:
         if (directory / _EXCLUSIONS).is_file()
         else None
     )
+    _validate_loaded_population(manifest, membership, chronology, static_manifest, static_membership, request)
     return ConstructPublishedPopulationResult(
         population_manifest=manifest,
         membership=membership,
@@ -271,7 +309,7 @@ def _load_population(directory: Path) -> ConstructPublishedPopulationResult:
     )
 
 
-def _load_split(directory: Path) -> ConstructPublishedSplitResult:
+def _load_split(directory: Path, request: ConstructPublishedSplitRequest) -> ConstructPublishedSplitResult:
     assignments = _read_parquet(directory / _ASSIGNMENTS)
     manifest = _read_json(directory / _SPLIT_MANIFEST, SplitManifestDocument)
     static_assignments = (
@@ -282,6 +320,7 @@ def _load_split(directory: Path) -> ConstructPublishedSplitResult:
         if (directory / _STATIC_SPLIT_MANIFEST).is_file()
         else None
     )
+    _validate_loaded_split(assignments, manifest, static_assignments, static_manifest, request)
     return ConstructPublishedSplitResult(
         assignments=assignments,
         manifest=manifest,
@@ -306,7 +345,7 @@ def _manifest(document: PopulationManifestDocument) -> PopulationManifest:
 
 
 def _write_json(path: Path, value: object) -> None:
-    path.write_text(canonical_json_text(value), encoding="utf-8")
+    write_text_atomically(path, FileContentText(canonical_json_text(value)))
 
 
 def _read_json[ModelT: BaseModel](path: Path, model_type: type[ModelT]) -> ModelT:
@@ -338,3 +377,78 @@ def _require_matching_reference_rows(temporal: pl.DataFrame, static: pl.DataFram
     columns = (PopulationFrameColumn.CLIENT_ID.value, PopulationFrameColumn.STABLE_ROW_ID.value)
     if not temporal.select(columns).sort(columns).equals(static.select(columns).sort(columns)):
         raise ScientificContractError(ErrorMessage("matched static reference must use the same client rows"))
+
+
+def _validate_loaded_population(
+    manifest: PopulationManifest,
+    membership: pl.DataFrame,
+    chronology: ChronologicalPartitionDiagnosticsDocument | None,
+    static_manifest: PopulationManifest | None,
+    static_membership: pl.DataFrame | None,
+    request: ConstructPublishedPopulationRequest,
+) -> None:
+    document = manifest.document
+    if (
+        document.population is not request.population
+        or document.partition_seed != request.partition_seed
+        or document.split_protocol is not request.split_protocol
+    ):
+        raise ScientificContractError(ErrorMessage("persisted population coordinates disagree with the request"))
+    validate_population_manifest(
+        manifest, membership, population_declaration(request.population), population_capabilities(request.population)
+    )
+    if (static_manifest is None) != (static_membership is None):
+        raise ScientificContractError(ErrorMessage("matched static reference artifacts must be published together"))
+    if request.execution_identity.temporal_state is not None and chronology is None:
+        raise ScientificContractError(ErrorMessage("temporal population requires persisted chronology diagnostics"))
+    if static_manifest is not None and static_membership is not None:
+        if static_manifest.document.population is not request.population:
+            raise ScientificContractError(
+                ErrorMessage("matched static reference population disagrees with the request")
+            )
+        validate_population_manifest(
+            static_manifest,
+            static_membership,
+            population_declaration(request.population),
+            population_capabilities(request.population),
+        )
+        _require_matching_reference_rows(membership, static_membership)
+
+
+def _validate_loaded_split(
+    assignments: pl.DataFrame,
+    manifest: SplitManifestDocument,
+    static_assignments: pl.DataFrame | None,
+    static_manifest: SplitManifestDocument | None,
+    request: ConstructPublishedSplitRequest,
+) -> None:
+    document = request.population_manifest.document
+    if (
+        manifest.population is not request.population
+        or manifest.dataset is not document.dataset
+        or manifest.partition_seed != request.partition_seed
+        or manifest.split_protocol is not document.split_protocol
+    ):
+        raise ScientificContractError(ErrorMessage("persisted split coordinates disagree with the request"))
+    validate_split_manifest(request.membership, assignments, manifest)
+    if (static_manifest is None) != (static_assignments is None):
+        raise ScientificContractError(
+            ErrorMessage("matched static reference split artifacts must be published together")
+        )
+    expected_static = request.matched_static_reference_manifest is not None
+    if (static_manifest is not None) != expected_static:
+        raise ScientificContractError(ErrorMessage("persisted static reference split does not match the population"))
+    if static_manifest is not None and static_assignments is not None:
+        static_membership = request.matched_static_reference_membership
+        if static_membership is None:
+            raise ScientificContractError(ErrorMessage("matched reference membership is required"))
+        if (
+            static_manifest.population is not request.population
+            or static_manifest.dataset is not document.dataset
+            or static_manifest.partition_seed != request.partition_seed
+            or static_manifest.split_protocol is not SplitProtocolId.RANDOM_FRACTIONAL_STATIC_REFERENCE
+        ):
+            raise ScientificContractError(
+                ErrorMessage("persisted static reference split coordinates disagree with the request")
+            )
+        validate_split_manifest(static_membership, static_assignments, static_manifest)

@@ -70,7 +70,7 @@ def evaluate_nbaiot_family_recall(
             raise ScientificContractError(
                 ErrorMessage("family recall diagnostics require every score client to be evaluated")
             )
-        frame = validate_persisted_score_frame(score_record.path, score_record.row_count)
+        frame = validate_persisted_score_frame(score_record.path, score_record.row_count, score_record.partition_role)
         labels = frame.get_column(ScoreFrameColumn.OUTCOME_LABEL.value)
         families = frame.get_column(ScoreFrameColumn.ATTACK_FAMILY.value)
         scores = frame.get_column(ScoreFrameColumn.RECONSTRUCTION_ERROR.value)

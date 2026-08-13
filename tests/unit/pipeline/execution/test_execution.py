@@ -21,10 +21,13 @@ from datp_core.core.identifiers import (
 from datp_core.core.numeric import ModelCoefficientValue, Seed
 from datp_core.detector.training.protocols import DITTO_TRAINING_PROTOCOLS
 from datp_core.experiments.common.coordinates import ExperimentCoordinate
+from datp_core.experiments.execution.context import training_coordinate_for
 from datp_core.experiments.execution.engine import execute_experiment, resolve_execution_recipe
+from datp_core.experiments.execution.layout import federated_training_directory
 from datp_core.experiments.execution.models import (
     ANCHOR_REPRODUCTION_RECIPE,
     STANDARD_FEDERATED_RECIPE,
+    ExperimentExecution,
     PipelineStage,
     StageExecution,
     StageOutcome,
@@ -111,6 +114,16 @@ def test_anchor_reproduction_uses_the_standard_sequence() -> None:
     assert resolve_execution_recipe(anchor_coordinate) == ANCHOR_REPRODUCTION_RECIPE
 
 
+def test_historical_anchor_training_artifacts_cannot_alias_standard_fedavg_artifacts(tmp_path: Path) -> None:
+    standard = coordinate()
+    anchor = replace(standard, experiment=ExperimentId.HISTORICAL_DATP_REPRODUCTION)
+
+    assert training_coordinate_for(anchor) != training_coordinate_for(standard)
+    assert federated_training_directory(training_coordinate_for(anchor), tmp_path) != federated_training_directory(
+        training_coordinate_for(standard), tmp_path
+    )
+
+
 def test_ditto_coordinate_requires_its_joint_route() -> None:
     ditto_coordinate = replace(
         coordinate(),
@@ -125,3 +138,18 @@ def test_ditto_coordinate_requires_its_joint_route() -> None:
 def test_temporal_coordinate_requires_its_paired_route() -> None:
     with pytest.raises(ScientificContractError, match="temporal_paired_execution"):
         resolve_execution_recipe(replace(coordinate(), temporal_state=TemporalState.FROZEN_FUTURE))
+
+
+def test_execution_record_rejects_stages_after_a_terminal_failure() -> None:
+    recipe = STANDARD_FEDERATED_RECIPE
+    stages = tuple(
+        StageExecution(
+            stage=stage,
+            outcome=StageOutcome.BLOCKED if stage is PipelineStage.FIT_PREPROCESSING else StageOutcome.COMPLETED,
+            evidence=StageExecutionEvidence("fixture"),
+        )
+        for stage in recipe.stages
+    )
+
+    with pytest.raises(ValueError, match="must terminate"):
+        _ = ExperimentExecution(coordinate=coordinate(), recipe=recipe, stages=stages)

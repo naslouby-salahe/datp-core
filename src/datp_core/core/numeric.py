@@ -368,6 +368,10 @@ class ThresholdVariance(NonNegativeFiniteFloatValue):
     validation_name: ClassVar[str] = "threshold variance"
 
 
+class ThresholdStandardDeviation(NonNegativeFiniteFloatValue):
+    validation_name: ClassVar[str] = "threshold standard deviation"
+
+
 class AbsoluteThresholdError(NonNegativeFiniteFloatValue):
     validation_name: ClassVar[str] = "absolute threshold error"
 

@@ -448,11 +448,17 @@ def _dispatch_temporal(
         for seed in seeds
     )
     declared = _declared_methods(ExperimentId.EDGE_ONE_SHOT_RECALIBRATION)
+    # A temporal result is only complete if its method was evaluated in every
+    # declared state.  Taking the union of the state-level completions would
+    # incorrectly report a method as complete when, for example, only the
+    # static reference was materialized.
     completed = frozenset(declared)
     for result in results:
-        per_seed: set[FederatedThresholdMethod] = set()
-        for state in (result.static_reference, result.frozen_future, result.recalibrated_future):
-            per_seed.update(state.completed_threshold_methods)
+        state_methods: tuple[frozenset[FederatedThresholdMethod], ...] = tuple(
+            frozenset(state.completed_threshold_methods)
+            for state in (result.static_reference, result.frozen_future, result.recalibrated_future)
+        )
+        per_seed = state_methods[0].intersection(*state_methods[1:])
         completed = completed.intersection(per_seed)
     outcomes: list[ThresholdMethodOutcome] = []
     for method in declared:
@@ -1051,8 +1057,8 @@ def _report_supplementary(experiment_id: ExperimentId) -> ReportResult:
         f"Evidence role: `{declaration.role.value}`",
         f"Population: `{declaration.population.value}`",
         "",
-        "| Seed | Threshold method | Metric | Status | Value |",
-        "|---:|---|---|---|---:|",
+        "| Seed | Threshold method | Metric | Status | Value | Reason | Denominator |",
+        "|---:|---|---|---|---:|---|---:|",
     ]
     seen: set[tuple[Seed, FederatedThresholdMethod, MetricId]] = set()
     for entry in plan.executable:
@@ -1074,9 +1080,11 @@ def _report_supplementary(experiment_id: ExperimentId) -> ReportResult:
         document = load_evaluation_document(document_path)
         metric = metric_by_id(document.population.metrics, coordinate.metric)
         value = f"{metric.value.value:.12g}" if isinstance(metric, AvailableMetric) else "—"
+        reason = "—" if metric.reason is None else metric.reason.value
+        denominator = "—" if metric.denominator is None else str(metric.denominator.value)
         lines.append(
             f"| {coordinate.training_seed.value} | {coordinate.threshold_method.value} | "
-            f"{coordinate.metric.value} | {metric.status.value} | {value} |"
+            f"{coordinate.metric.value} | {metric.status.value} | {value} | {reason} | {denominator} |"
         )
     report_path.parent.mkdir(parents=True, exist_ok=True)
     write_text_atomically(report_path, FileContentText("\n".join(lines) + "\n"))
@@ -1085,51 +1093,59 @@ def _report_supplementary(experiment_id: ExperimentId) -> ReportResult:
 
 def _confirmatory_marker(experiment_id: ExperimentId) -> bool:
     del experiment_id
-    return (
+    return _nonempty_evidence_path(
         OUTPUTS_ROOT
         / ConfirmatoryAssetDirectory.ROOT
         / PopulationId.NBAIOT_NATURAL_DEVICES.value
         / ConfirmatoryAssetDirectory.ANALYSIS
         / AnalysisAssetName.DOCUMENT
-    ).is_file()
+    )
+
+
+def _nonempty_evidence_path(path: Path) -> bool:
+    if path.is_file():
+        return path.stat().st_size > 0
+    if not path.is_dir():
+        return False
+    return any(child.is_file() and child.stat().st_size > 0 for child in path.rglob("*"))
 
 
 def _external_marker(experiment_id: ExperimentId) -> bool:
     declaration = _declaration(experiment_id)
-    paired_complete = (
+    paired_complete = _nonempty_evidence_path(
         OUTPUTS_ROOT
         / BoundedExternalAssetDirectory.ANALYSIS
         / experiment_id.value
         / declaration.population.value
         / AnalysisAssetName.EXTERNAL_DOCUMENT
-    ).is_file()
+    )
     if not paired_complete:
         return False
     if experiment_id is ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION:
-        return (
+        return _nonempty_evidence_path(
             OUTPUTS_ROOT
             / ExternalBenignStatisticsAssetName.ROOT
             / experiment_id.value
             / declaration.population.value
             / ExternalBenignStatisticsAssetName.SUMMARY
-        ).is_file()
+        )
     if experiment_id is ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY:
-        return (
+        return _nonempty_evidence_path(
             centralized_reference_directory(CIC_CENTRALIZED_REFERENCE, CONFIRMATORY_SEED_COHORT.values[0]) / "report"
-        ).is_dir()
+        )
     raise ReportEvidenceError(ErrorMessage(f"unsupported external marker: {experiment_id.value}"))
 
 
 def _fedprox_marker(experiment_id: ExperimentId) -> bool:
     del experiment_id
     return all(
-        (
+        _nonempty_evidence_path(
             fedprox_analysis_directory(
                 coefficient,
                 output_root=OUTPUTS_ROOT,
             )
             / PUBLICATION_FILENAME
-        ).is_file()
+        )
         for coefficient in FEDPROX_COEFFICIENTS
     )
 
@@ -1137,7 +1153,8 @@ def _fedprox_marker(experiment_id: ExperimentId) -> bool:
 def _ditto_marker(experiment_id: ExperimentId) -> bool:
     del experiment_id
     return all(
-        (output / PUBLICATION_FILENAME).is_file() and (output / MECHANISM_REPORT_FILENAME).is_file()
+        _nonempty_evidence_path(output / PUBLICATION_FILENAME)
+        and _nonempty_evidence_path(output / MECHANISM_REPORT_FILENAME)
         for output in (ditto_analysis_directory(item, output_root=OUTPUTS_ROOT) for item in DITTO_REGULARIZATION_GRID)
     )
 
@@ -1146,16 +1163,16 @@ def _fine_tuning_marker(experiment_id: ExperimentId) -> bool:
     del experiment_id
     output = _fine_tuning_analysis_path()
     return (
-        output.is_file()
-        and (output.parent / PUBLICATION_FILENAME).is_file()
-        and (output.parent / MECHANISM_REPORT_FILENAME).is_file()
+        _nonempty_evidence_path(output)
+        and _nonempty_evidence_path(output.parent / PUBLICATION_FILENAME)
+        and _nonempty_evidence_path(output.parent / MECHANISM_REPORT_FILENAME)
     )
 
 
 def _temporal_marker(experiment_id: ExperimentId) -> bool:
     declaration = _declaration(experiment_id)
     return all(
-        (
+        _nonempty_evidence_path(
             OUTPUTS_ROOT
             / ExecutionRootDirectory.BOUNDED_EVIDENCE
             / experiment_id.value
@@ -1164,7 +1181,7 @@ def _temporal_marker(experiment_id: ExperimentId) -> bool:
             / TemporalArtifactDirectory.ANALYSIS
             / method.value
             / AnalysisAssetName.TEMPORAL_DOCUMENT
-        ).is_file()
+        )
         for method in declaration.federated_thresholds
     )
 
@@ -1213,8 +1230,10 @@ def _heterogeneity_marker(experiment_id: ExperimentId) -> bool:
     if experiment_id is ExperimentId.HETEROGENEITY_CALIBRATION_SUPPORT_INTERACTION:
         analysis = output / "support_interaction_analysis.json"
         surface = output / "support_interaction_surface.md"
-        return analysis.is_file() and surface.is_file()
-    return (output / PUBLICATION_FILENAME).is_file() and (output / MECHANISM_REPORT_FILENAME).is_file()
+        return _nonempty_evidence_path(analysis) and _nonempty_evidence_path(surface)
+    return _nonempty_evidence_path(output / PUBLICATION_FILENAME) and _nonempty_evidence_path(
+        output / MECHANISM_REPORT_FILENAME
+    )
 
 
 def _robustness_marker(experiment_id: ExperimentId) -> bool:
@@ -1254,7 +1273,7 @@ def _estimation_marker(experiment_id: ExperimentId) -> bool:
 
 
 def _supplementary_marker(experiment_id: ExperimentId) -> bool:
-    return (_supplementary_directory(experiment_id) / ResearchArtifact.EVIDENCE_REPORT).is_file()
+    return _nonempty_evidence_path(_supplementary_directory(experiment_id) / ResearchArtifact.EVIDENCE_REPORT)
 
 
 def _external_recipe(experiment_id: ExperimentId) -> DispatchHandler:

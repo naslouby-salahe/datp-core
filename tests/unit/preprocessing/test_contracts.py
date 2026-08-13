@@ -1,22 +1,26 @@
 from dataclasses import replace
 from pathlib import Path
 
+import polars as pl
 import pytest
 
 from datp_core.core.identifiers import (
     ClientPathToken,
     DatasetId,
+    PartitionRole,
     PopulationId,
     PreprocessingProtocolId,
     ProcessedDataBranch,
     SplitProtocolId,
 )
 from datp_core.core.numeric import Seed
+from datp_core.data.populations.contracts import OUTCOME_LABEL_COLUMN, STABLE_ROW_ID_COLUMN
 from datp_core.data.preprocessing.artifacts import (
     PartitionOrdering,
     PreparedDataCoordinate,
     PreprocessingFitScope,
     ProcessedAssetName,
+    RelativeAssetPath,
     TrustedEstimatorClassName,
     centralized_branch_directory,
     federated_client_coordinate,
@@ -24,6 +28,7 @@ from datp_core.data.preprocessing.artifacts import (
     processed_asset_names,
     processed_branch_coordinate,
 )
+from datp_core.data.preprocessing.models import PreprocessingPartition
 
 
 def test_preprocessing_identity_enum_member_sets_are_exact_and_unique() -> None:
@@ -85,3 +90,21 @@ def test_layout_separates_federated_and_centralized_branches() -> None:
     assert ProcessedAssetName.STATE == "state.skops"
     assert ProcessedAssetName.TRAIN in processed_asset_names(SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS)
     assert "=" not in str(federated)
+
+
+def test_preprocessing_partitions_reject_duplicate_source_row_provenance() -> None:
+    with pytest.raises(Exception, match="stable row IDs must be unique"):
+        PreprocessingPartition(
+            role=PartitionRole.TRAIN,
+            frame=pl.DataFrame(
+                {
+                    STABLE_ROW_ID_COLUMN: ["same", "same"],
+                    OUTCOME_LABEL_COLUMN: ["benign", "benign"],
+                }
+            ),
+        )
+
+
+def test_relative_preprocessing_assets_cannot_escape_their_coordinate_directory() -> None:
+    with pytest.raises(ValueError, match="must not traverse"):
+        RelativeAssetPath("../state.skops")

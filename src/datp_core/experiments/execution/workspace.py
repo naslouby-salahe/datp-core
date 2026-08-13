@@ -26,6 +26,7 @@ from datp_core.analysis.operational.communication import (
     CommunicationMessageDiagnostic,
     MessageDirection,
     SerializedPayloadEvidence,
+    ThresholdBroadcastAccounting,
     ThresholdPayloadKind,
     ThresholdStageCommunicationDiagnostic,
 )
@@ -542,6 +543,8 @@ class ExperimentWorkspace:
                 messages=(),
                 total_logical_element_count=NonNegativeIntegerValue(0),
                 total_serialized_bytes=ByteCount(0),
+                broadcast_accounting=ThresholdBroadcastAccounting.ONCE_PER_LOGICAL_RECIPIENT,
+                communication_round_count=NonNegativeIntegerValue(0),
             )
         messages: list[CommunicationMessageDiagnostic] = []
         scalar_bytes = ByteCount(len(pack("<d", 0.0)))
@@ -657,6 +660,8 @@ class ExperimentWorkspace:
                 sum(message.payload.logical_element_count.value for message in messages)
             ),
             total_serialized_bytes=ByteCount(sum(message.estimated_serialized_bytes.value for message in messages)),
+            broadcast_accounting=ThresholdBroadcastAccounting.ONCE_PER_LOGICAL_RECIPIENT,
+            communication_round_count=NonNegativeIntegerValue(1),
         )
 
     @cached_property

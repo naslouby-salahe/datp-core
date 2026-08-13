@@ -46,8 +46,8 @@ EXPECTED_MEMBERS = (
                 "NBAIOT_NATURAL_DEVICES",
                 "CICIOT_FILE_CLIENTS",
                 "NBAIOT_DIRICHLET_CLIENTS",
-                "EDGE_SENSOR_GROUPS",
-                "EDGE_TEMPORAL_GROUPS",
+                "EDGE_SENSOR_CLIENTS",
+                "EDGE_TEMPORAL_CLIENTS",
             )
         ),
     ),

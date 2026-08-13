@@ -1,6 +1,7 @@
 import pytest
 from tests.unit.thresholding.helpers import COORDINATE, client_scores
 
+from datp_core.artifacts.repositories.thresholds import FederatedThresholdConstructionRequest
 from datp_core.core.errors import CapabilityError, LeakageError, ScientificContractError
 from datp_core.core.identifiers import (
     CentralizedThresholdMethod,
@@ -248,6 +249,39 @@ def test_threshold_construction_request_rejects_mixed_coordinates() -> None:
             family_by_client=(),
             support_rule=CalibrationSupportRule.CANONICAL_MINIMUM_SUPPORT,
             cluster_threshold_aggregation=None,
+        )
+
+
+def test_threshold_construction_request_rejects_capabilities_from_another_population() -> None:
+    mismatched = PopulationCapabilities(
+        population=PopulationId.CICIOT_FILE_CLIENTS,
+        dataset=DatasetId.CICIOT2023,
+        identity_kind=PopulationIdentityKind.FILE_DEFINED_PSEUDO_CLIENTS,
+        declared_client_count=ClientCount(len(ELIGIBLE)),
+        physical_client_validity=CapabilityStatus.UNAVAILABLE,
+        family_taxonomy=CapabilityStatus.UNAVAILABLE,
+        chronology=CapabilityStatus.UNAVAILABLE,
+        client_level_attack_assignment=CapabilityStatus.SUPPORTED,
+        fpr_evaluation=CapabilityStatus.SUPPORTED,
+        attack_sensitive_evaluation=CapabilityStatus.SUPPORTED,
+        temporal_support=CapabilityStatus.UNAVAILABLE,
+        valid_threshold_methods=tuple(FederatedThresholdMethod),
+        evidentiary_role=EvidenceRole.SUPPORTIVE,
+        confirmatory_eligible=False,
+    )
+    with pytest.raises(ScientificContractError, match="capabilities must belong"):
+        _request(FederatedThresholdMethod.SHARED_THRESHOLD, capabilities=mismatched)
+
+
+def test_threshold_publication_rejects_a_non_directory_destination(tmp_path) -> None:
+    destination = tmp_path / "threshold-output"
+    destination.write_text("not-a-directory", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="must be a directory"):
+        FederatedThresholdConstructionRequest(
+            request=_request(FederatedThresholdMethod.SHARED_THRESHOLD),
+            output_directory=destination,
+            overwrite=False,
         )
 
 

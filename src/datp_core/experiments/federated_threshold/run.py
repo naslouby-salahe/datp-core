@@ -169,6 +169,11 @@ def _complete_marker(experiment_id: ExperimentId, population: PopulationId) -> P
     return _summary_path(experiment_id, population)
 
 
+def _complete_marker_present(experiment_id: ExperimentId, population: PopulationId) -> bool:
+    marker = _complete_marker(experiment_id, population)
+    return marker.is_file() and marker.stat().st_size > 0
+
+
 def _evaluation_document_path(output_root: Path, coordinate: ExperimentCoordinate) -> Path:
     return (
         evaluation_run_directory(output_root, coordinate)
@@ -562,7 +567,7 @@ def report_federated_benign_statistics_comparison(
 
 
 def federated_benign_statistics_comparison_analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    return _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES).is_file()
+    return _complete_marker_present(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
 
 
 def run_federated_quantile_estimation_seed(
@@ -620,7 +625,7 @@ def report_federated_quantile_estimation(
 
 
 def federated_quantile_estimation_analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    return _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES).is_file()
+    return _complete_marker_present(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
 
 
 def run_fixed_coefficient_statistics_sensitivity_seed(
@@ -708,4 +713,4 @@ def report_fixed_coefficient_statistics_sensitivity(
 
 
 def fixed_coefficient_statistics_sensitivity_analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    return _complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES).is_file()
+    return _complete_marker_present(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)

@@ -39,7 +39,7 @@ from datp_core.data.populations.contracts import (
     FamilyAssignment,
     PopulationCapabilities,
 )
-from datp_core.data.registry import population_capabilities
+from datp_core.data.registry import population_capabilities, resolve_population
 from datp_core.detector.scoring.models import FederatedScoreArtifactManifest
 from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity
 from datp_core.thresholds.calibration.eligibility import EligibilityDecision, load_benign_calibration_references
@@ -465,6 +465,7 @@ def build_onboarding_target_calibration(
     manifests = tuple(
         build_calibration_replicate(
             client=target,
+            dataset=resolve_population(score_manifest.coordinate.population).declaration.dataset,
             coordinate=score_manifest.coordinate,
             training_seed=score_manifest.coordinate.training_seed,
             replicate_index=ReplicateIndex(index),

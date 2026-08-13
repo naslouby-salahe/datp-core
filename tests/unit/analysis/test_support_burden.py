@@ -34,6 +34,18 @@ def test_support_burden_campaign_retains_seed_direction_counts() -> None:
     assert summary.support_fpr.median is not None and summary.support_fpr.median.value == 0.0
 
 
+def test_support_burden_rejects_available_status_without_both_statistics() -> None:
+    with pytest.raises(ValueError, match="requires both Spearman"):
+        CalibrationSupportBurdenSeedEvidence(
+            seed=Seed(1),
+            clients=(),
+            support_fpr_spearman=MetricValue(0.5),
+            support_relief_spearman=None,
+            availability=SupportAssociationAvailability.AVAILABLE,
+            reason=None,
+        )
+
+
 def _evidence(*, seed: int, value: float) -> CalibrationSupportBurdenSeedEvidence:
     return CalibrationSupportBurdenSeedEvidence(
         seed=Seed(seed),

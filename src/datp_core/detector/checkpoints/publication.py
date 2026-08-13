@@ -33,8 +33,23 @@ def load_federated_training(
     autoencoder: AutoencoderProtocol,
     batch_size: BatchSize,
 ) -> FederatedTrainingResult | None:
+    if output_directory.is_symlink():
+        raise ArtifactIntegrityError(
+            ErrorMessage("training publication directory cannot be a symbolic link"),
+            subject=ContractSubject.ARTIFACT_PATH,
+        )
     terminal_path = output_directory / FederatedHistoryAssetName.TERMINAL_MODEL.value
+    if terminal_path.is_symlink():
+        raise ArtifactIntegrityError(
+            ErrorMessage("persisted terminal model cannot be a symbolic link"),
+            subject=ContractSubject.ARTIFACT_PATH,
+        )
     if not terminal_path.is_file():
+        if output_directory.is_dir() and next(output_directory.iterdir(), None) is not None:
+            raise ArtifactIntegrityError(
+                ErrorMessage("training publication is incomplete because its terminal model is missing"),
+                subject=ContractSubject.ARTIFACT_PATH,
+            )
         return None
     ordered_clients = tuple(sorted(clients))
     history = load_federated_training_history(
@@ -99,6 +114,10 @@ def write_ditto_training(
     global_output_directory: Path,
     personalized_output_directory: Path,
 ) -> DittoTrainingOutcome:
+    outcome = DittoTrainingOutcome(
+        global_training_result=global_result,
+        personalized_terminal_models=personalized_terminal_models,
+    )
     require_separate_directories(global_output_directory, personalized_output_directory)
     require_empty_directory(global_output_directory)
     require_empty_directory(personalized_output_directory)
@@ -116,13 +135,20 @@ def write_ditto_training(
             terminal_model.model_state.to_torch_state_dict(),
             personalized_output_directory / f"terminal_model_{terminal_model.client.client_id.value}.safetensors",
         )
-    return DittoTrainingOutcome(
-        global_training_result=global_result,
-        personalized_terminal_models=personalized_terminal_models,
-    )
+    return outcome
 
 
 def require_empty_directory(directory: Path) -> None:
+    if directory.is_symlink():
+        raise ArtifactIntegrityError(
+            ErrorMessage("training publication directory cannot be a symbolic link"),
+            subject=ContractSubject.ARTIFACT_PATH,
+        )
+    if directory.exists() and not directory.is_dir():
+        raise ArtifactIntegrityError(
+            ErrorMessage("training publication destination must be a directory"),
+            subject=ContractSubject.ARTIFACT_PATH,
+        )
     directory.mkdir(parents=True, exist_ok=True)
     if next(directory.iterdir(), None) is not None:
         raise ArtifactIntegrityError(
@@ -132,7 +158,7 @@ def require_empty_directory(directory: Path) -> None:
 
 
 def require_separate_directories(left: Path, right: Path) -> None:
-    if left == right:
+    if left.resolve(strict=False) == right.resolve(strict=False):
         raise ArtifactIntegrityError(
             ErrorMessage("Ditto terminal-model publications require separate directories"),
             subject=ContractSubject.ARTIFACT_PATH,

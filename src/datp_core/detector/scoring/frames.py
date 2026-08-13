@@ -123,8 +123,9 @@ def score_frame(
 def validate_persisted_score_frame(
     path: Path,
     row_count: RowCount,
+    partition_role: PartitionRole,
 ) -> pl.DataFrame:
-    if not path.is_file():
+    if path.is_symlink() or not path.is_file():
         raise ArtifactIntegrityError(
             ErrorMessage("score artifact is missing"),
             subject=ContractSubject.ARTIFACT_PATH,
@@ -146,6 +147,19 @@ def validate_persisted_score_frame(
             ErrorMessage("score artifact column dtype mismatch"),
             subject=ContractSubject.SCHEMA,
         )
+    _require_identity_columns(frame, partition_role)
+    labels = tuple(OutcomeLabel(str(value)) for value in frame.get_column(OUTCOME_LABEL_COLUMN).to_list())
+    if any(not str(value) for value in labels):
+        raise ArtifactIntegrityError(
+            ErrorMessage("score artifact contains an empty outcome label"), subject=ContractSubject.LABEL
+        )
+    scores = frame.get_column(ScoreFrameColumn.RECONSTRUCTION_ERROR.value).to_numpy()
+    if not np.isfinite(scores).all():
+        raise ArtifactIntegrityError(
+            ErrorMessage("score artifact contains non-finite reconstruction errors"), subject=ContractSubject.SCORES
+        )
+    if partition_role in CALIBRATION_PARTITIONS:
+        _require_benign_calibration(frame)
     return frame
 
 

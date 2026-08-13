@@ -91,6 +91,11 @@ class PreprocessingPartition:
                 )
             if self.frame.get_column(column).null_count() > 0:
                 raise ValueError(f"{column} cannot contain null values")
+        if self.frame.get_column(STABLE_ROW_ID_COLUMN).n_unique() != self.frame.height:
+            raise ScientificContractError(
+                ErrorMessage("stable row IDs must be unique within a preprocessing partition"),
+                subject=ContractSubject.ROWS,
+            )
         _ = self.row_ids
         _ = self.outcome_labels
 

@@ -32,10 +32,16 @@ class FederatedThresholdConstructionRequest:
     temporal_score_manifest: FederatedScoreArtifactManifest | None = None
 
     def __post_init__(self) -> None:
+        if self.output_directory.is_symlink():
+            raise ValueError("threshold output directory cannot be a symbolic link")
+        if self.output_directory.exists() and not self.output_directory.is_dir():
+            raise ValueError("threshold output destination must be a directory")
         if (self.temporal_provenance is None) != (self.temporal_score_manifest is None):
             raise ValueError("temporal threshold construction requires both provenance and score manifest")
         if self.temporal_provenance is not None and self.temporal_score_manifest is not None:
             self.temporal_provenance.validate_score_manifest(self.temporal_score_manifest)
+            if self.request.coordinate != self.temporal_score_manifest.coordinate:
+                raise ValueError("temporal threshold request and score manifest must share one coordinate")
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

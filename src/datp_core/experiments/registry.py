@@ -381,7 +381,7 @@ EXPERIMENTS = (
     _declare(
         ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION,
         EvidenceRole.EXTERNAL_VALIDATION,
-        PopulationId.EDGE_SENSOR_GROUPS,
+        PopulationId.EDGE_SENSOR_CLIENTS,
         TrainingModelId.FEDAVG_AUTOENCODER,
         PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
         _EDGE_BENIGN_EQUITY_METHODS,
@@ -426,7 +426,7 @@ EXPERIMENTS = (
     _declare(
         ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
         EvidenceRole.TEMPORAL_BOUNDARY,
-        PopulationId.EDGE_TEMPORAL_GROUPS,
+        PopulationId.EDGE_TEMPORAL_CLIENTS,
         TrainingModelId.FEDAVG_AUTOENCODER,
         PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
         _TEMPORAL_METHODS,

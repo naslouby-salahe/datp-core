@@ -21,8 +21,8 @@ class PopulationId(StrEnum):
     NBAIOT_NATURAL_DEVICES = "nbaiot_natural_devices"
     CICIOT_FILE_CLIENTS = "ciciot_file_clients"
     NBAIOT_DIRICHLET_CLIENTS = "nbaiot_dirichlet_clients"
-    EDGE_SENSOR_GROUPS = "edge_sensor_groups"
-    EDGE_TEMPORAL_GROUPS = "edge_temporal_groups"
+    EDGE_SENSOR_CLIENTS = "edge_sensor_groups"
+    EDGE_TEMPORAL_CLIENTS = "edge_temporal_groups"
 
 
 class PopulationIdentityKind(StrEnum):

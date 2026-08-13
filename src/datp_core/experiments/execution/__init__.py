@@ -27,11 +27,18 @@ def build_campaign(plan: ExperimentPlan) -> CampaignPlan:
     execution_keys: set[CoordinateStableKey] = set()
     for entry in plan.entries:
         coordinate = entry.coordinate
-        if (
-            entry.disposition is not PlanDisposition.EXECUTABLE
-            or execution_route_for(coordinate) is not ExecutionRoute.SINGLE_COORDINATE
-            or coordinate.execution_key in execution_keys
-        ):
+        if entry.disposition is not PlanDisposition.EXECUTABLE:
+            continue
+        route = execution_route_for(coordinate)
+        if route is not ExecutionRoute.SINGLE_COORDINATE:
+            raise ScientificContractError(
+                ErrorMessage(
+                    f"{coordinate.stable_key} requires the declared {route.value} route; "
+                    "generic campaign construction cannot omit it"
+                ),
+                subject=coordinate.experiment,
+            )
+        if coordinate.execution_key in execution_keys:
             continue
         execution_keys.add(coordinate.execution_key)
         coordinates.append(coordinate)
@@ -56,12 +63,28 @@ def execute_declared_experiment_seed(
         seed_cohort=seed_cohort,
         evidence=(PlanningEvidence(experiment=declaration.id, disposition=PlanDisposition.EXECUTABLE, reason=reason),),
     )
+    _require_all_declared_coordinates_executable(plan)
     return execute_declared_campaign(
         campaign=build_campaign(plan),
         declaration=declaration,
         output_root=output_root,
         overwrite=overwrite,
         progress=progress,
+    )
+
+
+def _require_all_declared_coordinates_executable(plan: ExperimentPlan) -> None:
+    """Reject a declared protocol cell before generic campaign construction can omit it."""
+
+    non_executable = tuple(entry for entry in plan.entries if entry.disposition is not PlanDisposition.EXECUTABLE)
+    if not non_executable:
+        return
+    detail = "; ".join(
+        f"{entry.coordinate.stable_key}={entry.disposition.value}:{entry.reason}" for entry in non_executable
+    )
+    raise ScientificContractError(
+        ErrorMessage(f"declared experiment contains non-executable coordinates and cannot omit them: {detail}"),
+        subject=non_executable[0].coordinate.experiment,
     )
 
 

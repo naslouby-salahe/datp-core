@@ -64,7 +64,7 @@ def test_every_non_metric_coordinate_dimension_changes_the_run_identity() -> Non
         replace(primary, experiment=ExperimentId.HISTORICAL_DATP_REPRODUCTION),
         replace(primary, evidence_role=EvidenceRole.ANCHOR_REPRODUCTION),
         replace(primary, dataset=DatasetId.EDGE_IIOTSET),
-        replace(primary, population=PopulationId.EDGE_SENSOR_GROUPS),
+        replace(primary, population=PopulationId.EDGE_SENSOR_CLIENTS),
         replace(
             primary,
             training_model=TrainingModelId.FEDPROX_AUTOENCODER,
@@ -119,19 +119,19 @@ def test_bounded_evidence_paths_separate_external_and_temporal_claims() -> None:
     seed = Seed(0)
     external = ExternalTemporalExecutionIdentity(
         experiment=ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION,
-        population=PopulationId.EDGE_SENSOR_GROUPS,
+        population=PopulationId.EDGE_SENSOR_CLIENTS,
         evidence_role=EvidenceRole.EXTERNAL_VALIDATION,
         temporal_state=None,
     )
     frozen = ExternalTemporalExecutionIdentity(
         experiment=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
-        population=PopulationId.EDGE_TEMPORAL_GROUPS,
+        population=PopulationId.EDGE_TEMPORAL_CLIENTS,
         evidence_role=EvidenceRole.TEMPORAL_BOUNDARY,
         temporal_state=TemporalState.FROZEN_FUTURE,
     )
     recalibrated = ExternalTemporalExecutionIdentity(
         experiment=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
-        population=PopulationId.EDGE_TEMPORAL_GROUPS,
+        population=PopulationId.EDGE_TEMPORAL_CLIENTS,
         evidence_role=EvidenceRole.TEMPORAL_BOUNDARY,
         temporal_state=TemporalState.RECALIBRATED_FUTURE,
     )

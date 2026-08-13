@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from datp_core.analysis.metrics.cohorts import EvaluationCohortManifest
+from datp_core.analysis.metrics.cohorts import ClientEligibilityRecord, EvaluationCohortManifest
 from datp_core.analysis.metrics.models import (
     EQUITY_INDEX_METRIC_IDS,
     FPR_POPULATION_METRIC_IDS,
@@ -59,6 +59,9 @@ def calculate_population_metrics(
             ErrorMessage("population results require one fixed coordinate, threshold method, and evidence role")
         )
 
+    if cohort is not None:
+        _validate_results_against_cohort(results, cohort)
+
     classification = _classify_population_results(results)
 
     if cohort is None:
@@ -87,6 +90,40 @@ def calculate_population_metrics(
         warnings=aggregates.warnings,
         evidence_role=first.evidence_role,
     )
+
+
+def _validate_results_against_cohort(
+    results: tuple[ClientMetricResult, ...],
+    cohort: EvaluationCohortManifest,
+) -> None:
+    """Prevent a supplied cohort from changing aggregate denominators by omission."""
+    if cohort.population is not results[0].coordinate.population:
+        raise ScientificContractError(
+            ErrorMessage("evaluation cohort population must match result coordinate population")
+        )
+
+    eligibility_by_client = {record.client: record for record in cohort.records}
+    result_clients = frozenset(result.client for result in results)
+    cohort_clients = frozenset(eligibility_by_client)
+    if result_clients != cohort_clients:
+        raise ScientificContractError(ErrorMessage("evaluation results must cover exactly the declared cohort clients"))
+
+    for result in results:
+        _validate_result_eligibility(result, eligibility_by_client[result.client])
+
+
+def _validate_result_eligibility(result: ClientMetricResult, eligibility: ClientEligibilityRecord) -> None:
+    expected_cohort = (
+        EvaluationCohort.FPR_EVALUABLE
+        if eligibility.fpr_evaluable
+        else EvaluationCohort.DEPLOYMENT_FALLBACK
+        if eligibility.deployment_fallback
+        else EvaluationCohort.UNAVAILABLE
+    )
+    if result.cohort is not expected_cohort:
+        raise ScientificContractError(ErrorMessage("client result cohort conflicts with declared eligibility"))
+    if result.confusion.attack_assignment_valid != eligibility.attack_evaluable:
+        raise ScientificContractError(ErrorMessage("client attack validity conflicts with declared cohort eligibility"))
 
 
 def _classify_population_results(

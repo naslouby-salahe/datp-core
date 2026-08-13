@@ -83,8 +83,8 @@ def seed_cohort_for(experiment_id: ExperimentId) -> SeedCohort:
 
     declaration = require_experiment_declaration(experiment_id)
     if declaration.population in {
-        PopulationId.EDGE_SENSOR_GROUPS,
-        PopulationId.EDGE_TEMPORAL_GROUPS,
+        PopulationId.EDGE_SENSOR_CLIENTS,
+        PopulationId.EDGE_TEMPORAL_CLIENTS,
         PopulationId.CICIOT_FILE_CLIENTS,
     }:
         return BOUNDED_EVIDENCE_SEED_COHORT

@@ -263,6 +263,7 @@ def run_campaign(*, overwrite: OverwriteMode) -> CampaignRunResult:
     CAMPAIGN_EXECUTION_MARKER.parent.mkdir(parents=True, exist_ok=True)
     write_text_atomically(CAMPAIGN_EXECUTION_MARKER, FileContentText(execution_marker_lines))
     report = _generate_campaign_report(require_anchor=False)
+    _require_report_publication(report)
     CAMPAIGN_PUBLICATION_MARKER.parent.mkdir(parents=True, exist_ok=True)
     write_text_atomically(CAMPAIGN_PUBLICATION_MARKER, FileContentText(execution_marker_lines))
     return CampaignRunResult(
@@ -270,6 +271,35 @@ def run_campaign(*, overwrite: OverwriteMode) -> CampaignRunResult:
         detail=DetailText(f"campaign experiments={len(results)} report={report.detail}"),
         anchor_failure=None,
     )
+
+
+def _require_report_publication(report: ReportResult) -> None:
+    """Prevent a campaign publication marker from certifying an empty report.
+
+    Recipe reports are evidence-bearing files or directories.  A successful
+    dispatch alone is not publication completion: every report must identify
+    at least one nonempty materialized artifact and each reported artifact
+    must exist.
+    """
+
+    if not report.paths:
+        raise ReportEvidenceError(ErrorMessage("campaign report produced no publication artifacts"))
+    missing = tuple(path for path in report.paths if not path.exists())
+    if missing:
+        detail = ", ".join(str(path) for path in missing)
+        raise ReportEvidenceError(ErrorMessage(f"campaign report references missing publication artifacts: {detail}"))
+    empty = tuple(path for path in report.paths if not _has_materialized_report_content(path))
+    if empty:
+        detail = ", ".join(str(path) for path in empty)
+        raise ReportEvidenceError(ErrorMessage(f"campaign report references empty publication artifacts: {detail}"))
+
+
+def _has_materialized_report_content(path: Path) -> bool:
+    if path.is_file():
+        return path.stat().st_size > 0
+    if not path.is_dir():
+        return False
+    return any(child.is_file() and child.stat().st_size > 0 for child in path.rglob("*"))
 
 
 def generate_report(experiment_id: ExperimentId | None) -> ReportResult:
@@ -324,9 +354,13 @@ def programme_status(experiment_id: ExperimentId | None) -> ProgrammeStatusRepor
         records=tuple(_status_for_experiment(item, anchor.gate_status) for item in target_ids),
         anchor_gate=anchor.gate_status,
         campaign_completion=(
-            ArtifactPresence.PRESENT if CAMPAIGN_PUBLICATION_MARKER.is_file() else ArtifactPresence.ABSENT
+            ArtifactPresence.PRESENT if _campaign_publication_marker_present() else ArtifactPresence.ABSENT
         ),
     )
+
+
+def _campaign_publication_marker_present() -> bool:
+    return CAMPAIGN_PUBLICATION_MARKER.is_file() and CAMPAIGN_PUBLICATION_MARKER.stat().st_size > 0
 
 
 def _status_for_experiment(

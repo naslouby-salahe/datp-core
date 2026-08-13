@@ -19,6 +19,7 @@ from datp_core.core.identifiers import (
 )
 from datp_core.core.numeric import FeatureCount, RowCount
 from datp_core.data.populations.contracts import ClientIdentity
+from datp_core.detector.autoencoder import AutoencoderModelState
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 
 
@@ -117,6 +118,7 @@ class ScoreArtifactManifest[CoordinateT, ClientT]:
     calibration_records: tuple[ScoreRecord[CoordinateT, ClientT], ...]
     evaluation_records: tuple[ScoreRecord[CoordinateT, ClientT], ...]
     future_recalibration_records: tuple[ScoreRecord[CoordinateT, ClientT], ...] = ()
+    terminal_detector_identity: Sha256Digest | None = None
 
     def __post_init__(self) -> None:
         if not self.calibration_records or not self.evaluation_records:
@@ -148,6 +150,16 @@ class ScoreArtifactManifest[CoordinateT, ClientT]:
         )
         if len(set(inventories)) != 1:
             raise ScientificContractError(ErrorMessage("every scored partition must cover the same clients"))
+        for records in (
+            self.calibration_records,
+            self.evaluation_records,
+            self.future_recalibration_records,
+        ):
+            if records and len({record.scored_client for record in records}) != len(records):
+                raise ScientificContractError(
+                    ErrorMessage("score manifests cannot contain duplicate client records"),
+                    subject=ContractSubject.CLIENT_IDENTITY,
+                )
 
     def records_for(self, role: PartitionRole) -> tuple[ScoreRecord[CoordinateT, ClientT], ...]:
         match role:
@@ -166,6 +178,10 @@ def score_artifact_content_identity[CoordinateT, ClientT](
 ) -> Sha256Digest:
     """Return an ordered, byte-level identity for immutable score artifacts."""
     digest = sha256()
+    if manifest.terminal_detector_identity is not None:
+        digest.update(b"terminal_detector\0")
+        digest.update(str(manifest.terminal_detector_identity).encode("ascii"))
+        digest.update(b"\0")
     for role in (PartitionRole.CALIBRATION, PartitionRole.FUTURE_RECALIBRATION, PartitionRole.EVALUATION):
         for record in manifest.records_for(role):
             if not record.path.is_file():
@@ -179,6 +195,21 @@ def score_artifact_content_identity[CoordinateT, ClientT](
             digest.update(client.client_id.value.encode("utf-8"))
             digest.update(b"\0")
             digest.update(record.path.read_bytes())
+    return Sha256Digest(digest.hexdigest())
+
+
+def terminal_detector_content_identity(model_state: AutoencoderModelState) -> Sha256Digest:
+    """Return a stable byte-level identity for the one terminal scoring source."""
+    digest = sha256()
+    for name, tensor in sorted(model_state.to_torch_state_dict().items()):
+        normalized = tensor.detach().cpu().contiguous()
+        digest.update(name.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(str(normalized.dtype).encode("ascii"))
+        digest.update(b"\0")
+        digest.update(str(tuple(normalized.shape)).encode("ascii"))
+        digest.update(b"\0")
+        digest.update(normalized.numpy().tobytes())
     return Sha256Digest(digest.hexdigest())
 
 

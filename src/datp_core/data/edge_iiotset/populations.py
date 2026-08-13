@@ -36,8 +36,8 @@ from datp_core.data.materialization import DATASET_MANIFEST_FILENAME
 from datp_core.data.populations.construction import PopulationFinalizationRequest, finalize_population
 from datp_core.data.populations.contracts import (
     CLIENT_ID_COLUMN,
-    EDGE_SENSOR_GROUPS,
-    EDGE_TEMPORAL_GROUPS,
+    EDGE_SENSOR_CLIENTS,
+    EDGE_TEMPORAL_CLIENTS,
     OUTCOME_LABEL_COLUMN,
     SOURCE_PATH_COLUMN,
     SOURCE_ROW_INDEX_COLUMN,
@@ -58,9 +58,9 @@ from datp_core.data.populations.paths import PartitioningFilePattern, canonical_
 
 _GROUP = EdgeCanonicalColumn.BENIGN_SENSOR_GROUP
 _CAPTURE = EdgeCanonicalColumn.CAPTURE_TIMESTAMP
-_SENSOR_POPULATION = PopulationId.EDGE_SENSOR_GROUPS
+_SENSOR_POPULATION = PopulationId.EDGE_SENSOR_CLIENTS
 _SENSOR_IDENTITY = PopulationIdentityKind.SOURCE_DEFINED_SENSOR_GROUPS
-_TEMPORAL_POPULATION = PopulationId.EDGE_TEMPORAL_GROUPS
+_TEMPORAL_POPULATION = PopulationId.EDGE_TEMPORAL_CLIENTS
 _TEMPORAL_IDENTITY = PopulationIdentityKind.VERIFIED_TEMPORAL_GROUPS
 
 
@@ -109,9 +109,9 @@ def construct_edge_sensor_groups(
             population=_SENSOR_POPULATION,
             dataset=DatasetId.EDGE_IIOTSET,
             identity_kind=_SENSOR_IDENTITY,
-            declaration=EDGE_SENSOR_GROUPS,
+            declaration=EDGE_SENSOR_CLIENTS,
             capabilities=build_population_capabilities(
-                EDGE_SENSOR_GROUPS,
+                EDGE_SENSOR_CLIENTS,
                 population_evidence_role(_SENSOR_POPULATION),
                 EDGE_IIOTSET_CAPABILITIES,
             ),
@@ -155,7 +155,7 @@ def construct_edge_temporal_groups(
     )
     diagnostics = ChronologicalPartitionDiagnosticsDocument(
         population=_TEMPORAL_POPULATION,
-        expected_group_count=EDGE_TEMPORAL_GROUPS.client_count,
+        expected_group_count=EDGE_TEMPORAL_CLIENTS.client_count,
         observed_eligible_group_count=NonNegativeIntegerValue(len(eligible_ids)),
         eligible_group_ids=eligible_ids,
         excluded_group_ids=excluded_ids,
@@ -204,9 +204,9 @@ def _finalize_temporal_manifest(
             population=_TEMPORAL_POPULATION,
             dataset=DatasetId.EDGE_IIOTSET,
             identity_kind=_TEMPORAL_IDENTITY,
-            declaration=EDGE_TEMPORAL_GROUPS,
+            declaration=EDGE_TEMPORAL_CLIENTS,
             capabilities=build_population_capabilities(
-                EDGE_TEMPORAL_GROUPS,
+                EDGE_TEMPORAL_CLIENTS,
                 population_evidence_role(_TEMPORAL_POPULATION),
                 EDGE_IIOTSET_CAPABILITIES,
             ),
@@ -410,9 +410,9 @@ def _matched_static_reference(
             population=_TEMPORAL_POPULATION,
             dataset=DatasetId.EDGE_IIOTSET,
             identity_kind=_TEMPORAL_IDENTITY,
-            declaration=EDGE_TEMPORAL_GROUPS,
+            declaration=EDGE_TEMPORAL_CLIENTS,
             capabilities=build_population_capabilities(
-                EDGE_TEMPORAL_GROUPS,
+                EDGE_TEMPORAL_CLIENTS,
                 population_evidence_role(_TEMPORAL_POPULATION),
                 EDGE_IIOTSET_CAPABILITIES,
             ),

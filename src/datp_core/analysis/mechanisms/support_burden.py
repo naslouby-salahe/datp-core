@@ -1,4 +1,8 @@
+from __future__ import annotations
+
 from enum import StrEnum
+
+from pydantic import model_validator
 
 from datp_core.analysis.mechanisms.movement import ThresholdMovementCohort
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
@@ -31,6 +35,18 @@ class CalibrationSupportBurdenSeedEvidence(StrictModel):
     availability: SupportAssociationAvailability
     reason: AnalysisReasonText | None
 
+    @model_validator(mode="after")
+    def validate_availability(self) -> CalibrationSupportBurdenSeedEvidence:
+        clients = tuple(item.client for item in self.clients)
+        if len(clients) != len(frozenset(clients)):
+            raise ValueError("calibration-support burden clients must be unique within a seed")
+        available = self.availability is SupportAssociationAvailability.AVAILABLE
+        if available != (self.support_fpr_spearman is not None and self.support_relief_spearman is not None):
+            raise ValueError("available support evidence requires both Spearman statistics")
+        if available != (self.reason is None):
+            raise ValueError("support evidence availability and reason must agree")
+        return self
+
 
 class SupportCorrelationDirectionSummary(StrictModel):
     valid_seed_count: SeedObservationCount
@@ -48,6 +64,13 @@ class CalibrationSupportBurdenCampaignSummary(StrictModel):
     support_fpr: SupportCorrelationDirectionSummary
     support_relief: SupportCorrelationDirectionSummary
 
+    @model_validator(mode="after")
+    def validate_seed_evidence(self) -> CalibrationSupportBurdenCampaignSummary:
+        seeds = tuple(item.seed for item in self.seed_evidence)
+        if not seeds or len(seeds) != len(frozenset(seeds)):
+            raise ValueError("calibration-support campaign requires unique non-empty seed evidence")
+        return self
+
 
 class CalibrationSupportBurdenDeviceSummary(StrictModel):
     client: ClientIdentity
@@ -62,6 +85,13 @@ class CalibrationSupportBurdenDeviceSummary(StrictModel):
 
 class CalibrationSupportBurdenDeviceReport(StrictModel):
     devices: tuple[CalibrationSupportBurdenDeviceSummary, ...]
+
+    @model_validator(mode="after")
+    def validate_devices(self) -> CalibrationSupportBurdenDeviceReport:
+        clients = tuple(item.client for item in self.devices)
+        if len(clients) != len(frozenset(clients)):
+            raise ValueError("calibration-support device report must not duplicate clients")
+        return self
 
 
 def calibration_support_burden_evidence(

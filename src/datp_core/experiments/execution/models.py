@@ -130,6 +130,9 @@ class ExperimentExecution:
         expected_prefix = self.recipe.stages[: len(completed_stage_ids)]
         if completed_stage_ids != expected_prefix:
             raise ValueError("pipeline stages must execute in the selected recipe's order")
+        terminal = tuple(index for index, item in enumerate(self.stages) if item.outcome is not StageOutcome.COMPLETED)
+        if terminal and terminal != (len(self.stages) - 1,):
+            raise ValueError("a blocked or failed pipeline stage must terminate the execution")
 
     @property
     def successful(self) -> bool:
@@ -162,6 +165,9 @@ class CampaignPlan:
     def __post_init__(self) -> None:
         if tuple(item.ordinal.value for item in self.entries) != tuple(range(len(self.entries))):
             raise ValueError("campaign entries must use contiguous deterministic ordinals")
+        coordinate_keys = tuple(item.coordinate.stable_key for item in self.entries)
+        if len(coordinate_keys) != len(frozenset(coordinate_keys)):
+            raise ValueError("campaign entries must not repeat a coordinate")
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

@@ -90,6 +90,19 @@ class ClaimGuardPhrase(StrEnum):
     REPEATED_CYCLES = "repeated cycles"
     CONCEPT_DRIFT_SOLUTION = "concept drift solution"
     DRIFT_HANDLING = "drift handling"
+    AUROC_IMPROVEMENT = "improves auroc"
+    AUROC_IMPROVEMENT_REVERSED = "auroc improves"
+    OVERALL_DETECTION_IMPROVEMENT = "improves detection performance overall"
+    OVERALL_DETECTION_IMPROVEMENT_REVERSED = "overall detection performance improves"
+    PRIVACY_PRESERVING = "privacy preserving"
+    LIGHTWEIGHT = "lightweight"
+    EDGE_READY = "edge ready"
+    DEPLOYABLE_ON_CONSTRAINED_DEVICES = "deployable on constrained devices"
+    NOVEL_LOCAL_ANOMALY_THRESHOLD = "novel local anomaly threshold"
+    NOVEL_CLIENT_SPECIFIC_ANOMALY_THRESHOLD = "novel client-specific anomaly threshold"
+    NOVEL_FEDERATED_THRESHOLD = "novel federated threshold"
+    NOVEL_FEDERATED_CONFORMAL = "novel federated conformal"
+    NOVEL_CLUSTERED_FEDERATED_LEARNING = "novel clustered federated learning"
 
 
 _PRIVACY_GUARD_PHRASES = frozenset(
@@ -159,6 +172,27 @@ _CENTRAL_FRAMING_GUARD_PHRASES = frozenset(
         ClaimGuardPhrase.SOLUTION_TO_NON_IID,
     }
 )
+_SCORE_GUARD_PHRASES = frozenset(
+    {
+        ClaimGuardPhrase.AUROC_IMPROVEMENT,
+        ClaimGuardPhrase.AUROC_IMPROVEMENT_REVERSED,
+    }
+)
+_DETECTION_GUARD_PHRASES = frozenset(
+    {
+        ClaimGuardPhrase.OVERALL_DETECTION_IMPROVEMENT,
+        ClaimGuardPhrase.OVERALL_DETECTION_IMPROVEMENT_REVERSED,
+    }
+)
+_PRIMITIVE_NOVELTY_GUARD_PHRASES = frozenset(
+    {
+        ClaimGuardPhrase.NOVEL_LOCAL_ANOMALY_THRESHOLD,
+        ClaimGuardPhrase.NOVEL_CLIENT_SPECIFIC_ANOMALY_THRESHOLD,
+        ClaimGuardPhrase.NOVEL_FEDERATED_THRESHOLD,
+        ClaimGuardPhrase.NOVEL_FEDERATED_CONFORMAL,
+        ClaimGuardPhrase.NOVEL_CLUSTERED_FEDERATED_LEARNING,
+    }
+)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -225,6 +259,9 @@ def _claim_failures(
     yield _adversarial_calibration_guard_suppression(normalized_wording)
     yield _persistence_guard_suppression(normalized_wording)
     yield _central_framing_guard_suppression(normalized_wording)
+    yield _score_guard_suppression(normalized_wording)
+    yield _detection_guard_suppression(normalized_wording)
+    yield _primitive_novelty_guard_suppression(normalized_wording)
     yield _applicability_boundary_failure(request, normalized_wording)
 
 
@@ -307,13 +344,22 @@ def _temporal_guard_result(request: ClaimRequest, normalized_wording: Normalized
 
 
 def _privacy_guard_suppression(normalized_wording: NormalizedClaimWording) -> ClaimDecision | None:
-    if any(phrase.value in normalized_wording for phrase in _PRIVACY_GUARD_PHRASES):
+    phrases = _PRIVACY_GUARD_PHRASES | {ClaimGuardPhrase.PRIVACY_PRESERVING}
+    if any(phrase.value in normalized_wording for phrase in phrases):
         return _suppressed(ClaimReason("data locality is not a formal privacy guarantee"))
     return None
 
 
 def _deployment_guard_suppression(normalized_wording: NormalizedClaimWording) -> ClaimDecision | None:
-    if any(phrase.value in normalized_wording for phrase in _DEPLOYMENT_GUARD_PHRASES):
+    if any(
+        phrase.value in normalized_wording
+        for phrase in _DEPLOYMENT_GUARD_PHRASES
+        | {
+            ClaimGuardPhrase.LIGHTWEIGHT,
+            ClaimGuardPhrase.EDGE_READY,
+            ClaimGuardPhrase.DEPLOYABLE_ON_CONSTRAINED_DEVICES,
+        }
+    ):
         return _suppressed(ClaimReason("message-size estimates are not deployment measurements"))
     return None
 
@@ -347,6 +393,24 @@ def _persistence_guard_suppression(normalized_wording: NormalizedClaimWording) -
 def _central_framing_guard_suppression(normalized_wording: NormalizedClaimWording) -> ClaimDecision | None:
     if any(phrase.value in normalized_wording for phrase in _CENTRAL_FRAMING_GUARD_PHRASES):
         return _suppressed(ClaimReason("claim exceeds DATP-Core's locked threshold-scope study framing"))
+    return None
+
+
+def _score_guard_suppression(normalized_wording: NormalizedClaimWording) -> ClaimDecision | None:
+    if any(phrase.value in normalized_wording for phrase in _SCORE_GUARD_PHRASES):
+        return _suppressed(ClaimReason("threshold scope cannot change AUROC when the score artifact is fixed"))
+    return None
+
+
+def _detection_guard_suppression(normalized_wording: NormalizedClaimWording) -> ClaimDecision | None:
+    if any(phrase.value in normalized_wording for phrase in _DETECTION_GUARD_PHRASES):
+        return _suppressed(ClaimReason("threshold-scope evidence cannot establish overall detection improvement"))
+    return None
+
+
+def _primitive_novelty_guard_suppression(normalized_wording: NormalizedClaimWording) -> ClaimDecision | None:
+    if any(phrase.value in normalized_wording for phrase in _PRIMITIVE_NOVELTY_GUARD_PHRASES):
+        return _suppressed(ClaimReason("DATP-Core does not claim invention of established thresholding primitives"))
     return None
 
 

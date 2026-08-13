@@ -24,6 +24,7 @@ from datp_core.core.identifiers import (
     NonEmptyString,
     PopulationId,
     PreprocessingProtocolId,
+    Sha256Digest,
     SourceRuleDescription,
     SplitProtocolId,
     TrainingModelId,
@@ -429,6 +430,7 @@ class AnchorConfirmatoryHandoff(StrictModel):
     threshold_protocol_identities: tuple[FederatedThresholdMethod, ...]
     verified_gate_status: AnchorGateStatus
     diagnostics_directory: ArtifactDirectoryPathText
+    gate_decision_sha256: Sha256Digest
 
     @model_validator(mode="after")
     def validate_handoff_integrity(self) -> AnchorConfirmatoryHandoff:

@@ -23,6 +23,13 @@ class MessageDirection(StrEnum):
     COORDINATOR_TO_CLIENT = "coordinator_to_client"
 
 
+class ThresholdBroadcastAccounting(StrEnum):
+    """How coordinator threshold responses are totalled in a threshold-stage report."""
+
+    ONCE_ON_WIRE = "once_on_wire"
+    ONCE_PER_LOGICAL_RECIPIENT = "once_per_logical_recipient"
+
+
 class ThresholdPayloadKind(StrEnum):
     MODEL_TRANSMISSION = "model_transmission"
     THRESHOLD_TRANSMISSION = "threshold_transmission"
@@ -126,6 +133,8 @@ class ThresholdStageCommunicationDiagnostic:
     messages: tuple[CommunicationMessageDiagnostic, ...]
     total_logical_element_count: NonNegativeIntegerValue
     total_serialized_bytes: ByteCount
+    broadcast_accounting: ThresholdBroadcastAccounting
+    communication_round_count: NonNegativeIntegerValue
 
     def __post_init__(self) -> None:
         expected_elements = sum(item.payload.logical_element_count.value for item in self.messages)
@@ -134,6 +143,14 @@ class ThresholdStageCommunicationDiagnostic:
             raise ScientificContractError(ErrorMessage("threshold-stage logical elements must equal message totals"))
         if self.total_serialized_bytes.value != expected_bytes:
             raise ScientificContractError(ErrorMessage("threshold-stage bytes must equal message totals"))
+        if not self.messages and self.communication_round_count.value != 0:
+            raise ScientificContractError(
+                ErrorMessage("a threshold stage without messages cannot report communication rounds")
+            )
+        if self.messages and self.communication_round_count.value < 1:
+            raise ScientificContractError(
+                ErrorMessage("a threshold stage with messages requires one or more communication rounds")
+            )
         for message in self.messages:
             if message.training_seed != self.training_seed or message.coordinate != self.coordinate:
                 raise ScientificContractError(
@@ -143,6 +160,22 @@ class ThresholdStageCommunicationDiagnostic:
                 raise ScientificContractError(
                     ErrorMessage("threshold-stage accounting cannot contain model transmission")
                 )
+
+    @property
+    def upload_messages(self) -> tuple[CommunicationMessageDiagnostic, ...]:
+        return tuple(item for item in self.messages if item.direction is MessageDirection.CLIENT_TO_COORDINATOR)
+
+    @property
+    def response_messages(self) -> tuple[CommunicationMessageDiagnostic, ...]:
+        return tuple(item for item in self.messages if item.direction is MessageDirection.COORDINATOR_TO_CLIENT)
+
+    @property
+    def total_uploaded_serialized_bytes(self) -> ByteCount:
+        return ByteCount(sum(item.estimated_serialized_bytes.value for item in self.upload_messages))
+
+    @property
+    def total_response_serialized_bytes(self) -> ByteCount:
+        return ByteCount(sum(item.estimated_serialized_bytes.value for item in self.response_messages))
 
 
 def summarize_communication(

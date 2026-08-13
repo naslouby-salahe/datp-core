@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 from dataclasses import dataclass
 from functools import singledispatch
+from hashlib import sha256
 from io import StringIO
 from itertools import chain
 from pathlib import Path
@@ -82,7 +83,7 @@ from datp_core.core.identifiers import (
 )
 from datp_core.core.numeric import ClusterIndex, MetricValue, PairedObservationCount, Ratio
 from datp_core.experiments.anchor.contracts import VerifiedAnchorGateArtifact
-from datp_core.presentation.figures import FigureSpec, render_markdown_figure
+from datp_core.presentation.figures import EmpiricalCdfFigureSeries, FigureSpec, render_markdown_figure
 from datp_core.presentation.tables import (
     EvidenceText,
     PublicationTable,
@@ -114,6 +115,9 @@ PUBLICATION_P_VALUE_DISPLAY_THRESHOLD = 0.001
 
 
 class PublicationSourceRow(TypedDict):
+    experiment: str
+    population: str
+    evidence_role: str
     output_kind: str
     output_title: str
     series_label: str
@@ -125,6 +129,15 @@ class PublicationSourceRow(TypedDict):
     point_label: str
     evidence: str
     unavailable_reason: str
+    client_id: str
+    training_seed: str
+    score_role: str
+    threshold_method: str
+    threshold_value: str
+    benign_exceedance: str
+    attack_acceptance: str
+    balanced_accuracy: str
+    macro_f1: str
 
 
 def format_publication_metric(value: float) -> str:
@@ -222,6 +235,8 @@ def export_markdown(
             canonical_json_text(
                 {
                     "publication": publication.name,
+                    "publication_bytes": publication.stat().st_size,
+                    "publication_sha256": _sha256_file(publication),
                     "experiment": provenance.experiment.value,
                     "population": provenance.population.value,
                     "evidence_role": provenance.evidence_role.value,
@@ -236,8 +251,18 @@ def export_markdown(
                                 else "additional_figure_table_source"
                             ),
                             "row_count": _source_file_row_count(source),
+                            "bytes": source.stat().st_size,
+                            "sha256": _sha256_file(source),
                         }
                         for source in source_files
+                    ),
+                    "claims": tuple(
+                        {
+                            "status": decision.status.value,
+                            "wording": str(decision.wording or ""),
+                            "reason": str(decision.reason),
+                        }
+                        for decision in bundle.claims
                     ),
                 }
             )
@@ -252,6 +277,9 @@ def _export_publication_source_data(bundle: PublicationBundle, output_directory:
     rows = _publication_source_rows(bundle)
     buffer = StringIO(newline="")
     columns = (
+        "experiment",
+        "population",
+        "evidence_role",
         "output_kind",
         "output_title",
         "series_label",
@@ -263,6 +291,15 @@ def _export_publication_source_data(bundle: PublicationBundle, output_directory:
         "point_label",
         "evidence",
         "unavailable_reason",
+        "client_id",
+        "training_seed",
+        "score_role",
+        "threshold_method",
+        "threshold_value",
+        "benign_exceedance",
+        "attack_acceptance",
+        "balanced_accuracy",
+        "macro_f1",
     )
     writer = csv.DictWriter(buffer, fieldnames=columns, lineterminator="\n", extrasaction="raise")
     writer.writeheader()
@@ -275,8 +312,14 @@ def _export_publication_source_data(bundle: PublicationBundle, output_directory:
 def _validate_publication_source_files(sources: tuple[Path, ...], output_directory: Path) -> None:
     if len(sources) != len(frozenset(sources)):
         raise ValueError("publication source files must not repeat")
-    if any(source.parent != output_directory or not source.is_file() for source in sources):
-        raise ValueError("publication source files must be direct files in the publication directory")
+    if any(
+        source.parent != output_directory
+        or not source.is_file()
+        or source.is_symlink()
+        or source.stat().st_size == 0
+        for source in sources
+    ):
+        raise ValueError("publication source files must be non-empty regular files in the publication directory")
 
 
 def _source_file_row_count(source: Path) -> int:
@@ -284,6 +327,14 @@ def _source_file_row_count(source: Path) -> int:
         return 1
     with source.open(encoding="utf-8", newline="") as stream:
         return sum(1 for _ in csv.DictReader(stream))
+
+
+def _sha256_file(source: Path) -> str:
+    digest = sha256()
+    with source.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _publication_source_rows(bundle: PublicationBundle) -> list[PublicationSourceRow]:
@@ -318,7 +369,13 @@ def _publication_source_rows(bundle: PublicationBundle) -> list[PublicationSourc
                     series.y_values,
                     (),
                     str(series.unavailable_reason or ""),
+                    client_id=str(series.client_id.value) if series.client_id is not None else "",
+                    training_seed=str(series.seed.value) if series.seed is not None else "",
+                    score_role=str(series.score_role.value) if series.score_role is not None else "",
                 )
+            )
+            rows.extend(
+                _threshold_overlay_source_rows(str(figure.title), series)
             )
         for series in figure.paired_metric_series:
             rows.extend(
@@ -342,7 +399,16 @@ def _publication_source_rows(bundle: PublicationBundle) -> list[PublicationSourc
                     evidence=str(line),
                 )
             )
-    return rows
+    provenance = bundle.provenance
+    return [
+        {
+            **row,
+            "experiment": provenance.experiment.value,
+            "population": provenance.population.value,
+            "evidence_role": provenance.evidence_role.value,
+        }
+        for row in rows
+    ]
 
 
 def _single_axis_source_rows(
@@ -371,6 +437,10 @@ def _paired_source_rows(
     y_values: tuple[MetricValue, ...],
     point_labels: tuple[object, ...],
     unavailable_reason: str,
+    *,
+    client_id: str = "",
+    training_seed: str = "",
+    score_role: str = "",
 ) -> list[PublicationSourceRow]:
     return [
         _publication_source_row(
@@ -384,13 +454,53 @@ def _paired_source_rows(
             y_value=format(y_value.value, ".17g"),
             point_label=str(point_labels[index]) if point_labels else "",
             unavailable_reason=unavailable_reason,
+            client_id=client_id,
+            training_seed=training_seed,
+            score_role=score_role,
         )
         for index, (x_value, y_value) in enumerate(zip(x_values, y_values, strict=True))
     ] or [
         _publication_source_row(
-            "figure_paired_series", title, str(label), metric, availability, unavailable_reason=unavailable_reason
+            "figure_paired_series",
+            title,
+            str(label),
+            metric,
+            availability,
+            unavailable_reason=unavailable_reason,
+            client_id=client_id,
+            training_seed=training_seed,
+            score_role=score_role,
         )
     ]
+
+
+def _threshold_overlay_source_rows(title: str, series: EmpiricalCdfFigureSeries) -> list[PublicationSourceRow]:
+    """Keep every threshold overlay value in the release's tidy figure source data."""
+
+    return [
+        _publication_source_row(
+            output_kind="figure_threshold_overlay",
+            output_title=title,
+            series_label=str(series.label),
+            metric=f"{series.x_metric.value}:{series.y_metric.value}",
+            availability=series.availability.value,
+            value_index=str(index),
+            client_id=series.client_id.value if series.client_id is not None else "",
+            training_seed=str(series.seed.value) if series.seed is not None else "",
+            score_role=series.score_role.value if series.score_role is not None else "",
+            threshold_method=overlay.method.value,
+            threshold_value=format(overlay.value.value, ".17g"),
+            benign_exceedance=_metric_source_value(overlay.benign_exceedance),
+            attack_acceptance=_metric_source_value(overlay.attack_acceptance),
+            balanced_accuracy=_metric_source_value(overlay.balanced_accuracy),
+            macro_f1=_metric_source_value(overlay.macro_f1),
+        )
+        for index, overlay in enumerate(series.threshold_overlays)
+    ]
+
+
+def _metric_source_value(value: MetricValue | None) -> str:
+    return "" if value is None else format(value.value, ".17g")
 
 
 def _publication_source_row(
@@ -405,8 +515,20 @@ def _publication_source_row(
     point_label: str = "",
     evidence: str = "",
     unavailable_reason: str = "",
+    client_id: str = "",
+    training_seed: str = "",
+    score_role: str = "",
+    threshold_method: str = "",
+    threshold_value: str = "",
+    benign_exceedance: str = "",
+    attack_acceptance: str = "",
+    balanced_accuracy: str = "",
+    macro_f1: str = "",
 ) -> PublicationSourceRow:
     return {
+        "experiment": "",
+        "population": "",
+        "evidence_role": "",
         "output_kind": output_kind,
         "output_title": output_title,
         "series_label": series_label,
@@ -418,6 +540,15 @@ def _publication_source_row(
         "point_label": point_label,
         "evidence": evidence,
         "unavailable_reason": unavailable_reason,
+        "client_id": client_id,
+        "training_seed": training_seed,
+        "score_role": score_role,
+        "threshold_method": threshold_method,
+        "threshold_value": threshold_value,
+        "benign_exceedance": benign_exceedance,
+        "attack_acceptance": attack_acceptance,
+        "balanced_accuracy": balanced_accuracy,
+        "macro_f1": macro_f1,
     }
 
 
@@ -463,8 +594,12 @@ def export_confirmatory_publication(
         tables=tables,
         figures=figures,
     )
-    export_analysis_report(document, output_directory / "analysis_report.md")
-    return export_markdown(bundle, output_directory / PUBLICATION_FILENAME)
+    analysis_report = export_analysis_report(document, output_directory / "analysis_report.md")
+    return export_markdown(
+        bundle,
+        output_directory / PUBLICATION_FILENAME,
+        additional_source_files=(analysis_report,),
+    )
 
 
 def export_external_publication(document: ExternalAnalysisDocument, output_directory: Path) -> Path:
@@ -493,7 +628,7 @@ def export_external_publication(document: ExternalAnalysisDocument, output_direc
             "",
         ]
     )
-    write_text_atomically(output_directory / "external_analysis_report.md", FileContentText(payload))
+    analysis_report = write_text_atomically(output_directory / "external_analysis_report.md", FileContentText(payload))
     return export_markdown(
         PublicationBundle(
             provenance=ReportProvenance(
@@ -508,6 +643,7 @@ def export_external_publication(document: ExternalAnalysisDocument, output_direc
             figures=(),
         ),
         output_directory / PUBLICATION_FILENAME,
+        additional_source_files=(analysis_report,),
     )
 
 
@@ -621,12 +757,15 @@ def export_temporal_publication(document: TemporalAnalysisDocument, output_direc
             "",
         ]
     )
-    write_text_atomically(output_directory / "temporal_analysis_report.md", FileContentText("\n".join(lines)))
+    analysis_report = write_text_atomically(
+        output_directory / "temporal_analysis_report.md",
+        FileContentText("\n".join(lines)),
+    )
     return export_markdown(
         PublicationBundle(
             provenance=ReportProvenance(
                 experiment=document.experiment,
-                population=PopulationId.EDGE_TEMPORAL_GROUPS,
+                population=PopulationId.EDGE_TEMPORAL_CLIENTS,
                 evidence_role=EvidenceRole.TEMPORAL_BOUNDARY,
             ),
             claims=(claim,),
@@ -651,6 +790,7 @@ def export_temporal_publication(document: TemporalAnalysisDocument, output_direc
         ),
         output_directory / PUBLICATION_FILENAME,
         additional_source_files=(
+            analysis_report,
             figure_sources.fpr_trajectory_source,
             figure_sources.threshold_movement_source,
             figure_sources.manifest,
@@ -668,7 +808,7 @@ def export_mechanism_publication(
     figures: tuple[FigureSpec, ...] = (),
 ) -> Path:
     payload = "\n".join(_render_mechanisms(mechanisms))
-    write_text_atomically(output_directory / MECHANISM_REPORT_FILENAME, FileContentText(payload))
+    mechanism_report = write_text_atomically(output_directory / MECHANISM_REPORT_FILENAME, FileContentText(payload))
     tables = _mechanism_tables(mechanisms)
     return export_markdown(
         PublicationBundle(
@@ -696,6 +836,7 @@ def export_mechanism_publication(
             figures=figures,
         ),
         output_directory / PUBLICATION_FILENAME,
+        additional_source_files=(mechanism_report,),
     )
 
 
@@ -1416,7 +1557,7 @@ def _render_divergence_result(mechanism: DivergenceResult) -> list[ReportLine]:
         f"Score source: `{mechanism.protocol.score_source.value}`",
         f"Shared support: `{mechanism.protocol.shared_support.value}`",
         f"Binning: `{mechanism.protocol.binning.value}` bins={mechanism.protocol.bin_count.value}",
-        f"Smoothing: {_format_publication_metric(mechanism.protocol.smoothing_constant.value)}",
+        "Smoothing: none (locked unsmoothed protocol)",
         f"Log base: `{mechanism.protocol.logarithm_base.value}`",
         f"Aggregation: `{mechanism.protocol.aggregation.value}`",
     ]

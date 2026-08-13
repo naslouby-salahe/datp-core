@@ -161,6 +161,34 @@ def test_handoff_missing_fails_closed(tmp_path: Path) -> None:
         load_anchor_confirmatory_handoff(tmp_path, verified_gate=verified)
 
 
+def test_handoff_rejects_gate_bytes_changed_after_verification(tmp_path: Path) -> None:
+    decision = decide_anchor_gate(reproduce_anchor(observations=matching_anchor_observations()))
+    persist_anchor_gate_diagnostics(decision, tmp_path)
+    verified = load_verified_anchor_gate_artifact(tmp_path)
+    gate_path = tmp_path / AnchorArtifactFileName.GATE_DECISION.value
+    gate_path.write_text(gate_path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+
+    with pytest.raises(AnchorReproductionError, match="gate digest does not match"):
+        load_anchor_confirmatory_handoff(tmp_path, verified_gate=verified)
+
+
+def test_blocked_rewrite_removes_prior_confirmatory_handoff(tmp_path: Path) -> None:
+    passing = decide_anchor_gate(reproduce_anchor(observations=matching_anchor_observations()))
+    persist_anchor_gate_diagnostics(passing, tmp_path)
+    handoff_path = tmp_path / AnchorArtifactFileName.CONFIRMATORY_HANDOFF.value
+    assert handoff_path.is_file()
+
+    blocked = decide_anchor_gate(
+        reproduce_anchor(
+            observations=(),
+            dependency_blocker=independent_reproduction_dependency_blocker(),
+        )
+    )
+    persist_anchor_gate_diagnostics(blocked, tmp_path)
+
+    assert not handoff_path.exists()
+
+
 def test_stale_handoff_programme_binding_is_rejected(tmp_path: Path) -> None:
     decision = decide_anchor_gate(reproduce_anchor(observations=matching_anchor_observations()))
     persist_anchor_gate_diagnostics(decision, tmp_path)

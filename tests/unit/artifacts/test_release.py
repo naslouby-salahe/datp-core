@@ -1,4 +1,5 @@
 import csv
+import json
 from datetime import date
 from hashlib import sha256
 from pathlib import Path
@@ -62,6 +63,65 @@ _COLUMNS = (
     "threshold_policy",
     "experiment_id",
 )
+_RECONSTRUCTION_EVIDENCE = {
+    "DATA_PROVENANCE/dataset_manifest.json": b"{}\n",
+    "SPLIT_IDENTITY/split_manifest.json": b"{}\n",
+    "PREPROCESSING/preprocessing_manifest.json": b"{}\n",
+    "MODELS/terminal_model.safetensors": b"model\n",
+    "SCORES/calibration.parquet": b"score\n",
+    "THRESHOLDS/threshold_result.json": b"{}\n",
+    "METRICS/metrics.csv": b"metric,value\nfpr,0.05\n",
+    "STATISTICS/analysis.json": b"{}\n",
+    "FIGURE_TABLE_DATA/publication.md": b"# results\n",
+    "FIGURE_TABLE_DATA/publication_source_data.csv": b"metric,value\nfpr,0.05\n",
+    "FIGURE_TABLE_DATA/publication_source_manifest.json": json.dumps(
+        {
+            "publication": "publication.md",
+            "publication_bytes": len(b"# results\n"),
+            "publication_sha256": sha256(b"# results\n").hexdigest(),
+            "sources": [{"filename": "publication_source_data.csv"}],
+        }
+    ).encode(),
+    "AUDIT_REPORTS/summary.txt": b"audit summary\n",
+}
+_RECONSTRUCTION_ARTIFACT_TYPES = {
+    "DATA_PROVENANCE": "canonical_data_provenance",
+    "SPLIT_IDENTITY": "split_identity",
+    "PREPROCESSING": "preprocessing_state",
+    "MODELS": "terminal_model",
+    "SCORES": "score_artifact",
+    "THRESHOLDS": "threshold_result",
+    "METRICS": "federated_evaluation_document",
+    "STATISTICS": "analysis_result",
+    "AUDIT_REPORTS": "audit_report",
+}
+
+
+def _required_release_artifacts(source: Path) -> tuple[ReleaseArtifact, ...]:
+    fixture_directory = source.parent / "release-fixture"
+    fixture_directory.mkdir(exist_ok=True)
+    artifacts: list[ReleaseArtifact] = []
+    for relative_path, content in _RECONSTRUCTION_EVIDENCE.items():
+        fixture_source = fixture_directory / Path(relative_path).name
+        fixture_source.write_bytes(content if relative_path.startswith("FIGURE_TABLE_DATA/") else source.read_bytes())
+        artifact_type = _RECONSTRUCTION_ARTIFACT_TYPES.get(Path(relative_path).parts[0], "table_figure_source_data")
+        if relative_path.endswith("publication.md"):
+            artifact_type = "publication"
+        elif relative_path.endswith("publication_source_manifest.json"):
+            artifact_type = "publication_source_manifest"
+        artifacts.append(ReleaseArtifact(fixture_source, Path(relative_path), artifact_type))
+    return tuple(artifacts)
+
+
+def _publication_manifest_payload(publication: bytes, sources: list[dict[str, object]]) -> str:
+    return json.dumps(
+        {
+            "publication": "publication.md",
+            "publication_bytes": len(publication),
+            "publication_sha256": sha256(publication).hexdigest(),
+            "sources": sources,
+        }
+    )
 
 
 def _release(root: Path) -> Path:
@@ -92,7 +152,7 @@ def _release(root: Path) -> Path:
         ),
         "SEEDS.csv": seed_registry,
         "README_REPRODUCIBILITY.md": b"reproduce\n",
-        "METRICS/metrics.csv": b"metric,value\nfpr,0.05\n",
+        **_RECONSTRUCTION_EVIDENCE,
     }
     for relative_path, content in artifacts.items():
         (root / relative_path).write_bytes(content)
@@ -106,7 +166,17 @@ def _release(root: Path) -> Path:
                     "relative_path": relative_path,
                     "sha256": sha256(content).hexdigest(),
                     "bytes": len(content),
-                    "artifact_type": "metadata",
+                    "artifact_type": (
+                        "publication"
+                        if relative_path.endswith("publication.md")
+                        else (
+                            "publication_source_manifest"
+                            if relative_path.endswith("publication_source_manifest.json")
+                            else _RECONSTRUCTION_ARTIFACT_TYPES.get(
+                                Path(relative_path).parts[0], "table_figure_source_data"
+                            )
+                        )
+                    ),
                     "dataset_id": "NA",
                     "population_id": "NA",
                     "training_method": "NA",
@@ -125,7 +195,118 @@ def _release(root: Path) -> Path:
 def test_release_validation_accepts_complete_exact_inventory(tmp_path: Path) -> None:
     release = validate_release_bundle(_release(tmp_path))
 
-    assert len(release.entries) == 4
+    assert len(release.entries) == 15
+
+
+def test_release_validation_rejects_a_symbolic_link_in_the_payload(tmp_path: Path) -> None:
+    root = _release(tmp_path)
+    target = tmp_path / "outside-release.csv"
+    target.write_text("metric,value\nfpr,0.05\n", encoding="utf-8")
+    linked = root / "METRICS" / "metrics.csv"
+    linked.unlink()
+    linked.symlink_to(target)
+
+    with pytest.raises(ArtifactIntegrityError, match="must not contain symbolic links"):
+        validate_release_bundle(root)
+
+
+def test_release_builder_rejects_a_symbolic_link_source(tmp_path: Path) -> None:
+    roadmap = tmp_path / "roadmap.md"
+    source = tmp_path / "source.json"
+    linked_source = tmp_path / "linked-source.json"
+    roadmap.write_text("authoritative roadmap\n", encoding="utf-8")
+    source.write_text('{"metric": 0.05}\n', encoding="utf-8")
+    linked_source.symlink_to(source)
+    artifacts = list(_required_release_artifacts(source))
+    artifacts[0] = ReleaseArtifact(linked_source, artifacts[0].relative_path, artifacts[0].artifact_type)
+
+    with pytest.raises(ArtifactIntegrityError, match="release source artifact is missing"):
+        build_release_bundle(
+            ReleaseBuildRequest(
+                root=tmp_path / "release",
+                roadmap=roadmap,
+                code_revision="deadbeef",
+                literature_search_date=date(2026, 8, 13),
+                state=ReleaseState.PUBLIC,
+                confirmatory_seeds=tuple(range(10)),
+                artifacts=tuple(artifacts),
+            )
+        )
+
+
+def test_release_validation_rejects_an_inventory_without_required_reconstruction_evidence(tmp_path: Path) -> None:
+    root = _release(tmp_path)
+    removed = Path("STATISTICS/analysis.json")
+    (root / removed).unlink()
+    manifest = root / "MANIFEST_SHA256.csv"
+    with manifest.open(encoding="utf-8", newline="") as stream:
+        rows = tuple(row for row in csv.DictReader(stream) if row["relative_path"] != str(removed))
+    with manifest.open("w", encoding="utf-8", newline="") as stream:
+        writer = csv.writer(stream)
+        writer.writerow(_COLUMNS)
+        writer.writerows(tuple(tuple(row[column] for column in _COLUMNS) for row in rows))
+    (root / "MANIFEST_SHA256.sha256").write_text(
+        f"{sha256(manifest.read_bytes()).hexdigest()}  MANIFEST_SHA256.csv\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ArtifactIntegrityError,
+        match="missing required reconstruction evidence directories: STATISTICS",
+    ):
+        validate_release_bundle(root)
+
+
+def test_release_validation_rejects_a_figure_table_payload_without_a_source_manifest(tmp_path: Path) -> None:
+    root = _release(tmp_path)
+    manifest = root / "MANIFEST_SHA256.csv"
+    with manifest.open(encoding="utf-8", newline="") as stream:
+        rows = tuple(csv.DictReader(stream))
+    for row in rows:
+        if row["artifact_type"] == "publication_source_manifest":
+            row["artifact_type"] = "table_figure_source_data"
+    with manifest.open("w", encoding="utf-8", newline="") as stream:
+        writer = csv.writer(stream)
+        writer.writerow(_COLUMNS)
+        writer.writerows(tuple(tuple(row[column] for column in _COLUMNS) for row in rows))
+    (root / "MANIFEST_SHA256.sha256").write_text(
+        f"{sha256(manifest.read_bytes()).hexdigest()}  MANIFEST_SHA256.csv\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ArtifactIntegrityError, match="missing publication output artifacts: publication_source_manifest"
+    ):
+        validate_release_bundle(root)
+
+
+def test_release_validation_rejects_a_publication_manifest_that_reuses_the_rendered_report_as_source(
+    tmp_path: Path,
+) -> None:
+    root = _release(tmp_path)
+    source_manifest = root / "FIGURE_TABLE_DATA" / "publication_source_manifest.json"
+    source_manifest.write_text(
+        _publication_manifest_payload(b"# results\n", [{"filename": "publication.md"}]), encoding="utf-8"
+    )
+    manifest = root / "MANIFEST_SHA256.csv"
+    with manifest.open(encoding="utf-8", newline="") as stream:
+        rows = tuple(csv.DictReader(stream))
+    for row in rows:
+        if row["relative_path"] == "FIGURE_TABLE_DATA/publication_source_manifest.json":
+            payload = source_manifest.read_bytes()
+            row["sha256"] = sha256(payload).hexdigest()
+            row["bytes"] = str(len(payload))
+    with manifest.open("w", encoding="utf-8", newline="") as stream:
+        writer = csv.writer(stream)
+        writer.writerow(_COLUMNS)
+        writer.writerows(tuple(tuple(row[column] for column in _COLUMNS) for row in rows))
+    (root / "MANIFEST_SHA256.sha256").write_text(
+        f"{sha256(manifest.read_bytes()).hexdigest()}  MANIFEST_SHA256.csv\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ArtifactIntegrityError, match="not retained as table/figure source data"):
+        validate_release_bundle(root)
 
 
 def test_release_validation_rejects_unlisted_and_mutated_artifacts(tmp_path: Path) -> None:
@@ -245,7 +426,11 @@ def test_release_builder_accepts_a_manifested_audit_record(tmp_path: Path) -> No
             state=ReleaseState.PUBLIC,
             confirmatory_seeds=tuple(range(10)),
             artifacts=(
-                ReleaseArtifact(metric_source, Path("METRICS/metrics.csv"), "metric_table"),
+                *(
+                    artifact
+                    for artifact in _required_release_artifacts(metric_source)
+                    if artifact.relative_path.parts[0] != "AUDIT_REPORTS"
+                ),
                 ReleaseArtifact(audit_source, Path("AUDIT_REPORTS") / AUDIT_REPORT_FILENAME, "audit_report"),
             ),
         )
@@ -268,22 +453,12 @@ def test_release_builder_packages_explicit_retained_evidence_and_validates_it(tm
             literature_search_date=date(2026, 8, 13),
             state=ReleaseState.BLINDED_ARCHIVE,
             confirmatory_seeds=tuple(range(10)),
-            artifacts=(
-                ReleaseArtifact(
-                    source=source,
-                    relative_path=Path("METRICS/confirmatory.json"),
-                    artifact_type="metric_table",
-                    dataset_id="nbaiot",
-                    population_id="nbaiot_natural_devices",
-                    training_method="fedavg_autoencoder",
-                    experiment_id="shared_vs_local_confirmation",
-                ),
-            ),
+            artifacts=_required_release_artifacts(source),
         )
     )
 
-    assert len(release.entries) == 5
-    assert (release.root / "METRICS" / "confirmatory.json").read_bytes() == source.read_bytes()
+    assert len(release.entries) == 16
+    assert (release.root / "METRICS" / "metrics.csv").read_bytes() == source.read_bytes()
     readme = (release.root / "README_REPRODUCIBILITY.md").read_text(encoding="utf-8")
     assert "python -m tools.reproducibility.release" in readme
     assert "datp-core validate-release" not in readme
@@ -338,7 +513,7 @@ def test_license_restricted_release_requires_and_records_withheld_artifacts(tmp_
         literature_search_date=date(2026, 8, 13),
         state=ReleaseState.WITHHELD_LICENSE_RESTRICTED,
         confirmatory_seeds=tuple(range(10)),
-        artifacts=(),
+        artifacts=_required_release_artifacts(withheld_source),
         withheld_artifacts=(
             WithheldReleaseArtifact(
                 source=withheld_source,
@@ -535,7 +710,7 @@ def test_bounded_training_release_discovery_uses_persisted_execution_coordinate(
         path.write_text(name, encoding="utf-8")
     execution_coordinate = SimpleNamespace(
         experiment=ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION,
-        population=PopulationId.EDGE_SENSOR_GROUPS,
+        population=PopulationId.EDGE_SENSOR_CLIENTS,
         evidence_role=EvidenceRole.EXTERNAL_VALIDATION,
         temporal_state=None,
         training_seed=Seed(4),
@@ -636,6 +811,9 @@ def test_campaign_publication_release_discovery_requires_the_rendered_publicatio
     publication.write_text("# results\n", encoding="utf-8")
     source_data = manifest.parent / "publication_source_data.csv"
     source_data.write_text("metric,value\nfpr,0.05\n", encoding="utf-8")
+    manifest.write_text(
+        _publication_manifest_payload(publication.read_bytes(), [{"filename": source_data.name}]), encoding="utf-8"
+    )
     artifacts = campaign_publication_release_artifacts(tmp_path)
     assert tuple(item.relative_path for item in artifacts) == (
         Path("FIGURE_TABLE_DATA/analysis/publication_source_manifest.json"),
@@ -647,8 +825,69 @@ def test_campaign_publication_release_discovery_requires_the_rendered_publicatio
 def test_campaign_publication_release_discovery_rejects_missing_declared_source(tmp_path: Path) -> None:
     manifest = tmp_path / "analysis" / "publication_source_manifest.json"
     manifest.parent.mkdir()
-    manifest.write_text('{"sources": [{"filename": "missing.csv"}]}', encoding="utf-8")
-    (manifest.parent / "publication.md").write_text("# results\n", encoding="utf-8")
+    publication = manifest.parent / "publication.md"
+    publication.write_text("# results\n", encoding="utf-8")
+    manifest.write_text(
+        _publication_manifest_payload(publication.read_bytes(), [{"filename": "missing.csv"}]), encoding="utf-8"
+    )
 
     with pytest.raises(ArtifactIntegrityError, match="source is missing or invalid"):
+        campaign_publication_release_artifacts(tmp_path)
+
+
+def test_campaign_publication_release_discovery_rejects_mutated_hashed_source(tmp_path: Path) -> None:
+    source = tmp_path / "analysis" / "publication_source_data.csv"
+    source.parent.mkdir()
+    source.write_text("metric,value\nfpr,0.05\n", encoding="utf-8")
+    payload = source.read_bytes()
+    manifest = source.parent / "publication_source_manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "publication": "publication.md",
+                "publication_bytes": len(b"# results\n"),
+                "publication_sha256": sha256(b"# results\n").hexdigest(),
+                "sources": [
+                    {
+                        "filename": source.name,
+                        "row_count": 1,
+                        "bytes": len(payload),
+                        "sha256": sha256(payload).hexdigest(),
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (source.parent / "publication.md").write_text("# results\n", encoding="utf-8")
+    source.write_text("metric,value\nfpr,0.10\n", encoding="utf-8")
+
+    with pytest.raises(ArtifactIntegrityError, match="publication source (byte count|digest) does not match"):
+        campaign_publication_release_artifacts(tmp_path)
+
+
+def test_campaign_publication_release_discovery_rejects_mutated_rendered_claim_text(tmp_path: Path) -> None:
+    source = tmp_path / "analysis" / "publication_source_data.csv"
+    source.parent.mkdir()
+    source.write_text("metric,value\nfpr,0.05\n", encoding="utf-8")
+    publication = source.parent / "publication.md"
+    publication.write_text("# bounded result\n", encoding="utf-8")
+    manifest = source.parent / "publication_source_manifest.json"
+    manifest.write_text(
+        _publication_manifest_payload(
+            publication.read_bytes(),
+            [
+                {
+                    "filename": source.name,
+                    "row_count": 1,
+                    "bytes": source.stat().st_size,
+                    "sha256": sha256(source.read_bytes()).hexdigest(),
+                }
+            ],
+        ),
+        encoding="utf-8",
+    )
+    publication.write_text("# overstated claim\n", encoding="utf-8")
+
+    with pytest.raises(ArtifactIntegrityError, match="publication (byte count|digest) does not match"):
         campaign_publication_release_artifacts(tmp_path)

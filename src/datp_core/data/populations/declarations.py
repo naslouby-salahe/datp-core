@@ -77,14 +77,14 @@ CICIOT_FILE_CLIENTS = PopulationDeclaration(
     identity_kind=PopulationIdentityKind.FILE_DEFINED_PSEUDO_CLIENTS,
     client_count=CICIOT_FILE_CLIENT_COUNT,
 )
-EDGE_SENSOR_GROUPS = PopulationDeclaration(
-    id=PopulationId.EDGE_SENSOR_GROUPS,
+EDGE_SENSOR_CLIENTS = PopulationDeclaration(
+    id=PopulationId.EDGE_SENSOR_CLIENTS,
     dataset=DatasetId.EDGE_IIOTSET,
     identity_kind=PopulationIdentityKind.SOURCE_DEFINED_SENSOR_GROUPS,
     client_count=EDGE_STATIC_SENSOR_GROUP_COUNT,
 )
-EDGE_TEMPORAL_GROUPS = PopulationDeclaration(
-    id=PopulationId.EDGE_TEMPORAL_GROUPS,
+EDGE_TEMPORAL_CLIENTS = PopulationDeclaration(
+    id=PopulationId.EDGE_TEMPORAL_CLIENTS,
     dataset=DatasetId.EDGE_IIOTSET,
     identity_kind=PopulationIdentityKind.VERIFIED_TEMPORAL_GROUPS,
     client_count=EDGE_TEMPORAL_SENSOR_GROUP_COUNT,
@@ -94,17 +94,17 @@ POPULATIONS = (
     NBAIOT_NATURAL_DEVICES,
     NBAIOT_DIRICHLET_CLIENTS,
     CICIOT_FILE_CLIENTS,
-    EDGE_SENSOR_GROUPS,
-    EDGE_TEMPORAL_GROUPS,
+    EDGE_SENSOR_CLIENTS,
+    EDGE_TEMPORAL_CLIENTS,
 )
 
 
 def split_protocol_for_population(population: PopulationId) -> SplitProtocolId:
 
     match population:
-        case PopulationId.EDGE_TEMPORAL_GROUPS:
+        case PopulationId.EDGE_TEMPORAL_CLIENTS:
             return SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
-        case PopulationId.EDGE_SENSOR_GROUPS:
+        case PopulationId.EDGE_SENSOR_CLIENTS:
             return SplitProtocolId.RANDOM_FRACTIONAL_STATIC_REFERENCE
         case PopulationId.NBAIOT_NATURAL_DEVICES:
             return SplitProtocolId.HISTORICAL_TEMPORAL_GAP

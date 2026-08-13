@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 import polars as pl
 
@@ -103,6 +104,17 @@ def single_client_source_path(
     return CanonicalSourcePath(str(sources[0]))
 
 
+def _client_group_key(key: object) -> str:
+    """Normalize Polars single-column group keys to a client identifier."""
+
+    if not isinstance(key, tuple):
+        return str(key)
+    group_key = cast(tuple[object, ...], key)
+    if len(group_key) != 1:
+        raise ValueError("CICIoT client grouping must have exactly one key")
+    return str(group_key[0])
+
+
 def preprocess_ciciot_client_local(
     *,
     context: PreprocessingPublishContext,
@@ -114,7 +126,13 @@ def preprocess_ciciot_client_local(
     source_files = ciciot_source_files(canonical_root)
 
     client_id_vals = sorted(str(value) for value in assignments.get_column(CLIENT_ID_COLUMN).unique().to_list())
-    grouped_assignments = {str(k): v for k, v in assignments.partition_by(CLIENT_ID_COLUMN, as_dict=True).items()}
+    # Polars uses a one-element tuple as the dictionary key even when grouping
+    # on a single column.  Normalize it to the client identity used by the
+    # assignment table; otherwise real CICIoT executions fail to find every
+    # file-defined client (for example, ``Merged01``).
+    grouped_assignments = {
+        _client_group_key(key): value for key, value in assignments.partition_by(CLIENT_ID_COLUMN, as_dict=True).items()
+    }
 
     publications: list[ClientPreprocessingResult] = []
     published_count = 0

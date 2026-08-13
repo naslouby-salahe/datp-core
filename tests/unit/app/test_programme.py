@@ -1,15 +1,24 @@
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 
-from datp_core.analysis.mechanisms.model_alignment import ModelAlignmentMetric
+from datp_core.analysis.mechanisms.absorption import AbsorptionSeedObservation
+from datp_core.analysis.mechanisms.model_alignment import ModelAlignmentMetric, ModelAlignmentResult
 from datp_core.app.campaign import build_programme_plan
 from datp_core.app.contracts import AnchorRequirement, OverwriteMode
 from datp_core.app.models import DetailText, ReportResult
 from datp_core.app.planning import PlanDisposition, seed_cohort_for
 from datp_core.app.recipes import _common_alignment_tuple_rows, evaluation_document_experiment_ids
-from datp_core.app.research import generate_report, registered_experiment_ids, run_campaign, run_smoke
+from datp_core.app.research import (
+    _campaign_publication_marker_present,
+    _require_report_publication,
+    generate_report,
+    registered_experiment_ids,
+    run_campaign,
+    run_smoke,
+)
 from datp_core.app.validation import require_experiment_execution_ready, validate_programme
 from datp_core.artifacts.serializers.json import canonical_json_text
 from datp_core.core.errors import ErrorMessage, ReportEvidenceError
@@ -83,7 +92,10 @@ def test_common_alignment_tuple_reports_raw_scope_absorption_and_unavailable_ref
     unavailable = SimpleNamespace(reference_effect=MetricValue(1e-12), personalized_effect=MetricValue(0.1))
 
     rows = _common_alignment_tuple_rows(
-        ((Seed(1), alignment, available), (Seed(2), alignment, unavailable))
+        (
+            (Seed(1), cast(ModelAlignmentResult, alignment), cast(AbsorptionSeedObservation, available)),
+            (Seed(2), cast(ModelAlignmentResult, alignment), cast(AbsorptionSeedObservation, unavailable)),
+        )
     )
 
     assert "| 1 | 0.1 | 0.2 | 0.3 | 0.4 | 0.5 | 0.1 | 0.75 |" in rows
@@ -206,6 +218,27 @@ def test_report_propagates_missing_evidence_instead_of_computing_it(monkeypatch:
         generate_report(experiment)
 
 
+def test_campaign_publication_requires_materialized_report_artifacts(tmp_path: Path) -> None:
+    report = ReportResult(experiment=None, paths=(), detail=DetailText("empty"))
+    with pytest.raises(ReportEvidenceError, match="produced no publication artifacts"):
+        _require_report_publication(report)
+
+    missing = ReportResult(experiment=None, paths=(tmp_path / "missing",), detail=DetailText("missing"))
+    with pytest.raises(ReportEvidenceError, match="references missing publication artifacts"):
+        _require_report_publication(missing)
+
+    present = tmp_path / "publication.md"
+    present.write_text("evidence\n", encoding="utf-8")
+    _require_report_publication(ReportResult(experiment=None, paths=(present,), detail=DetailText("present")))
+
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    with pytest.raises(ReportEvidenceError, match="references empty publication artifacts"):
+        _require_report_publication(
+            ReportResult(experiment=None, paths=(empty,), detail=DetailText("empty"))
+        )
+
+
 def test_campaign_execution_and_publication_do_not_depend_on_anchor(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -215,7 +248,9 @@ def test_campaign_execution_and_publication_do_not_depend_on_anchor(
     observed_anchor_requirements: list[bool] = []
     observed_completeness_plans: list[object] = []
     result = SimpleNamespace(experiment=experiment)
-    report = ReportResult(experiment=None, paths=(), detail=DetailText("published"))
+    report_path = tmp_path / "campaign.md"
+    report_path.write_text("published\n", encoding="utf-8")
+    report = ReportResult(experiment=None, paths=(report_path,), detail=DetailText("published"))
 
     monkeypatch.setattr("datp_core.app.research.EXPERIMENT_RECIPES", (recipe,))
     monkeypatch.setattr("datp_core.app.research.validate_programme", lambda _: None)
@@ -247,6 +282,16 @@ def test_campaign_execution_and_publication_do_not_depend_on_anchor(
     assert campaign.anchor_failure is None
     assert observed_anchor_requirements == [False]
     assert len(observed_completeness_plans) == 1
+
+
+def test_campaign_publication_marker_requires_nonempty_content(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    marker = tmp_path / "campaign_publication.txt"
+    monkeypatch.setattr("datp_core.app.research.CAMPAIGN_PUBLICATION_MARKER", marker)
+    assert _campaign_publication_marker_present() is False
+    marker.write_text("", encoding="utf-8")
+    assert _campaign_publication_marker_present() is False
+    marker.write_text("campaign evidence\n", encoding="utf-8")
+    assert _campaign_publication_marker_present() is True
 
 
 def test_status_recognizes_dataset_manifest(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

@@ -4,6 +4,7 @@ from typing import cast
 import pytest
 
 from datp_core.analysis.contrasts import PairedContrasts
+from datp_core.analysis.descriptive import count_paired_differences
 from datp_core.analysis.inference.sign_test import ExactPairedSignTestResult, exact_paired_sign_test
 from datp_core.analysis.inference.wilcoxon import PValue
 from datp_core.core.numeric import MetricValue, PairedObservationCount
@@ -22,6 +23,9 @@ def test_exact_paired_sign_test_excludes_zeros_from_the_binomial_null() -> None:
     assert result.nonzero_pair_count.value == 3
     assert result.two_sided_p_value is not None
     assert result.two_sided_p_value.value == pytest.approx(1.0)
+    proportion = count_paired_differences(contrasts.deltas).positive_proportion
+    assert proportion is not None
+    assert proportion.value == pytest.approx(0.5)
 
 
 def test_exact_paired_sign_test_rejects_an_impossible_availability_state() -> None:
@@ -53,3 +57,15 @@ def test_exact_paired_sign_test_retains_the_locked_ten_positive_pair_p_value() -
     assert result.positive_pair_count == PairedObservationCount(10)
     assert result.negative_pair_count == PairedObservationCount(0)
     assert result.two_sided_p_value == PValue(0.001953125)
+
+
+def test_exact_paired_sign_test_is_unavailable_when_every_delta_is_zero() -> None:
+    contrasts = cast(
+        PairedContrasts,
+        SimpleNamespace(deltas=(MetricValue(0.0), MetricValue(0.0))),
+    )
+
+    result = exact_paired_sign_test(contrasts)
+
+    assert result.nonzero_pair_count == PairedObservationCount(0)
+    assert result.two_sided_p_value is None

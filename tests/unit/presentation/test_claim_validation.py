@@ -144,6 +144,34 @@ def test_claims_cannot_use_prohibited_central_framing(wording: str) -> None:
     assert "locked threshold-scope" in decision.reason
 
 
+@pytest.mark.parametrize(
+    ("wording", "reason"),
+    [
+        ("LOCAL_THRESHOLD improves AUROC", "cannot change AUROC"),
+        ("Overall detection performance improves", "overall detection improvement"),
+        ("DATP is privacy preserving", "formal privacy guarantee"),
+        ("DATP is lightweight and edge ready", "deployment measurements"),
+        ("DATP is deployable on constrained devices", "deployment measurements"),
+        ("This is a novel local anomaly threshold", "established thresholding primitives"),
+        ("This is a novel federated conformal method", "established thresholding primitives"),
+    ],
+)
+def test_claims_cannot_bypass_explicit_score_tradeoff_scope_and_novelty_boundaries(
+    wording: str, reason: str
+) -> None:
+    decision = validate_claim(
+        claim_request(
+            kind=ClaimKind.SUPPORTIVE,
+            evidence_role=EvidenceRole.SUPPORTIVE,
+            metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
+            wording=wording,
+        )
+    )
+
+    assert decision.status is ClaimStatus.SUPPRESSED
+    assert reason in decision.reason
+
+
 def test_blocked_anchor_blocks_confirmatory_claim() -> None:
     decision = validate_claim(
         claim_request(

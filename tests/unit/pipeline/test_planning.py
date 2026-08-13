@@ -73,7 +73,7 @@ def test_temporal_plan_uses_state_specific_split_protocols() -> None:
     declaration = ExperimentDeclaration(
         id=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
         role=EvidenceRole.TEMPORAL_BOUNDARY,
-        population=PopulationId.EDGE_TEMPORAL_GROUPS,
+        population=PopulationId.EDGE_TEMPORAL_CLIENTS,
         training_model=TrainingModelId.FEDAVG_AUTOENCODER,
         preprocessing_protocol=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
         federated_thresholds=(FederatedThresholdMethod.SHARED_THRESHOLD,),

@@ -15,7 +15,7 @@ from datp_core.analysis.descriptive import (
     count_paired_differences,
     summarize_values,
 )
-from datp_core.analysis.inference.bootstrap.contracts import BcaReason, BootstrapInterval
+from datp_core.analysis.inference.bootstrap.contracts import BcaOutcome, BcaReason, BootstrapInterval
 from datp_core.analysis.inference.bootstrap.estimation import (
     paired_bca_interval,
     supplementary_paired_bca_interval,
@@ -215,7 +215,7 @@ def prepare_confirmatory_analysis(request: ConfirmatoryAnalysisRequest) -> Analy
         protocol=protocol,
         analysis_seed=request.analysis_seed,
     )
-    if interval.outcome.value != "available":
+    if interval.outcome is BcaOutcome.BLOCKED:
         reason_text = (
             AnalysisReasonText(interval.reason.value)
             if interval.reason is not None
@@ -269,12 +269,20 @@ def prepare_confirmatory_analysis(request: ConfirmatoryAnalysisRequest) -> Analy
         exact_sign_test=sign_test,
         wilcoxon=wilcoxon,
         rank_biserial=matched_pairs_rank_biserial(contrasts, protocol),
-        precision_diagnostics=confirmatory_precision_diagnostics(contrasts, interval),
+        precision_diagnostics=(
+            confirmatory_precision_diagnostics(contrasts, interval)
+            if interval.outcome is BcaOutcome.AVAILABLE
+            else None
+        ),
         leave_one_device_out=request.leave_one_device_out,
         multiplicity_plan=multiplicity_plan,
         multiplicity_result=multiplicity,
         mechanisms=request.mechanisms,
-        unavailable_reason=None,
+        unavailable_reason=(
+            AnalysisReasonText(interval.reason.value)
+            if interval.outcome is BcaOutcome.DEGENERATE and interval.reason is not None
+            else None
+        ),
     )
 
 
@@ -304,7 +312,7 @@ def prepare_external_analysis(request: ExternalAnalysisRequest) -> ExternalAnaly
         analysis_seed=request.analysis_seed,
     )
     deltas = contrasts.deltas
-    if interval.outcome.value != "available":
+    if interval.outcome is BcaOutcome.BLOCKED:
         reason_text = (
             AnalysisReasonText(interval.reason.value)
             if interval.reason is not None
@@ -326,6 +334,11 @@ def prepare_external_analysis(request: ExternalAnalysisRequest) -> ExternalAnaly
             mechanisms=request.mechanisms,
             unavailable_reason=reason_text,
         )
+    unavailable_reason = (
+        AnalysisReasonText(interval.reason.value)
+        if interval.outcome is BcaOutcome.DEGENERATE and interval.reason is not None
+        else None
+    )
     return ExternalAnalysisDocument(
         plan=request.plan,
         contrasts=contrasts,
@@ -340,7 +353,7 @@ def prepare_external_analysis(request: ExternalAnalysisRequest) -> ExternalAnaly
         wilcoxon=paired_wilcoxon(contrasts, protocol),
         rank_biserial=matched_pairs_rank_biserial(contrasts, protocol),
         mechanisms=request.mechanisms,
-        unavailable_reason=None,
+        unavailable_reason=unavailable_reason,
     )
 
 
@@ -556,7 +569,7 @@ def _validate_temporal_identities(request: TemporalAnalysisRequest) -> None:
         (request.recalibrated_identity, TemporalState.RECALIBRATED_FUTURE),
     )
     for identity, expected_state in bindings:
-        bound = require_execution_identity(identity, PopulationId.EDGE_TEMPORAL_GROUPS)
+        bound = require_execution_identity(identity, PopulationId.EDGE_TEMPORAL_CLIENTS)
         if bound is None or bound.temporal_state is not expected_state:
             raise ScientificContractError(ErrorMessage("temporal analysis identity must match its deployment state"))
         if bound.experiment is not request.experiment:
