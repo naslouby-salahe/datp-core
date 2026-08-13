@@ -26,6 +26,7 @@ from datp_core.core.identifiers import (
     AnalysisMarkerText,
     ExperimentId,
     FederatedThresholdMethod,
+    FileContentText,
     MetricId,
     PopulationId,
     PreprocessingProtocolId,
@@ -70,6 +71,7 @@ from datp_core.experiments.threshold_robustness.cohorts import (
     extract_feasible_clients_by_size,
 )
 from datp_core.runtime.configuration import OUTPUTS_ROOT
+from datp_core.runtime.filesystem import write_text_atomically
 from datp_core.thresholds.contracts import ThresholdInfeasibilityReason
 from datp_core.thresholds.protocols import (
     CALIBRATION_SIZES,
@@ -88,6 +90,7 @@ class ThresholdRobustnessArtifactName(StrEnum):
     ROOT = "threshold_robustness"
     ANALYSIS = "analysis"
     SUMMARY = "summary.json"
+    SHARED_CONSTRUCTION_PANEL = "shared_construction_robustness.md"
     COMPLETE = "complete.marker"
 
 
@@ -375,6 +378,13 @@ def _summary_path(experiment_id: ExperimentId, population: PopulationId) -> Path
     return _analysis_directory(experiment_id, population) / ThresholdRobustnessArtifactName.SUMMARY
 
 
+def _shared_construction_panel_path(population: PopulationId) -> Path:
+    return (
+        _analysis_directory(ExperimentId.SHARED_CONSTRUCTION_SENSITIVITY, population)
+        / ThresholdRobustnessArtifactName.SHARED_CONSTRUCTION_PANEL
+    )
+
+
 def _evaluation_document_path(output_root: Path, coordinate: ExperimentCoordinate) -> Path:
     return (
         evaluation_run_directory(output_root, coordinate)
@@ -495,9 +505,14 @@ def report_shared_construction_sensitivity(
                 missing += 1
         if documents:
             rows.append(_method_summary(method, tuple(documents)))
+    report = MethodCvSummaryReport(experiment=experiment_id, rows=tuple(rows))
     serialize_json_model(
-        MethodCvSummaryReport(experiment=experiment_id, rows=tuple(rows)),
+        report,
         _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
+    )
+    write_text_atomically(
+        _shared_construction_panel_path(PopulationId.NBAIOT_NATURAL_DEVICES),
+        FileContentText(_render_shared_construction_panel(report)),
     )
     return finalize_analysis_report(
         AnalysisReportFinalizationInput(
@@ -507,6 +522,42 @@ def report_shared_construction_sensitivity(
             marker_text=AnalysisMarkerText(ThresholdRobustnessAnalysisMarker.SHARED_CONSTRUCTION_SENSITIVITY),
         )
     )
+
+
+def _render_shared_construction_panel(report: MethodCvSummaryReport) -> str:
+    local = next(
+        (item for item in report.rows if item.method is FederatedThresholdMethod.LOCAL_THRESHOLD),
+        None,
+    )
+    rows = [
+        "# Shared-threshold robustness panel",
+        "",
+        "All shared constructions are compared against the same LOCAL_THRESHOLD baseline. "
+        "Values are arithmetic means over available seed-level CV(FPR) outcomes; unavailable evidence is retained.",
+        "",
+        "| Threshold construction | Seeds | Mean CV(FPR) | LOCAL minus construction CV(FPR) | "
+        "Mean worst-client FPR | CV(FPR) across seeds |",
+        "| --- | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for item in report.rows:
+        difference = (
+            None
+            if local is None or local.mean_cv_fpr is None or item.mean_cv_fpr is None
+            else local.mean_cv_fpr.value - item.mean_cv_fpr.value
+        )
+        rows.append(
+            f"| `{item.method.value}` | {item.seed_count.value} | {_panel_value(item.mean_cv_fpr)} | "
+            f"{_panel_value(difference)} | {_panel_value(item.mean_worst_client_fpr)} | "
+            f"{_panel_value(item.cv_fpr_across_seeds)} |"
+        )
+    return "\n".join(rows) + "\n"
+
+
+def _panel_value(value: MetricValue | float | None) -> str:
+    if value is None:
+        return "UNAVAILABLE"
+    numeric = value.value if isinstance(value, MetricValue) else value
+    return f"{numeric:.12g}"
 
 
 def shared_construction_sensitivity_analysis_marker_present(experiment_id: ExperimentId) -> bool:
