@@ -19,6 +19,7 @@ class ScientificDecision(StrEnum):
     INFEASIBLE = "infeasible"
     BLOCKED = "blocked"
     NOT_ESTABLISHED = "not_established"
+    CONFIRMATORY_INFERENCE_UNAVAILABLE = "confirmatory_inference_unavailable"
 
 
 class ScientificDecisionResult(StrictModel):
@@ -41,7 +42,13 @@ class ScientificDecisionResult(StrictModel):
         )
 
 
-_UNAVAILABLE_DECISIONS = frozenset({ScientificDecision.BLOCKED, ScientificDecision.NOT_ESTABLISHED})
+_UNAVAILABLE_DECISIONS = frozenset(
+    {
+        ScientificDecision.BLOCKED,
+        ScientificDecision.NOT_ESTABLISHED,
+        ScientificDecision.CONFIRMATORY_INFERENCE_UNAVAILABLE,
+    }
+)
 
 
 def decide_confirmatory(interval: BootstrapInterval) -> ScientificDecisionResult:
@@ -54,7 +61,7 @@ def decide_confirmatory(interval: BootstrapInterval) -> ScientificDecisionResult
     ):
         return ScientificDecisionResult(
             evidence_role=EvidenceRole.CONFIRMATORY,
-            decision=ScientificDecision.NOT_ESTABLISHED,
+            decision=ScientificDecision.CONFIRMATORY_INFERENCE_UNAVAILABLE,
             point_estimate=interval.point_estimate,
             interval=interval,
             rationale=DecisionRationale("confirmatory BCa interval is unavailable or degenerate"),

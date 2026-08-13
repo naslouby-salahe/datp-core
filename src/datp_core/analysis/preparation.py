@@ -78,7 +78,6 @@ class ConfirmatoryAnalysisRequest:
     mechanisms: tuple[MechanismEvidence, ...] = ()
     leave_one_device_out: LeaveOneDeviceOutDiagnostics | None = None
     unavailable_reason: AnalysisReasonText | None = None
-    excluded_seeds: tuple[Seed, ...] = ()
 
 
 class AnalysisDocument(StrictModel):
@@ -97,7 +96,6 @@ class AnalysisDocument(StrictModel):
     multiplicity_plan: MultiplicityPlan | None
     multiplicity_result: MultiplicityResult | None
     mechanisms: tuple[MechanismEvidence, ...]
-    excluded_seeds: tuple[Seed, ...]
     unavailable_reason: AnalysisReasonText | None
 
     @model_validator(mode="after")
@@ -115,7 +113,6 @@ class ExternalAnalysisRequest:
     analysis_seed: Seed
     mechanisms: tuple[MechanismEvidence, ...] = ()
     unavailable_reason: AnalysisReasonText | None = None
-    excluded_seeds: tuple[Seed, ...] = ()
 
 
 class ExternalAnalysisDocument(StrictModel):
@@ -127,7 +124,6 @@ class ExternalAnalysisDocument(StrictModel):
     wilcoxon: WilcoxonResult
     rank_biserial: RankBiserialResult
     mechanisms: tuple[MechanismEvidence, ...]
-    excluded_seeds: tuple[Seed, ...]
     unavailable_reason: AnalysisReasonText | None
 
 
@@ -236,7 +232,6 @@ def prepare_confirmatory_analysis(request: ConfirmatoryAnalysisRequest) -> Analy
             multiplicity_plan=None,
             multiplicity_result=None,
             mechanisms=request.mechanisms,
-            excluded_seeds=request.excluded_seeds,
             unavailable_reason=reason_text,
         )
     deltas = contrasts.deltas
@@ -262,7 +257,6 @@ def prepare_confirmatory_analysis(request: ConfirmatoryAnalysisRequest) -> Analy
         multiplicity_plan=request.multiplicity_plan,
         multiplicity_result=multiplicity,
         mechanisms=request.mechanisms,
-        excluded_seeds=request.excluded_seeds,
         unavailable_reason=None,
     )
 
@@ -313,7 +307,6 @@ def prepare_external_analysis(request: ExternalAnalysisRequest) -> ExternalAnaly
             wilcoxon=blocked_wilcoxon(AnalysisReasonText(f"dependent Wilcoxon blocked: {reason_text}")),
             rank_biserial=blocked_rank_biserial(AnalysisReasonText(f"dependent rank-biserial blocked: {reason_text}")),
             mechanisms=request.mechanisms,
-            excluded_seeds=request.excluded_seeds,
             unavailable_reason=reason_text,
         )
     return ExternalAnalysisDocument(
@@ -330,7 +323,6 @@ def prepare_external_analysis(request: ExternalAnalysisRequest) -> ExternalAnaly
         wilcoxon=paired_wilcoxon(contrasts, protocol),
         rank_biserial=matched_pairs_rank_biserial(contrasts, protocol),
         mechanisms=request.mechanisms,
-        excluded_seeds=request.excluded_seeds,
         unavailable_reason=None,
     )
 
@@ -384,7 +376,6 @@ def prepare_temporal_analysis(request: TemporalAnalysisRequest) -> TemporalAnaly
         records=records,
         campaign_decision=decide_temporal_campaign(ordered),
         paired_seed_identities=tuple(item.seed for item in ordered),
-        excluded_seeds=(),
         unavailable_reason=None,
         drift_excess_interval=intervals.drift_excess,
         recovered_amount_interval=intervals.recovered_amount,
@@ -412,7 +403,7 @@ def _blocked_confirmatory_document(
         interval=interval,
         decision=ScientificDecisionResult(
             evidence_role=EvidenceRole.CONFIRMATORY,
-            decision=ScientificDecision.NOT_ESTABLISHED,
+            decision=ScientificDecision.CONFIRMATORY_INFERENCE_UNAVAILABLE,
             point_estimate=None,
             interval=interval,
             rationale=DecisionRationale(f"confirmatory analysis blocked: {unavailable_reason}"),
@@ -434,7 +425,6 @@ def _blocked_confirmatory_document(
         multiplicity_plan=None,
         multiplicity_result=None,
         mechanisms=request.mechanisms,
-        excluded_seeds=request.excluded_seeds,
         unavailable_reason=unavailable_reason,
     )
 
@@ -468,7 +458,6 @@ def _blocked_external_document(
             AnalysisReasonText(f"dependent rank-biserial blocked: {unavailable_reason}")
         ),
         mechanisms=request.mechanisms,
-        excluded_seeds=request.excluded_seeds,
         unavailable_reason=unavailable_reason,
     )
 

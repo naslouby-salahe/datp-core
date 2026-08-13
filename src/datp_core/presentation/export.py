@@ -735,11 +735,6 @@ def _render_analysis_sections(
                 ReportLine(""),
             ]
         )
-    if document.excluded_seeds:
-        seeds = ", ".join(str(seed.value) for seed in document.excluded_seeds)
-        sections.extend(
-            [ReportLine("## Exclusions"), ReportLine(""), ReportLine(f"Excluded seeds: {seeds}"), ReportLine("")]
-        )
     return ReportLine("\n".join(sections).rstrip() + "\n")
 
 
@@ -2084,7 +2079,10 @@ def _paired_values_table(document: AnalysisDocument) -> PublicationTable:
             ),
         )
     interval_available = document.interval.availability is AvailabilityStatus.AVAILABLE
-    decision_not_established = document.decision.decision is ScientificDecision.NOT_ESTABLISHED
+    decision_not_established = document.decision.decision in {
+        ScientificDecision.NOT_ESTABLISHED,
+        ScientificDecision.CONFIRMATORY_INFERENCE_UNAVAILABLE,
+    }
     availability = (
         AvailabilityStatus.AVAILABLE
         if interval_available and not decision_not_established
@@ -2207,6 +2205,7 @@ _SCIENTIFIC_DECISION_EVIDENCE_DECISIONS: dict[ScientificDecision, EvidenceDecisi
     ScientificDecision.NO_OBSERVED_ADVANTAGE: EvidenceDecision.NULL,
     ScientificDecision.BOUNDARY_RESULT: EvidenceDecision.BOUNDARY,
     ScientificDecision.NOT_ESTABLISHED: EvidenceDecision.NOT_ESTABLISHED,
+    ScientificDecision.CONFIRMATORY_INFERENCE_UNAVAILABLE: EvidenceDecision.NOT_ESTABLISHED,
 }
 
 
