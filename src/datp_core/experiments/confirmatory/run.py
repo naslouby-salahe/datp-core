@@ -103,7 +103,10 @@ from datp_core.presentation.figures import (
 )
 from datp_core.presentation.population_capabilities import export_population_capability_table
 from datp_core.presentation.prior_art import export_prior_art_collision_table, export_prior_art_distinction_table
-from datp_core.presentation.target_attainment import export_target_attainment_table
+from datp_core.presentation.target_attainment import (
+    export_confirmatory_operating_point_table,
+    export_target_attainment_table,
+)
 from datp_core.runtime.configuration import OUTPUTS_ROOT
 from datp_core.thresholds.policies.cluster import GroupedThresholdResult
 
@@ -254,6 +257,11 @@ def analyze_confirmatory_campaign() -> Path:
     export_prior_art_distinction_table(output / "prior_art_distinction_table.md")
     pareto_views = _confirmatory_pareto_views()
     export_target_attainment_table(pareto_views[0], output / "calibration_target_attainment.md")
+    export_confirmatory_operating_point_table(
+        _confirmatory_operating_point_documents(),
+        CONFIRMATORY_SEED_COHORT.values,
+        output / "confirmatory_operating_point_record.md",
+    )
     _export_client_impact_synthesis_tables(all_mechanisms, output)
     if all_mechanisms:
         export_mechanism_publication(
@@ -442,6 +450,17 @@ def _confirmatory_pareto_views() -> tuple[EquityUtilityParetoView, ...]:
             utility_metric=MetricId.WORST_CLIENT_BALANCED_ACCURACY,
             fixed_shrinkage_documents=fixed_shrinkage_documents,
         ),
+    )
+
+
+def _confirmatory_operating_point_documents() -> tuple[FederatedEvaluationDocument, ...]:
+    return tuple(
+        load_evaluation_document(_evaluation_path(seed, method))
+        for seed in CONFIRMATORY_SEED_COHORT.values
+        for method in (
+            FederatedThresholdMethod.SHARED_THRESHOLD,
+            FederatedThresholdMethod.LOCAL_THRESHOLD,
+        )
     )
 
 
