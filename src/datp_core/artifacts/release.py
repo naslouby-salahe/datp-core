@@ -13,7 +13,9 @@ from re import fullmatch
 from shutil import copy2
 from sys import version
 
+from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.core.errors import ArtifactIntegrityError, ErrorMessage
+from datp_core.data.registry import population_declaration
 
 _MANIFEST_FILENAME = "MANIFEST_SHA256.csv"
 _SIDECAR_FILENAME = "MANIFEST_SHA256.sha256"
@@ -100,6 +102,27 @@ class ReleaseBuildRequest:
 class ReleaseValidation:
     root: Path
     entries: tuple[ReleaseManifestEntry, ...]
+
+
+def release_artifact_from_evaluation(source: Path, relative_path: Path) -> ReleaseArtifact:
+    """Bind released evaluation evidence to its persisted scientific coordinate."""
+
+    try:
+        document = FederatedEvaluationDocument.model_validate_json(source.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise ArtifactIntegrityError(ErrorMessage(f"released evaluation document is unreadable: {source}")) from error
+    coordinate = document.score_coordinate
+    return ReleaseArtifact(
+        source=source,
+        relative_path=relative_path,
+        artifact_type="federated_evaluation_document",
+        dataset_id=population_declaration(coordinate.population).dataset.value,
+        population_id=coordinate.population.value,
+        training_method=coordinate.model.value,
+        training_seed=str(coordinate.training_seed.value),
+        threshold_policy=document.threshold_method.value,
+        experiment_id=document.execution_key.split("/")[0],
+    )
 
 
 def validate_release_bundle(root: Path) -> ReleaseValidation:
