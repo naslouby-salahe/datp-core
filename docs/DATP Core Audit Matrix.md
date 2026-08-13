@@ -6009,14 +6009,14 @@ The implementation must distinguish at least these roadmap-defined scientific st
 
 | ID | Source line | Audit requirement | Implementation disposition | Audit outcome | Evidence / remediation |
 |---|---:|---|---|---|---|
-| `GATE-C-001` | 6023 | Each result references an immutable population identity. | `NOT_AUDITED` | — | — |
-| `GATE-C-002` | 6024 | Client membership is deterministic for a fixed population coordinate. | `NOT_AUDITED` | — | — |
-| `GATE-C-003` | 6025 | Natural-device, file-defined, synthetic/Dirichlet, external, and temporal populations cannot be silently mixed. | `NOT_AUDITED` | — | — |
+| `GATE-C-001` | 6023 | Each result references an immutable population identity. | `IMPLEMENTED` | `PASS` | Typed `PopulationId` declarations bind every construction/result and persisted population artifacts validate the identity before loading. |
+| `GATE-C-002` | 6024 | Client membership is deterministic for a fixed population coordinate. | `IMPLEMENTED` | `PASS` | Construction sorts membership by client/stable-row identity and split tests verify deterministic assignment for a fixed seed. |
+| `GATE-C-003` | 6025 | Natural-device, file-defined, synthetic/Dirichlet, external, and temporal populations cannot be silently mixed. | `IMPLEMENTED` | `PASS` | The population registry resolves each typed identity exactly once, and declarations constrain identity kind to the dataset/claim boundary. |
 | `GATE-C-004` | 6026 | Population construction never uses held-out test outcomes. | `NOT_AUDITED` | — | — |
-| `GATE-C-005` | 6027 | FAMILY_THRESHOLD is enabled only where the locked physical-family taxonomy is scientifically valid. | `NOT_AUDITED` | — | — |
+| `GATE-C-005` | 6027 | FAMILY_THRESHOLD is enabled only where the locked physical-family taxonomy is scientifically valid. | `IMPLEMENTED` | `PASS` | Population capabilities make family taxonomy unavailable outside N-BaIoT natural devices and dispatch emits the typed unavailable condition without a taxonomy. |
 | `GATE-C-006` | 6028 | CLUSTER_THRESHOLD receives exactly the eligible client population declared for the experiment. | `NOT_AUDITED` | — | — |
-| `GATE-C-007` | 6029 | Empty, singleton, and excluded groups remain visible rather than being silently dropped. | `NOT_AUDITED` | — | — |
-| `GATE-C-008` | 6030 | Client counts in tables equal the audited population manifest. | `NOT_AUDITED` | — | — |
+| `GATE-C-007` | 6029 | Empty, singleton, and excluded groups remain visible rather than being silently dropped. | `IMPLEMENTED` | `PASS` | Population/evaluation contracts retain explicit exclusion reasons, and family/group contracts reject silently invalid empty memberships. |
+| `GATE-C-008` | 6030 | Client counts in tables equal the audited population manifest. | `IMPLEMENTED` | `PASS` | Population-manifest validation rejects mismatched accepted-client counts and membership client sets before persisted evidence can load. |
 | `GATE-C-009` | 6032 | For every persistent-client result, the same immutable `client_id` binds training, calibration, evaluation, local threshold state, and any personalized model state exactly as Part I §3.3A requires. | `NOT_AUDITED` | — | — |
 | `GATE-C-010` | 6033 | No unseen-client or intermittent-client interpretation is inferred from the calibration cold-start experiment. | `NOT_AUDITED` | — | — |
 
@@ -7320,14 +7320,14 @@ README_REPRODUCIBILITY.md
 | `DATASET-088` | IV | 6017 | 4. Gate B — Dataset integrity | N-BaIoT preserves the nine natural physical devices for the confirmatory population. | `PASS` | Typed declaration locks nine physical confirmatory devices. |
 | `DATASET-089` | IV | 6018 | 4. Gate B — Dataset integrity | CICIoT2023 does not invent physical-device identities from unavailable provenance. | `PASS` | File-defined pseudo-client capability forbids physical-device interpretation. |
 | `DATASET-090` | IV | 6019 | 4. Gate B — Dataset integrity | Edge-IIoTset uses only the client definition and temporal information justified by Part I §9 and Part II §4. | `PASS` | Separate typed static and chronology-verified Edge populations enforce the boundary. |
-| `DATASET-091` | IV | 6023 | 5. Gate C — Population and client integrity | Each result references an immutable population identity. | `NOT_AUDITED` | — |
-| `DATASET-092` | IV | 6024 | 5. Gate C — Population and client integrity | Client membership is deterministic for a fixed population coordinate. | `NOT_AUDITED` | — |
-| `DATASET-093` | IV | 6025 | 5. Gate C — Population and client integrity | Natural-device, file-defined, synthetic/Dirichlet, external, and temporal populations cannot be silently mixed. | `NOT_AUDITED` | — |
+| `DATASET-091` | IV | 6023 | 5. Gate C — Population and client integrity | Each result references an immutable population identity. | `PASS` | Typed population declarations/persisted-artifact validation bind identity. |
+| `DATASET-092` | IV | 6024 | 5. Gate C — Population and client integrity | Client membership is deterministic for a fixed population coordinate. | `PASS` | Deterministic ordered membership and fixed-seed split tests cover the contract. |
+| `DATASET-093` | IV | 6025 | 5. Gate C — Population and client integrity | Natural-device, file-defined, synthetic/Dirichlet, external, and temporal populations cannot be silently mixed. | `PASS` | Registry/declarations enforce separate typed population identities. |
 | `DATASET-094` | IV | 6026 | 5. Gate C — Population and client integrity | Population construction never uses held-out test outcomes. | `NOT_AUDITED` | — |
-| `THRESHOLD-308` | IV | 6027 | 5. Gate C — Population and client integrity | FAMILY_THRESHOLD is enabled only where the locked physical-family taxonomy is scientifically valid. | `NOT_AUDITED` | — |
+| `THRESHOLD-308` | IV | 6027 | 5. Gate C — Population and client integrity | FAMILY_THRESHOLD is enabled only where the locked physical-family taxonomy is scientifically valid. | `PASS` | Capabilities and threshold dispatch require a valid family taxonomy. |
 | `THRESHOLD-309` | IV | 6028 | 5. Gate C — Population and client integrity | CLUSTER_THRESHOLD receives exactly the eligible client population declared for the experiment. | `NOT_AUDITED` | — |
-| `DATASET-095` | IV | 6029 | 5. Gate C — Population and client integrity | Empty, singleton, and excluded groups remain visible rather than being silently dropped. | `NOT_AUDITED` | — |
-| `DATASET-096` | IV | 6030 | 5. Gate C — Population and client integrity | Client counts in tables equal the audited population manifest. | `NOT_AUDITED` | — |
+| `DATASET-095` | IV | 6029 | 5. Gate C — Population and client integrity | Empty, singleton, and excluded groups remain visible rather than being silently dropped. | `PASS` | Typed group/exclusion contracts keep non-applicable states explicit. |
+| `DATASET-096` | IV | 6030 | 5. Gate C — Population and client integrity | Client counts in tables equal the audited population manifest. | `PASS` | Manifest validation rejects client-count or membership-set disagreement. |
 | `CALIBRATION-210` | IV | 6032 | 5. Gate C — Population and client integrity | For every persistent-client result, the same immutable `client_id` binds training, calibration, evaluation, local threshold state, and any personalized model state exactly as Part I §3.3A requires. | `NOT_AUDITED` | — |
 | `CALIBRATION-211` | IV | 6033 | 5. Gate C — Population and client integrity | No unseen-client or intermittent-client interpretation is inferred from the calibration cold-start experiment. | `NOT_AUDITED` | — |
 | `CALIBRATION-212` | IV | 6037 | 6. Gate D — Split, chronology, and eligibility integrity | Train, calibration, and evaluation partitions are disjoint by immutable row identity. | `NOT_AUDITED` | — |
