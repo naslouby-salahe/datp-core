@@ -76,6 +76,20 @@ def test_formal_privacy_claim_is_suppressed() -> None:
     assert not decision.wording
 
 
+def test_operational_equity_cannot_be_called_demographic_fairness() -> None:
+    decision = validate_claim(
+        claim_request(
+            kind=ClaimKind.SUPPORTIVE,
+            evidence_role=EvidenceRole.SUPPORTIVE,
+            metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
+            wording="The policy establishes demographic fairness across protected attributes",
+        )
+    )
+
+    assert decision.status is ClaimStatus.SUPPRESSED
+    assert "operational FPR equity" in decision.reason
+
+
 def test_blocked_anchor_blocks_confirmatory_claim() -> None:
     decision = validate_claim(
         claim_request(

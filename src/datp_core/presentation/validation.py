@@ -59,6 +59,8 @@ class ClaimGuardPhrase(StrEnum):
     MEASURED_DEPLOYMENT = "measured deployment"
     PHYSICAL_DEVICE = "physical device"
     FLEET_SCALE = "fleet-scale"
+    DEMOGRAPHIC_FAIRNESS = "demographic fairness"
+    PROTECTED_ATTRIBUTE = "protected attribute"
     CONTINUOUS_ADAPTATION = "continuous adaptation"
     ONLINE_ADAPTATION = "online adaptation"
     CONCEPT_DRIFT_SOLUTION = "concept drift solution"
@@ -83,6 +85,12 @@ _TEMPORAL_GUARD_PHRASES = frozenset(
         ClaimGuardPhrase.ONLINE_ADAPTATION,
         ClaimGuardPhrase.CONCEPT_DRIFT_SOLUTION,
         ClaimGuardPhrase.DRIFT_HANDLING,
+    }
+)
+_EQUITY_GUARD_PHRASES = frozenset(
+    {
+        ClaimGuardPhrase.DEMOGRAPHIC_FAIRNESS,
+        ClaimGuardPhrase.PROTECTED_ATTRIBUTE,
     }
 )
 
@@ -146,6 +154,7 @@ def _claim_failures(
     yield _temporal_guard_result(request, normalized_wording)
     yield _privacy_guard_suppression(normalized_wording)
     yield _deployment_guard_suppression(normalized_wording)
+    yield _equity_guard_suppression(normalized_wording)
     yield _applicability_boundary_failure(request, normalized_wording)
 
 
@@ -236,6 +245,12 @@ def _privacy_guard_suppression(normalized_wording: NormalizedClaimWording) -> Cl
 def _deployment_guard_suppression(normalized_wording: NormalizedClaimWording) -> ClaimDecision | None:
     if any(phrase.value in normalized_wording for phrase in _DEPLOYMENT_GUARD_PHRASES):
         return _suppressed(ClaimReason("message-size estimates are not deployment measurements"))
+    return None
+
+
+def _equity_guard_suppression(normalized_wording: NormalizedClaimWording) -> ClaimDecision | None:
+    if any(phrase.value in normalized_wording for phrase in _EQUITY_GUARD_PHRASES):
+        return _suppressed(ClaimReason("operational FPR equity is not demographic or protected-attribute fairness"))
     return None
 
 

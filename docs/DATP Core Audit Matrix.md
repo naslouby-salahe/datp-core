@@ -6248,7 +6248,7 @@ The implementation must distinguish at least these roadmap-defined scientific st
 | `GATE-R-001` | 6241 | The manuscript's confirmatory claim is supported only by Part II §5.1 and Part III §11. | `NOT_AUDITED` | — | — |
 | `GATE-R-002` | 6242 | Supportive, mechanism, external, stress-test, boundary, operational, and exploratory evidence keeps its declared tier. | `NOT_AUDITED` | — | — |
 | `GATE-R-003` | 6243 | A failed/null confirmatory endpoint is not rescued by CLUSTER_THRESHOLD, shrinkage, conformal, FedProx, Ditto, or an external dataset. | `NOT_AUDITED` | — | — |
-| `GATE-R-004` | 6244 | Operational FPR equity is not presented as demographic or protected-attribute fairness. | `NOT_AUDITED` | — | — |
+| `GATE-R-004` | 6244 | Operational FPR equity is not presented as demographic or protected-attribute fairness. | `IMPLEMENTED` | `PASS` | Claim validation now suppresses demographic-fairness and protected-attribute wording regardless of the cited evidence tier. |
 | `GATE-R-005` | 6245 | Structural raw-data locality is not called a formal privacy guarantee. | `NOT_AUDITED` | — | — |
 | `GATE-R-006` | 6246 | Threshold-stage byte/runtime accounting is not called deployment validation. | `NOT_AUDITED` | — | — |
 | `GATE-R-007` | 6247 | No fleet-scale claim is made from synthetic or file-defined pseudo-clients. | `IMPLEMENTED` | `PASS` | The claim validator now blocks fleet-scale wording whenever the cited population is synthetic Dirichlet or file-defined pseudo-clients, independently of evidence tier. |
@@ -7484,7 +7484,7 @@ README_REPRODUCIBILITY.md
 | `CALIBRATION-248` | IV | 6241 | 20. Gate R — Reporting and claim-to-evidence integrity | The manuscript's confirmatory claim is supported only by Part II §5.1 and Part III §11. | `NOT_AUDITED` | — |
 | `CALIBRATION-249` | IV | 6242 | 20. Gate R — Reporting and claim-to-evidence integrity | Supportive, mechanism, external, stress-test, boundary, operational, and exploratory evidence keeps its declared tier. | `NOT_AUDITED` | — |
 | `CALIBRATION-250` | IV | 6243 | 20. Gate R — Reporting and claim-to-evidence integrity | A failed/null confirmatory endpoint is not rescued by CLUSTER_THRESHOLD, shrinkage, conformal, FedProx, Ditto, or an external dataset. | `NOT_AUDITED` | — |
-| `METRIC-038` | IV | 6244 | 20. Gate R — Reporting and claim-to-evidence integrity | Operational FPR equity is not presented as demographic or protected-attribute fairness. | `NOT_AUDITED` | — |
+| `METRIC-038` | IV | 6244 | 20. Gate R — Reporting and claim-to-evidence integrity | Operational FPR equity is not presented as demographic or protected-attribute fairness. | `PASS` | Claim guards suppress demographic/protected-attribute fairness language. |
 | `REPORT-040` | IV | 6245 | 20. Gate R — Reporting and claim-to-evidence integrity | Structural raw-data locality is not called a formal privacy guarantee. | `NOT_AUDITED` | — |
 | `THRESHOLD-339` | IV | 6246 | 20. Gate R — Reporting and claim-to-evidence integrity | Threshold-stage byte/runtime accounting is not called deployment validation. | `NOT_AUDITED` | — |
 | `REPORT-041` | IV | 6247 | 20. Gate R — Reporting and claim-to-evidence integrity | No fleet-scale claim is made from synthetic or file-defined pseudo-clients. | `PASS` | Population-identity-aware claim validation blocks fleet-scale wording for synthetic and file-defined clients. |
