@@ -53,6 +53,7 @@ from datp_core.experiments.centralized_reference import (
 from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.experiments.confirmatory.run import (
     ConfirmatoryAssetDirectory,
+    analyze_calibration_support_burden,
     analyze_confirmatory_campaign,
     analyze_physical_family_adequacy,
     load_fedavg_cv_fpr_effect,
@@ -214,6 +215,7 @@ _METHOD_NOT_COMPLETED_DETAIL = "declared but not completed in this execution"
 _ANALYSIS_ONLY_EXPERIMENTS = frozenset(
     (
         ExperimentId.PHYSICAL_FAMILY_ADEQUACY,
+        ExperimentId.CALIBRATION_SUPPORT_BURDEN,
         ExperimentId.PER_CLIENT_SCORE_GEOMETRY,
         ExperimentId.HETEROGENEITY_BENEFIT_ASSOCIATION,
         ExperimentId.THRESHOLD_MOVEMENT_TRADEOFF,
@@ -601,6 +603,8 @@ def _report_heterogeneity(experiment_id: ExperimentId) -> ReportResult:
         path = analyze_controlled_heterogeneity_sweep(overwrite=True)
     elif experiment_id is ExperimentId.PHYSICAL_FAMILY_ADEQUACY:
         path = analyze_physical_family_adequacy(overwrite=True)
+    elif experiment_id is ExperimentId.CALIBRATION_SUPPORT_BURDEN:
+        path = analyze_calibration_support_burden(overwrite=True)
     elif experiment_id is ExperimentId.PER_CLIENT_SCORE_GEOMETRY:
         path = analyze_per_client_score_geometry(overwrite=True)
     elif experiment_id is ExperimentId.HETEROGENEITY_BENEFIT_ASSOCIATION:
@@ -1083,13 +1087,17 @@ def _heterogeneity_marker(experiment_id: ExperimentId) -> bool:
         / population.value
         / MechanismAnalysisDirectory.ANALYSIS
     )
-    if experiment_id is ExperimentId.PHYSICAL_FAMILY_ADEQUACY:
+    if experiment_id in {ExperimentId.PHYSICAL_FAMILY_ADEQUACY, ExperimentId.CALIBRATION_SUPPORT_BURDEN}:
         output = (
             OUTPUTS_ROOT
             / ConfirmatoryAssetDirectory.ROOT
             / PopulationId.NBAIOT_NATURAL_DEVICES.value
             / ConfirmatoryAssetDirectory.ANALYSIS
-            / ConfirmatoryAssetDirectory.PHYSICAL_FAMILY_ADEQUACY
+            / (
+                ConfirmatoryAssetDirectory.PHYSICAL_FAMILY_ADEQUACY
+                if experiment_id is ExperimentId.PHYSICAL_FAMILY_ADEQUACY
+                else ConfirmatoryAssetDirectory.CALIBRATION_SUPPORT_BURDEN
+            )
         )
     if experiment_id is ExperimentId.HETEROGENEITY_CALIBRATION_SUPPORT_INTERACTION:
         analysis = output / "support_interaction_analysis.json"
@@ -1412,6 +1420,14 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         anchor_requirement=AnchorRequirement.REQUIRED,
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_analysis_recipe(ExperimentId.PHYSICAL_FAMILY_ADEQUACY),
+        report=_report_heterogeneity,
+        analysis_marker=_heterogeneity_marker,
+    ),
+    ExperimentRecipe(
+        experiment=ExperimentId.CALIBRATION_SUPPORT_BURDEN,
+        anchor_requirement=AnchorRequirement.REQUIRED,
+        campaign_role=CampaignRole.MANDATORY,
+        dispatch=_analysis_recipe(ExperimentId.CALIBRATION_SUPPORT_BURDEN),
         report=_report_heterogeneity,
         analysis_marker=_heterogeneity_marker,
     ),

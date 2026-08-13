@@ -131,6 +131,7 @@ class ConfirmatoryAssetDirectory(StrEnum):
     MECHANISMS = "mechanisms"
     SUPPORTIVE = "supportive"
     PHYSICAL_FAMILY_ADEQUACY = "physical_family_adequacy"
+    CALIBRATION_SUPPORT_BURDEN = "calibration_support_burden"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -345,6 +346,45 @@ def analyze_physical_family_adequacy(*, overwrite: bool) -> Path:
     export_mechanism_publication(
         tuple(records),
         experiment=ExperimentId.PHYSICAL_FAMILY_ADEQUACY,
+        population=PopulationId.NBAIOT_NATURAL_DEVICES,
+        output_directory=output,
+        evidence_role=EvidenceRole.MECHANISM,
+    )
+    return output
+
+
+def analyze_calibration_support_burden(*, overwrite: bool) -> Path:
+    """Publish the §7.5A descriptive analysis from paired confirmatory evidence."""
+
+    output = (
+        OUTPUTS_ROOT
+        / ConfirmatoryAssetDirectory.ROOT
+        / PopulationId.NBAIOT_NATURAL_DEVICES.value
+        / ConfirmatoryAssetDirectory.ANALYSIS
+        / ConfirmatoryAssetDirectory.CALIBRATION_SUPPORT_BURDEN
+    )
+    if overwrite and output.exists():
+        from shutil import rmtree
+
+        rmtree(output)
+    evidence: list[CalibrationSupportBurdenSeedEvidence] = []
+    for seed in CONFIRMATORY_SEED_COHORT.values:
+        shared = load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.SHARED_THRESHOLD))
+        local = load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.LOCAL_THRESHOLD))
+        movement = threshold_movements_from_evaluations(
+            shared=shared,
+            local=local,
+            experiment=ExperimentId.CALIBRATION_SUPPORT_BURDEN,
+        )
+        evidence.append(calibration_support_burden_evidence(shared, local, movement))
+    records: tuple[MechanismEvidence, ...] = (
+        *evidence,
+        summarize_calibration_support_burden(tuple(evidence)),
+        summarize_calibration_support_burden_devices(tuple(evidence)),
+    )
+    export_mechanism_publication(
+        records,
+        experiment=ExperimentId.CALIBRATION_SUPPORT_BURDEN,
         population=PopulationId.NBAIOT_NATURAL_DEVICES,
         output_directory=output,
         evidence_role=EvidenceRole.MECHANISM,

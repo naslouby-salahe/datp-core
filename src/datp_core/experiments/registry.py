@@ -195,6 +195,15 @@ EXPERIMENTS = (
         OPERATING_POINT_METRICS,
     ),
     _declare(
+        ExperimentId.CALIBRATION_SUPPORT_BURDEN,
+        EvidenceRole.MECHANISM,
+        PopulationId.NBAIOT_NATURAL_DEVICES,
+        TrainingModelId.FEDAVG_AUTOENCODER,
+        PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
+        _SHARED_AND_LOCAL_METHODS,
+        OPERATING_POINT_METRICS,
+    ),
+    _declare(
         ExperimentId.HETEROGENEITY_CALIBRATION_SUPPORT_INTERACTION,
         EvidenceRole.MECHANISM,
         PopulationId.NBAIOT_DIRICHLET_CLIENTS,
