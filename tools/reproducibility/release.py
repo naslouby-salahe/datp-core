@@ -623,7 +623,8 @@ def _write_release_metadata(request: ReleaseBuildRequest) -> None:
         _write_withheld_artifact_records(request.root, request.withheld_artifacts)
     (request.root / "README_REPRODUCIBILITY.md").write_text(
         "# Reproducibility release\n\n"
-        f"State: `{request.state.value}`. Validate this bundle with `datp-core validate-release <root>`.\n",
+        f"State: `{request.state.value}`. Validate this bundle with "
+        "`python -m tools.reproducibility.release <root>`.\n",
         encoding="utf-8",
     )
 

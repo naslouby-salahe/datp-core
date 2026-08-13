@@ -157,6 +157,9 @@ def test_release_builder_packages_explicit_retained_evidence_and_validates_it(tm
 
     assert len(release.entries) == 5
     assert (release.root / "METRICS" / "confirmatory.json").read_bytes() == source.read_bytes()
+    readme = (release.root / "README_REPRODUCIBILITY.md").read_text(encoding="utf-8")
+    assert "python -m tools.reproducibility.release" in readme
+    assert "datp-core validate-release" not in readme
     environment = (release.root / "ENVIRONMENT" / "runtime.txt").read_text(encoding="utf-8")
     for key in (
         "python=",
