@@ -27,6 +27,135 @@ class PriorArtDistinctionRow:
             raise ValueError("prior-art rows require the ten locked categorical fields")
 
 
+@dataclass(frozen=True, slots=True)
+class PriorArtCollisionRow:
+    work: str
+    overlap: str
+    prohibited_claim: str
+    distinction: str
+
+
+_COLLISIONS = (
+    PriorArtCollisionRow(
+        "Meidan et al. 2018",
+        "per-device N-BaIoT AE threshold",
+        "first device-specific threshold",
+        "fixed federated detector and score artifact",
+    ),
+    PriorArtCollisionRow(
+        "FedIoT 2021",
+        "federated AE post-training thresholds",
+        "first federated IoT post-training threshold",
+        "scope intervention and FPR dispersion endpoint",
+    ),
+    PriorArtCollisionRow(
+        "Rey et al. 2022",
+        "server aggregation of local AE thresholds",
+        "first threshold aggregation",
+        "immutable-score scope comparison",
+    ),
+    PriorArtCollisionRow(
+        "Ochiai et al. 2023",
+        "coordinated IoT thresholding",
+        "first distributed coordination",
+        "scope-only causal comparison",
+    ),
+    PriorArtCollisionRow(
+        "Laridi et al. 2024",
+        "federated global threshold selection",
+        "first federated threshold-selection study",
+        "benign-only scope rather than estimator competition",
+    ),
+    PriorArtCollisionRow(
+        "Komadina et al. 2024",
+        "broad threshold-estimator catalogue",
+        "first/exhaustive estimator benchmark",
+        "fixed q95 estimator in confirmatory ladder",
+    ),
+    PriorArtCollisionRow(
+        "FedCal 2024",
+        "local/global FL calibration",
+        "first local/global calibration",
+        "anomaly-score operating thresholds, not probabilities",
+    ),
+    PriorArtCollisionRow(
+        "Asiri et al. 2025",
+        "benign local p95 FL-IoT threshold",
+        "first benign p95 client threshold",
+        "fixed-detector operating-point equity",
+    ),
+    PriorArtCollisionRow(
+        "Personalized FCP 2025",
+        "personalized federated calibration",
+        "novel federated conformal calibration",
+        "bounded supportive AE diagnostic",
+    ),
+    PriorArtCollisionRow(
+        "G-PFL-ID 2026",
+        "personalized unsupervised IoT IDS",
+        "first personalized N-BaIoT detector",
+        "does not compete on architecture",
+    ),
+    PriorArtCollisionRow(
+        "Fed-DTCN 2026",
+        "client-specific threshold",
+        "first client-specific federated anomaly threshold",
+        "frozen-detector evidence separated from personalization",
+    ),
+    PriorArtCollisionRow(
+        "FBID 2026", "adaptive personalized FL-IDS", "first PFL/OOD IoT IDS", "locked Ditto absorption counterfactual"
+    ),
+    PriorArtCollisionRow(
+        "Robalino-Díaz et al. 2026",
+        "AUC versus deployed recall divergence",
+        "first discrimination/operation divergence",
+        "scope is the controlled intervention",
+    ),
+    PriorArtCollisionRow(
+        "FedWQ-CP 2026",
+        "weighted global quantile aggregation",
+        "novel federated quantile aggregation",
+        "shared constructions are comparators",
+    ),
+    PriorArtCollisionRow(
+        "GC-FCP 2026",
+        "group-conditional federated calibration",
+        "first group-conditional calibration",
+        "no conformal guarantee claim",
+    ),
+    PriorArtCollisionRow(
+        "PFWCP 2026",
+        "personalized weighted calibration",
+        "novel personalized weighted calibration",
+        "empirical anomaly-threshold mechanism",
+    ),
+    PriorArtCollisionRow(
+        "Rob-FCP 2024",
+        "Byzantine-robust calibration",
+        "secure DATP aggregation",
+        "honest calibration-participant boundary",
+    ),
+    PriorArtCollisionRow(
+        "CF-HFC 2026",
+        "adaptive conformal heterogeneous IoT IDS",
+        "first calibrated heterogeneous FL-IDS",
+        "does not reproduce joint system changes",
+    ),
+    PriorArtCollisionRow(
+        "PRISM-FCP 2026",
+        "Byzantine training and calibration",
+        "end-to-end secure calibration",
+        "threat-boundary citation",
+    ),
+    PriorArtCollisionRow(
+        "Shahid 2026",
+        "pooled/local calibration and n/(n+n0)",
+        "novel sample-size shrinkage",
+        "n_min=100 fixed prospectively",
+    ),
+)
+
+
 _NOT_REPORTED = tuple(PriorArtCategory.NOT_REPORTED for _ in range(10))
 _ROWS = (
     PriorArtDistinctionRow(
@@ -169,3 +298,25 @@ def render_prior_art_distinction_table() -> str:
 
 def export_prior_art_distinction_table(destination: Path) -> Path:
     return write_text_atomically(destination, FileContentText(render_prior_art_distinction_table()))
+
+
+def render_prior_art_collision_table() -> str:
+    lines = [
+        "# Prior-art collision table",
+        "",
+        "| Prior work | Relevant overlap | What DATP must not claim | DATP distinction |",
+        "|---|---|---|---|",
+    ]
+    lines.extend(f"| {row.work} | {row.overlap} | {row.prohibited_claim} | {row.distinction} |" for row in _COLLISIONS)
+    lines.extend(
+        (
+            "",
+        "Submission-time novelty gate: `NOT_EXECUTED`; update this table from the required "
+        "14-day literature search before submission.",
+        )
+    )
+    return "\n".join(lines) + "\n"
+
+
+def export_prior_art_collision_table(destination: Path) -> Path:
+    return write_text_atomically(destination, FileContentText(render_prior_art_collision_table()))
