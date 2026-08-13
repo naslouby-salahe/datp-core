@@ -21,6 +21,7 @@ from datp_core.data.registry import population_declaration
 _MANIFEST_FILENAME = "MANIFEST_SHA256.csv"
 _SIDECAR_FILENAME = "MANIFEST_SHA256.sha256"
 _ROADMAP_LOCK_FILENAME = "ROADMAP_LOCK.md"
+_PUBLICATION_MANIFEST_FILENAME = "publication_source_manifest.json"
 _REQUIRED_DIRECTORIES = (
     "DATA_PROVENANCE",
     "SPLIT_IDENTITY",
@@ -128,6 +129,29 @@ def campaign_evaluation_release_artifacts(output_root: Path) -> tuple[ReleaseArt
         )
         for document in documents
     )
+
+
+def campaign_publication_release_artifacts(output_root: Path) -> tuple[ReleaseArtifact, ...]:
+    """Retain every publication manifest and its rendered publication as figure/table release evidence."""
+
+    manifests = tuple(sorted(output_root.rglob(_PUBLICATION_MANIFEST_FILENAME)))
+    artifacts: list[ReleaseArtifact] = []
+    for manifest in manifests:
+        relative = manifest.relative_to(output_root)
+        artifacts.append(
+            ReleaseArtifact(manifest, Path("FIGURE_TABLE_DATA") / relative, "publication_source_manifest")
+        )
+        publication = manifest.parent / "publication.md"
+        if not publication.is_file():
+            raise ArtifactIntegrityError(ErrorMessage(f"publication source manifest has no publication: {manifest}"))
+        artifacts.append(
+            ReleaseArtifact(
+                publication,
+                Path("FIGURE_TABLE_DATA") / relative.parent / publication.name,
+                "publication",
+            )
+        )
+    return tuple(artifacts)
 
 
 def _release_artifact_from_document(
