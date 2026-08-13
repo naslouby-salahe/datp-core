@@ -270,9 +270,7 @@ def prepare_confirmatory_analysis(request: ConfirmatoryAnalysisRequest) -> Analy
         wilcoxon=wilcoxon,
         rank_biserial=matched_pairs_rank_biserial(contrasts, protocol),
         precision_diagnostics=(
-            confirmatory_precision_diagnostics(contrasts, interval)
-            if interval.outcome is BcaOutcome.AVAILABLE
-            else None
+            confirmatory_precision_diagnostics(contrasts, interval) if len(contrasts) >= 2 else None
         ),
         leave_one_device_out=request.leave_one_device_out,
         multiplicity_plan=multiplicity_plan,

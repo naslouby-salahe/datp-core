@@ -143,7 +143,7 @@ def summarize_cross_seed_metric_values(values: MetricSeries) -> CrossSeedMetricS
         return CrossSeedMetricSummary(mean=mean, coefficient_of_variation=None)
     if mean.value == 0:
         return CrossSeedMetricSummary(mean=mean, coefficient_of_variation=None)
-    variance = sum((value.value - mean.value) ** 2 for value in values) / len(values)
+    variance = sum((value.value - mean.value) ** 2 for value in values) / (len(values) - 1)
     return CrossSeedMetricSummary(
         mean=mean,
         coefficient_of_variation=MetricValue(variance**0.5 / mean.value),

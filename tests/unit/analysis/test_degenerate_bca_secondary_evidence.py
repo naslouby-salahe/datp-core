@@ -45,3 +45,6 @@ def test_degenerate_bca_retains_valid_secondary_statistics(monkeypatch) -> None:
     assert document.exact_sign_test is not None
     assert document.multiplicity_result is not None
     assert document.unavailable_reason == BcaReason.IDENTICAL_PAIRED_DELTAS.value
+    assert document.precision_diagnostics is not None
+    assert document.precision_diagnostics.bca_width is None
+    assert document.precision_diagnostics.standard_error_proxy.value == 0.0

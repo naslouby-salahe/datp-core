@@ -277,7 +277,7 @@ def _as_fingerprint_features(row: np.ndarray) -> FingerprintFeatures:
 
 def _raw_fingerprint(scores: np.ndarray) -> FingerprintFeatures:
     mean = float(np.mean(scores))
-    standard_deviation = float(np.std(scores, ddof=0))
+    standard_deviation = float(np.std(scores, ddof=1))
     if is_numeric_zero(standard_deviation) or is_numeric_zero(float(np.ptp(scores))):
         skewness_value = 0.0
     else:

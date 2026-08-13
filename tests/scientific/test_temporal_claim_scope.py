@@ -10,6 +10,7 @@ from datp_core.analysis.temporal import (
     TemporalClientTrajectory,
     TemporalRecoveryResult,
     _campaign_decision_from_counts,
+    _temporal_inference_protocol,
     _TemporalInterpretationCounts,
     temporal_drift_js,
 )
@@ -26,6 +27,7 @@ from datp_core.core.identifiers import (
 from datp_core.core.numeric import MetricValue, Seed, SeedCount, SeedObservationCount
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.scoring.models import FederatedScoreRecord
+from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_ANALYSIS_SEED
 
 
 def test_temporal_state_names_do_not_claim_continuous_adaptation() -> None:
@@ -111,6 +113,37 @@ def test_negative_temporal_outcomes_cannot_be_classified_as_supported(
 
     assert decision is expected
     assert decision is not ScientificDecision.SUPPORTED
+
+
+def test_supported_requires_available_recovery_ratio_interval() -> None:
+    from datp_core.analysis.inference.bootstrap.contracts import BcaReason, BootstrapInterval
+
+    counts = _TemporalInterpretationCounts(
+        material_recovery=SeedObservationCount(10),
+        partial_or_weak_recovery=SeedObservationCount(0),
+        without_recovery=SeedObservationCount(0),
+        opposite=SeedObservationCount(0),
+        no_degradation=SeedObservationCount(0),
+        blocked=SeedObservationCount(0),
+    )
+    degenerate_interval = BootstrapInterval.degenerate(
+        protocol=_temporal_inference_protocol(BOUNDED_EVIDENCE_SEED_COHORT),
+        analysis_seed=CONFIRMATORY_ANALYSIS_SEED,
+        point_estimate=MetricValue(0.8),
+        reason=BcaReason.IDENTICAL_PAIRED_DELTAS,
+    )
+
+    decision, _ = _campaign_decision_from_counts(
+        counts,
+        total=SeedObservationCount(10),
+        defined_recovery_count=SeedObservationCount(10),
+        cohort_size=SeedCount(10),
+        interval=degenerate_interval,
+        require_uncertainty_for_supported=True,
+    )
+
+    assert decision is not ScientificDecision.SUPPORTED
+    assert decision is ScientificDecision.BOUNDARY_RESULT
 
 
 def test_temporal_client_trajectory_uses_locked_historical_and_future_formulae() -> None:

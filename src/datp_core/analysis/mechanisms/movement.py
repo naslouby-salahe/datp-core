@@ -214,7 +214,16 @@ def summarize_threshold_movements(
     delta_thresholds = tuple(item.delta_threshold.value for item in movements)
     delta_fprs = tuple(item.delta_fpr.value for item in movements)
     mean_fpr = sum(delta_fprs) / len(delta_fprs)
-    variance = sum((value - mean_fpr) ** 2 for value in delta_fprs) / len(delta_fprs)
+    if len(delta_fprs) < 2:
+        return ThresholdMovementCohort(
+            movements=movements,
+            mean_delta_threshold=MetricValue(sum(delta_thresholds) / len(delta_thresholds)),
+            mean_delta_fpr=MetricValue(mean_fpr),
+            client_dispersion_delta_fpr=None,
+            availability=AvailabilityStatus.AVAILABLE,
+            reason=None,
+        )
+    variance = sum((value - mean_fpr) ** 2 for value in delta_fprs) / (len(delta_fprs) - 1)
     return ThresholdMovementCohort(
         movements=movements,
         mean_delta_threshold=MetricValue(sum(delta_thresholds) / len(delta_thresholds)),

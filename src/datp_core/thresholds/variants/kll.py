@@ -135,7 +135,14 @@ def derive_kll_reconstruction_seed(
     sketch_size: KllSketchSize,
     replicate_index: ReplicateIndex,
 ) -> Seed:
-    """Derive a reconstruction-local KLL seed from its enclosing training seed."""
+    """Derive a reconstruction-local KLL seed from its enclosing training seed.
+
+    The §2.3A SHA-256/PCG64 identity-parts contract applies only when the sketch
+    exposes a controllable RNG; Apache DataSketches does not, so §9.2 locks
+    KLL_RECONSTRUCTION_REPLICATE_COUNT = 10 instead. This seed fixes the score
+    shuffle order within each replicate deterministically; it is a nested
+    implementation-variability draw, not a training seed.
+    """
     sketch_component = SeedDerivationComponent(60_000 + sketch_size.value)
     reconstruction_component = SeedDerivationComponent(70_000 + replicate_index.value)
     return derive_worker_seed(derive_worker_seed(training_seed, sketch_component), reconstruction_component)

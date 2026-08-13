@@ -8,7 +8,7 @@ import polars as pl
 from pydantic import model_validator
 from scipy.stats import spearmanr
 
-from datp_core.analysis.inference.bootstrap.contracts import BootstrapInterval
+from datp_core.analysis.inference.bootstrap.contracts import BcaOutcome, BootstrapInterval
 from datp_core.analysis.inference.contracts import PairedInferenceProtocol
 from datp_core.analysis.scientific_decision import ScientificDecision, ScientificDecisionResult
 from datp_core.core.contracts import StrictModel
@@ -477,6 +477,8 @@ def decide_temporal_campaign(
         total=SeedObservationCount(len(records)),
         defined_recovery_count=SeedObservationCount(len(defined_ratios)),
         cohort_size=required_seed_cohort.member_count,
+        interval=recovery_interval,
+        require_uncertainty_for_supported=require_temporal_decision_protocol().require_uncertainty_for_supported,
     )
     return ScientificDecisionResult(
         evidence_role=EvidenceRole.TEMPORAL_BOUNDARY,
@@ -527,6 +529,8 @@ def _campaign_decision_from_counts(
     total: SeedObservationCount,
     defined_recovery_count: SeedObservationCount,
     cohort_size: SeedCount,
+    interval: BootstrapInterval | None = None,
+    require_uncertainty_for_supported: bool = False,
 ) -> tuple[ScientificDecision, DecisionRationale]:
     if total.value < cohort_size.value or total.value < 2:
         return (
@@ -539,6 +543,15 @@ def _campaign_decision_from_counts(
             DecisionRationale("temporal campaign contains blocked or unavailable seed evidence"),
         )
     if counts.material_recovery == total:
+        if require_uncertainty_for_supported and (interval is None or interval.outcome is not BcaOutcome.AVAILABLE):
+            return (
+                ScientificDecision.BOUNDARY_RESULT,
+                DecisionRationale(
+                    "campaign-level temporal evidence shows material recovery on every seed but the locked "
+                    "recovery-ratio BCa interval is not available, so SUPPORTED is withheld under the declared "
+                    "uncertainty-for-supported requirement"
+                ),
+            )
         return (
             ScientificDecision.SUPPORTED,
             DecisionRationale(
