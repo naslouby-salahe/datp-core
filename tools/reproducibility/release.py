@@ -259,6 +259,23 @@ def preparation_release_artifacts(data_root: Path) -> tuple[ReleaseArtifact, ...
     return tuple(artifacts)
 
 
+def campaign_analysis_release_artifacts(output_root: Path) -> tuple[ReleaseArtifact, ...]:
+    """Retain only explicitly named analysis, diagnostic, and report artifacts from a campaign output tree."""
+
+    artifacts: list[ReleaseArtifact] = []
+    for source in sorted(path for path in output_root.rglob("*") if path.is_file()):
+        relative = source.relative_to(output_root)
+        if "analysis" in relative.parts:
+            artifacts.append(ReleaseArtifact(source, Path("STATISTICS") / relative, "analysis_result"))
+        elif "diagnostics" in relative.parts or source.name.endswith(("_report.md", "_summary.txt")):
+            artifacts.append(ReleaseArtifact(source, Path("AUDIT_REPORTS") / relative, "audit_report"))
+    if not artifacts:
+        raise ArtifactIntegrityError(
+            ErrorMessage("campaign release requires retained analysis or audit-report evidence")
+        )
+    return tuple(artifacts)
+
+
 def _standard_training_release_artifacts(
     output_root: Path,
     directory: Path,

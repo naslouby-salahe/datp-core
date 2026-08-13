@@ -12,6 +12,7 @@ from tools.reproducibility.release import (
     ReleaseBuildRequest,
     ReleaseState,
     build_release_bundle,
+    campaign_analysis_release_artifacts,
     campaign_bounded_training_release_artifacts,
     campaign_evaluation_release_artifacts,
     campaign_publication_release_artifacts,
@@ -358,6 +359,24 @@ def test_preparation_release_discovery_retains_only_declared_metadata(tmp_path: 
         Path("PREPROCESSING/nbaiot/coordinate/preprocessing_manifest.json"),
         Path("SPLIT_IDENTITY/nbaiot/coordinate/split_manifest.parquet"),
         Path("PREPROCESSING/nbaiot/coordinate/state.skops"),
+    )
+
+
+def test_campaign_analysis_release_discovery_retains_only_declared_derived_evidence(tmp_path: Path) -> None:
+    analysis = tmp_path / "experiment" / "analysis" / "summary.json"
+    diagnostic = tmp_path / "anchor" / "diagnostics" / "gate.json"
+    report = tmp_path / "experiment" / "analysis_report.md"
+    ignored = tmp_path / "experiment" / "scores" / "calibration.parquet"
+    for path in (analysis, diagnostic, report, ignored):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(path.name, encoding="utf-8")
+
+    artifacts = campaign_analysis_release_artifacts(tmp_path)
+
+    assert tuple(item.relative_path for item in artifacts) == (
+        Path("AUDIT_REPORTS/anchor/diagnostics/gate.json"),
+        Path("STATISTICS/experiment/analysis/summary.json"),
+        Path("AUDIT_REPORTS/experiment/analysis_report.md"),
     )
 
 
