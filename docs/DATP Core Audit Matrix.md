@@ -2181,7 +2181,7 @@ CalibrationExceedance_{k,p}
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `held_out_operating_point_diagnostics` | `PASS` | Strict-exceedance fraction over the selected calibration subset. | `test_operating_point.py` |
 
 ### FORMULA-145 — III / source lines 5037–5040
 
@@ -2194,7 +2194,7 @@ CalibrationTargetError_{k,p}
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `held_out_operating_point_diagnostics` | `PASS` | Calibration exceedance minus `1 − q`. | `test_operating_point.py` |
 
 ### FORMULA-146 — III / source lines 5044–5047
 
@@ -2207,7 +2207,7 @@ TestTargetError_{k,p}
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `held_out_operating_point_diagnostics` | `PASS` | Held-out FPR minus `1 − q`. | `test_operating_point.py` |
 
 ### FORMULA-147 — III / source lines 5051–5055
 
@@ -2221,7 +2221,7 @@ TestTargetError_{k,p}-CalibrationTargetError_{k,p}
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `held_out_operating_point_diagnostics` | `PASS` | Held-out FPR minus calibration exceedance, equivalently test-target minus calibration-target error. | `test_operating_point.py` |
 
 ### FORMULA-148 — III / source lines 5077–5082
 
