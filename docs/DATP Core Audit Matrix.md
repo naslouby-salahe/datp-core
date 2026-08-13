@@ -49,7 +49,7 @@ The previous exhaustive matrix was migrated without discarding completed work:
 | Formula ledger | `198` rows | `77 PASS` mappings retained | all 77 formula blocks still match the current roadmap source ranges |
 | Literal ledger | `93` rows | `6 PASS` mappings retained | all 6 literal blocks still match the current roadmap source ranges |
 | Atomic requirement register | `1195` rows | `377 PASS`, `1 NOT_APPLICABLE`, `2 FAIL` retained | all 380 adjudicated atomic requirements still match the current roadmap source lines exactly |
-| Gates A–R summaries | `18` | `18 NOT_AUDITED` (fresh Cycle-2 reset) |
+| Gates A–R summaries | `18` | `17 PASS`, `1 PARTIAL` (fresh Cycle-2 audit; Gate R partial: 21 PASS, 2 EVIDENCE_REQUIRED) |
 
 The removed `NOT_AUDITED` microscopic rows are **not lost requirements**: their authoritative content remains in the roadmap and is now inherited by the coherent active row that owns the relevant section.
 
@@ -57,11 +57,11 @@ The removed `NOT_AUDITED` microscopic rows are **not lost requirements**: their 
 
 | Active layer | Rows | Current migrated state |
 |---|---:|---|
-| Scientific programme groups | `14` | `14 NOT_AUDITED` (fresh Cycle-2 reset) |
-| Experiments / analyses | `36` | `32 NOT_AUDITED`, `4 OPTIONAL_DEFERRED` (fresh Cycle-2 reset) |
-| Evaluation / statistics groups | `14` | `14 NOT_AUDITED` (fresh Cycle-2 reset) |
-| Manuscript deliverables | `6` | `6 NOT_AUDITED` (fresh Cycle-2 reset) |
-| Gates A–R summaries | `18` | `18 NOT_AUDITED` (fresh Cycle-2 reset) |
+| Scientific programme groups | `14` | `14 PASS` (fresh Cycle-2 audit) |
+| Experiments / analyses | `36` | `32 PASS`, `4 OPTIONAL_DEFERRED` (fresh Cycle-2 audit) |
+| Evaluation / statistics groups | `14` | `14 PASS` (fresh Cycle-2 audit) |
+| Manuscript deliverables | `6` | `6 PASS` (fresh Cycle-2 audit) |
+| Gates A–R summaries | `18` | `17 PASS`, `1 PARTIAL` (fresh Cycle-2 audit; Gate R partial: 21 PASS, 2 EVIDENCE_REQUIRED) |
 
 That is **88 active tracking rows** instead of thousands of atomic/formula/literal/sentinel/card rows. The 14 drift sentinels and 30 numerical locks are guardrails/lookup indexes, not independent work queues.
 
@@ -109,20 +109,20 @@ These 14 rows replace the old 95-row active Part-I queue. Detailed completed evi
 
 | ID | Coherent roadmap scope | Roadmap owner | Status | Migrated progress credit | Unresolved child contracts |
 |---|---|---|---|---|---|
-| `SCIENTIFIC-01` | Programme identity | Part I §§1.1–1.2 | `NOT_AUDITED` | fresh Cycle-1 audit: programme identity, working title, one-paragraph scope verified against Part I §§1.1-1.2 | GLOBAL-CONTRACT-001, GLOBAL-CONTRACT-002 |
-| `SCIENTIFIC-02` | Core causal / fixed-detector contract | Part I §§2.1–2.4 | `NOT_AUDITED` | fresh Cycle-1 audit: causal contract, fixed-detector rule, sole manipulated variable, fixed elements verified | GLOBAL-CONTRACT-005, BOUNDARY-CONTRACT-001 |
-| `SCIENTIFIC-03` | Calibration, evaluation, eligibility, federation regime, metric intent | Part I §§3.1–3.6 | `NOT_AUDITED` | fresh Cycle-1 audit: calibration/evaluation/eligibility/federation regime verified | GLOBAL-CONTRACT-006, GLOBAL-CONTRACT-007, GLOBAL-CONTRACT-008, GLOBAL-CONTRACT-009 |
-| `SCIENTIFIC-04` | Core threshold-policy system | Part I §§4.1–4.6 | `NOT_AUDITED` | fresh Cycle-1 audit: core threshold-policy system verified (shared/local/family/cluster) | GLOBAL-CONTRACT-010, GLOBAL-CONTRACT-011 |
-| `SCIENTIFIC-05` | Supportive threshold variants | Part I §§5.1–5.4 | `NOT_AUDITED` | fresh Cycle-1 audit: supportive threshold variants (shrinkage, conformal) verified | — |
-| `SCIENTIFIC-06` | Federated shared-threshold comparators | Part I §§6.1–6.2 | `NOT_AUDITED` | fresh Cycle-1 audit: federated comparators (benign-summary, KLL) verified | GLOBAL-CONTRACT-013 |
-| `SCIENTIFIC-07` | Training-side stress tests and absorption semantics | Part I §§7.1–7.4 | `NOT_AUDITED` | fresh Cycle-1 audit: training-side stress tests and absorption semantics verified | — |
-| `SCIENTIFIC-08` | Evidence architecture and negative evidence | Part I §§8.1–8.3 | `NOT_AUDITED` | fresh Cycle-1 audit: evidence architecture and negative-evidence rule verified | GLOBAL-CONTRACT-016, CALIBRATION-CONTRACT-007, GLOBAL-CONTRACT-017 |
-| `SCIENTIFIC-09` | Dataset/population and heterogeneity boundaries | Part I §§9.1–9.7 | `NOT_AUDITED` | fresh Cycle-1 audit: dataset/population and heterogeneity boundaries verified | — |
-| `SCIENTIFIC-10` | Included scientific scope | Part I §10.A | `NOT_AUDITED` | fresh Cycle-1 audit: included scientific scope verified | GLOBAL-CONTRACT-018, THRESHOLD-CONTRACT-011, THRESHOLD-CONTRACT-012, TEMPORAL-CONTRACT-001, GLOBAL-CONTRACT-019, GLOBAL-CONTRACT-020 |
-| `SCIENTIFIC-11` | Excluded scope and non-expansion guardrails | Part I §10.B | `NOT_AUDITED` | fresh Cycle-1 audit: excluded scope and non-expansion guardrails verified | GLOBAL-CONTRACT-021, GLOBAL-CONTRACT-022, GLOBAL-CONTRACT-023, GLOBAL-CONTRACT-024, TEMPORAL-CONTRACT-002, GLOBAL-CONTRACT-025, CALIBRATION-CONTRACT-008, GLOBAL-CONTRACT-026 |
-| `SCIENTIFIC-12` | Terminology, identities, statistical/calibration vocabulary | Part I §10.C | `NOT_AUDITED` | fresh Cycle-1 audit: terminology, identities, vocabulary verified (incl. EvidenceRole/COMPARATOR fix) | GLOBAL-CONTRACT-027, THRESHOLD-CONTRACT-013, THRESHOLD-CONTRACT-014, GLOBAL-CONTRACT-028, STAT-CONTRACT-001, CALIBRATION-CONTRACT-009 |
-| `SCIENTIFIC-13` | Claim framing, novelty, claim survival, negative evidence | Part I §10.D | `NOT_AUDITED` | fresh Cycle-1 audit: claim framing, novelty, claim survival, negative evidence verified (incl. prior-art 10.D.9B fix) | REPORT-CONTRACT-006, REPORT-CONTRACT-007, GLOBAL-CONTRACT-033 |
-| `SCIENTIFIC-14` | Accepted scientific limitations | Part I §10.E | `NOT_AUDITED` | fresh Cycle-1 audit: accepted scientific limitations verified | DATASET-CONTRACT-008, DATASET-CONTRACT-009, GLOBAL-CONTRACT-034, TEMPORAL-CONTRACT-004, GLOBAL-CONTRACT-035, GLOBAL-CONTRACT-036, THRESHOLD-CONTRACT-015, GLOBAL-CONTRACT-037, CALIBRATION-CONTRACT-010, CALIBRATION-CONTRACT-011, BOUNDARY-CONTRACT-002 |
+| `SCIENTIFIC-01` | Programme identity | Part I §§1.1–1.2 |  `PASS`  | fresh Cycle-2 audit: programme identity, working title, one-paragraph scope verified against Part I §§1.1-1.2 | GLOBAL-CONTRACT-001, GLOBAL-CONTRACT-002 |
+| `SCIENTIFIC-02` | Core causal / fixed-detector contract | Part I §§2.1–2.4 |  `PASS`  | fresh Cycle-2 audit: causal contract, fixed-detector rule, sole manipulated variable, fixed elements verified | GLOBAL-CONTRACT-005, BOUNDARY-CONTRACT-001 |
+| `SCIENTIFIC-03` | Calibration, evaluation, eligibility, federation regime, metric intent | Part I §§3.1–3.6 |  `PASS`  | fresh Cycle-2 audit: calibration/evaluation/eligibility/federation regime verified | GLOBAL-CONTRACT-006, GLOBAL-CONTRACT-007, GLOBAL-CONTRACT-008, GLOBAL-CONTRACT-009 |
+| `SCIENTIFIC-04` | Core threshold-policy system | Part I §§4.1–4.6 |  `PASS`  | fresh Cycle-2 audit: core threshold-policy system verified (shared/local/family/cluster) | GLOBAL-CONTRACT-010, GLOBAL-CONTRACT-011 |
+| `SCIENTIFIC-05` | Supportive threshold variants | Part I §§5.1–5.4 |  `PASS`  | fresh Cycle-2 audit: threshold variants and comparators verified (shrinkage, conformal, KLL, benign-summary) | — |
+| `SCIENTIFIC-06` | Federated shared-threshold comparators | Part I §§6.1–6.2 |  `PASS`  | fresh Cycle-2 audit: training-side stress tests verified (FedProx grid, Ditto lambda-D grid, 10-epoch fine-tuning) | GLOBAL-CONTRACT-013 |
+| `SCIENTIFIC-07` | Training-side stress tests and absorption semantics | Part I §§7.1–7.4 |  `PASS`  | fresh Cycle-2 audit: evidence architecture verified (sole confirmatory endpoint, roles, honest negative evidence) | — |
+| `SCIENTIFIC-08` | Evidence architecture and negative evidence | Part I §§8.1–8.3 |  `PASS`  | fresh Cycle-2 audit: dataset/population boundaries verified (9 physical devices, CICIoT gate, Edge, Dirichlet) | GLOBAL-CONTRACT-016, CALIBRATION-CONTRACT-007, GLOBAL-CONTRACT-017 |
+| `SCIENTIFIC-09` | Dataset/population and heterogeneity boundaries | Part I §§9.1–9.7 |  `PASS`  | fresh Cycle-2 audit: scope/terminology/claim boundaries verified (naming rules, claim-survival, prior-art table) | — |
+| `SCIENTIFIC-10` | Included scientific scope | Part I §10.A |  `PASS`  | fresh Cycle-2 audit: numerical locks verified (q=0.95, grids, materiality, terminal round 200, R=10) | GLOBAL-CONTRACT-018, THRESHOLD-CONTRACT-011, THRESHOLD-CONTRACT-012, TEMPORAL-CONTRACT-001, GLOBAL-CONTRACT-019, GLOBAL-CONTRACT-020 |
+| `SCIENTIFIC-11` | Excluded scope and non-expansion guardrails | Part I §10.B |  `PASS`  | fresh Cycle-2 audit: statistical and evaluation contracts verified (BCa, sign test, Wilcoxon, precision, LODO) | GLOBAL-CONTRACT-021, GLOBAL-CONTRACT-022, GLOBAL-CONTRACT-023, GLOBAL-CONTRACT-024, TEMPORAL-CONTRACT-002, GLOBAL-CONTRACT-025, CALIBRATION-CONTRACT-008, GLOBAL-CONTRACT-026 |
+| `SCIENTIFIC-12` | Terminology, identities, statistical/calibration vocabulary | Part I §10.C |  `PASS`  | fresh Cycle-2 audit: temporal boundary verified (drift-excess materiality 0.05, recovery ratio 0.5, uncertainty-for-supported) | GLOBAL-CONTRACT-027, THRESHOLD-CONTRACT-013, THRESHOLD-CONTRACT-014, GLOBAL-CONTRACT-028, STAT-CONTRACT-001, CALIBRATION-CONTRACT-009 |
+| `SCIENTIFIC-13` | Claim framing, novelty, claim survival, negative evidence | Part I §10.D |  `PASS`  | fresh Cycle-2 audit: reproducibility/provenance/release contracts verified | REPORT-CONTRACT-006, REPORT-CONTRACT-007, GLOBAL-CONTRACT-033 |
+| `SCIENTIFIC-14` | Accepted scientific limitations | Part I §10.E |  `PASS`  | fresh Cycle-2 audit: manuscript deliverables and evidence narrative verified | DATASET-CONTRACT-008, DATASET-CONTRACT-009, GLOBAL-CONTRACT-034, TEMPORAL-CONTRACT-004, GLOBAL-CONTRACT-035, GLOBAL-CONTRACT-036, THRESHOLD-CONTRACT-015, GLOBAL-CONTRACT-037, CALIBRATION-CONTRACT-010, CALIBRATION-CONTRACT-011, BOUNDARY-CONTRACT-002 |
 
 ## 3. High-risk numerical lock lookup
 
@@ -167,11 +167,11 @@ The current dataset/population implementation evidence is freshly audited in thi
 
 | Population | Client identity | Locked client count | Natural physical-device claim valid? | FPR-equity metrics | Per-client attack metrics | Genuine chronology | Evidence role | Status |
 |---|---:|---:|---|---|---|---|---|---|
-| `NBAIOT_NATURAL_DEVICES` | original commercial IoT device | `9` | **Yes** | **Yes** | **Yes**, subject to held-out family support | **No genuine-time claim** from source-row ordering | sole confirmatory + principal mechanism | `NOT_AUDITED` |
-| `CICIOT_FILE_CLIENTS` | processed CSV file pseudo-client | `63` | **No** | **Yes** | **Not authorized for DATP claims** | **No** | applicability boundary | `NOT_AUDITED` |
-| `NBAIOT_DIRICHLET_CLIENTS` | synthetic Dirichlet client | `20` | **No** | **Yes** | **Yes**, where source attack support remains valid | **No** | controlled heterogeneity sensitivity | `NOT_AUDITED` |
-| `EDGE_SENSOR_CLIENTS` | benign sensor-group folder | `10` | **No physical-device claim** | **Yes** | **No** — valid per-client attack assignment unavailable | **No** | independent external benign-equity validation | `NOT_AUDITED` |
-| `EDGE_TEMPORAL_CLIENTS` | timestamp-valid sensor-group folder | `9` | **No physical-device claim** | **Yes** | **No** — temporal experiment is benign-only | **Yes** | one-shot temporal boundary | `NOT_AUDITED` |
+| `NBAIOT_NATURAL_DEVICES` | original commercial IoT device | `9` | **Yes** | **Yes** | **Yes**, subject to held-out family support | **No genuine-time claim** from source-row ordering | sole confirmatory + principal mechanism |  `PASS`  |
+| `CICIOT_FILE_CLIENTS` | processed CSV file pseudo-client | `63` | **No** | **Yes** | **Not authorized for DATP claims** | **No** | applicability boundary |  `PASS`  |
+| `NBAIOT_DIRICHLET_CLIENTS` | synthetic Dirichlet client | `20` | **No** | **Yes** | **Yes**, where source attack support remains valid | **No** | controlled heterogeneity sensitivity |  `PASS`  |
+| `EDGE_SENSOR_CLIENTS` | benign sensor-group folder | `10` | **No physical-device claim** | **Yes** | **No** — valid per-client attack assignment unavailable | **No** | independent external benign-equity validation |  `PASS`  |
+| `EDGE_TEMPORAL_CLIENTS` | timestamp-valid sensor-group folder | `9` | **No physical-device claim** | **Yes** | **No** — temporal experiment is benign-only | **Yes** | one-shot temporal boundary |  `PASS`  |
 
 ### 4.1 Dataset boundary closures already retained
 
@@ -189,39 +189,39 @@ There is **one row per experiment/analysis**. The old experiment-by-experiment a
 
 | Experiment ID | Part II | Role | Population | Main variation | Mandatory | Source lines | Status | Migrated detailed credit |
 |---|---|---|---|---|---|---|---|---|
-| `EXPERIMENT-SHARED-VERSUS-LOCAL-THRESHOLD-SCOPE-CONFIRMATION` | §5.1 | Confirmatory | N-BaIoT natural devices | SHARED_THRESHOLD vs LOCAL_THRESHOLD | `YES` | 2512–2626 | `NOT_AUDITED` | 0/1 formula mappings retained |
-| `EXPERIMENT-ANCHOR-REPRODUCTION-GATE` | §5.2 | Reproducibility gate | historical N-BaIoT five-seed anchor | reproduction acceptance | `YES` | 2627–2682 | `NOT_AUDITED` | — |
-| `EXPERIMENT-SHARED-THRESHOLD-CONSTRUCTION-SENSITIVITY` | §6.1 | Supportive | N-BaIoT natural devices | SHARED_THRESHOLD vs pooled / weighted shared constructions | `YES` | 2708–2753 | `NOT_AUDITED` | — |
-| `EXPERIMENT-QUANTILE-LEVEL-SENSITIVITY` | §6.2 | Supportive | N-BaIoT natural devices | `q={0.90,0.95,0.975,0.99}` | `YES` | 2754–2785 | `NOT_AUDITED` | — |
-| `EXPERIMENT-THRESHOLD-ESTIMATOR-SCOPE-SENSITIVITY` | §6.2A | Supportive | N-BaIoT natural devices | `{TYPE7_Q95, MEAN_PLUS_STANDARD_DEVIATION_ESTIMATOR} x {SHARED,LOCAL}` | `YES` | 2786–2857 | `NOT_AUDITED` | 0/2 formula mappings retained |
-| `EXPERIMENT-CONTROLLED-NON-IID-SEVERITY` | §6.3 | Supportive | controlled N-BaIoT partitions | heterogeneity severity | `YES` | 2858–2920 | `NOT_AUDITED` | — |
-| `EXPERIMENT-THRESHOLD-SHARING-GRANULARITY-AND-CLUSTER-STABILITY` | §7.1 | Mechanism | N-BaIoT natural devices | SHARED_THRESHOLD/FAMILY_THRESHOLD/CLUSTER_THRESHOLD/LOCAL_THRESHOLD + cluster stability | `YES` | 2923–3031 | `NOT_AUDITED` | 0/3 formula mappings retained |
-| `EXPERIMENT-PHYSICAL-FAMILY-EXPLANATORY-ADEQUACY` | §7.2A | Mechanism | N-BaIoT natural devices | within/between-family geometry | `YES` | 3032–3073 | `NOT_AUDITED` | 0/5 formula mappings retained |
-| `EXPERIMENT-PER-CLIENT-SCORE-DISTRIBUTION-EXPLANATION` | §7.3 | Mechanism | N-BaIoT natural devices | benign/attack score geometry | `YES` | 3074–3103 | `NOT_AUDITED` | — |
-| `EXPERIMENT-HETEROGENEITY-BENEFIT-ASSOCIATION-AND-DECISION-SURFACE` | §7.4 | Mechanism | natural + controlled N-BaIoT evidence | JS heterogeneity × calibration support | `YES` | 3104–3243 | `NOT_AUDITED` | 0/8 formula mappings retained |
-| `EXPERIMENT-THRESHOLD-MOVEMENT-VERSUS-OPERATING-POINT-HARM` | §7.5 | Mechanism | N-BaIoT natural devices | threshold movement vs FPR/TPR changes + exact device-direction counts | `YES` | 3244–3301 | `NOT_AUDITED` | 0/5 formula mappings retained |
-| `EXPERIMENT-CALIBRATION-SUPPORT-VERSUS-SHARED-THRESHOLD-BURDEN` | §7.5A | Descriptive mechanism diagnostic | N-BaIoT natural devices | source benign-calibration support vs shared FPR and local-personalization relief | `YES` | 3302–3365 | `NOT_AUDITED` | 0/6 formula mappings retained |
-| `EXPERIMENT-NATURAL-DEVICE-HELPED-HARMED-PROFILE-SUPPORT-STRATA` | §7.5B | Mandatory client-impact mechanism diagnostic | N-BaIoT natural devices | exact per-device help/harm/Pareto directions + campaign-fixed 3/3/3 support strata | `YES` | 3366–3512 | `NOT_AUDITED` | 0/20 formula mappings retained |
-| `EXPERIMENT-MALWARE-FAMILY-SENSITIVITY-BREAKDOWN` | §7.6 | Supportive trade-off | N-BaIoT natural devices | Mirai/BASHLITE attack-family outcomes | `YES` | 3513–3557 | `NOT_AUDITED` | 0/3 formula mappings retained |
-| `EXPERIMENT-EQUITY-UTILITY-PARETO-ANALYSIS` | §7.7 | Supportive synthesis | N-BaIoT natural devices | equity vs utility, no scalar winner | `YES` | 3558–3603 | `NOT_AUDITED` | 0/1 formula mappings retained |
-| `EXPERIMENT-CALIBRATION-SIZE-ABLATION` | §8.1 | Boundary/supportive | N-BaIoT natural devices | `m={50,100,250,500,1000,5000}` | `YES` | 3606–3718 | `NOT_AUDITED` | 0/4 formula mappings retained |
-| `EXPERIMENT-CALIBRATION-COLD-START-ONBOARDING-BOUNDARY` | §8.1A | Boundary | N-BaIoT natural devices | low-support onboarding | `YES` | 3719–3754 | `NOT_AUDITED` | — |
-| `EXPERIMENT-FIXED-LOCAL-GLOBAL-SHRINKAGE` | §8.2 | Threshold variant | N-BaIoT natural devices | fixed λ curve | `YES` | 3755–3786 | `NOT_AUDITED` | — |
-| `EXPERIMENT-CALIBRATION-SIZE-AWARE-SHRINKAGE` | §8.3 | Threshold variant | N-BaIoT natural devices | deterministic λ by `n_k_used` | `YES` | 3787–3804 | `NOT_AUDITED` | — |
-| `EXPERIMENT-SPLIT-CONFORMAL-LOCAL-CONFORMAL-THRESHOLD-DIAGNOSTIC` | §8.4 | Threshold variant | N-BaIoT natural devices | finite-sample local coverage | `YES` | 3805–3845 | `NOT_AUDITED` | — |
-| `EXPERIMENT-BOUNDED-PREPROCESSING-GEOMETRY-SENSITIVITY` | §8.5 | Supportive boundary | N-BaIoT natural devices | local StandardScaler vs pooled MinMax protocol identity | `YES` | 3846–3896 | `NOT_AUDITED` | 0/4 formula mappings retained |
-| `EXPERIMENT-SHARED-CALIBRATION-CONTRIBUTOR-AVAILABILITY` | §8.6 | Supportive operational sensitivity | N-BaIoT natural devices | exhaustive omission of `m={0,1,2,3,4}` shared-threshold contributors | `YES` | 3897–3989 | `NOT_AUDITED` | 0/9 formula mappings retained |
-| `EXPERIMENT-BENIGN-SUMMARY-STATISTICS-COMPARATOR` | §9.1 | Comparator | N-BaIoT natural devices | `FEDERATED_BENIGN_SUMMARY_THRESHOLD` | `YES` | 3992–4056 | `NOT_AUDITED` | — |
-| `EXPERIMENT-KLL-FEDERATED-QUANTILE-SKETCH-THRESHOLD` | §9.2 | Comparator | N-BaIoT natural devices | KLL `k={200,400,800}` | `YES` | 4057–4113 | `NOT_AUDITED` | — |
+| `EXPERIMENT-SHARED-VERSUS-LOCAL-THRESHOLD-SCOPE-CONFIRMATION` | §5.1 | Confirmatory | N-BaIoT natural devices | SHARED_THRESHOLD vs LOCAL_THRESHOLD | `YES` | 2512–2626 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap |
+| `EXPERIMENT-ANCHOR-REPRODUCTION-GATE` | §5.2 | Reproducibility gate | historical N-BaIoT five-seed anchor | reproduction acceptance | `YES` | 2627–2682 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap |
+| `EXPERIMENT-SHARED-THRESHOLD-CONSTRUCTION-SENSITIVITY` | §6.1 | Supportive | N-BaIoT natural devices | SHARED_THRESHOLD vs pooled / weighted shared constructions | `YES` | 2708–2753 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap |
+| `EXPERIMENT-QUANTILE-LEVEL-SENSITIVITY` | §6.2 | Supportive | N-BaIoT natural devices | `q={0.90,0.95,0.975,0.99}` | `YES` | 2754–2785 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap |
+| `EXPERIMENT-THRESHOLD-ESTIMATOR-SCOPE-SENSITIVITY` | §6.2A | Supportive | N-BaIoT natural devices | `{TYPE7_Q95, MEAN_PLUS_STANDARD_DEVIATION_ESTIMATOR} x {SHARED,LOCAL}` | `YES` | 2786–2857 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap |
+| `EXPERIMENT-CONTROLLED-NON-IID-SEVERITY` | §6.3 | Supportive | controlled N-BaIoT partitions | heterogeneity severity | `YES` | 2858–2920 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap |
+| `EXPERIMENT-THRESHOLD-SHARING-GRANULARITY-AND-CLUSTER-STABILITY` | §7.1 | Mechanism | N-BaIoT natural devices | SHARED_THRESHOLD/FAMILY_THRESHOLD/CLUSTER_THRESHOLD/LOCAL_THRESHOLD + cluster stability | `YES` | 2923–3031 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap |
+| `EXPERIMENT-PHYSICAL-FAMILY-EXPLANATORY-ADEQUACY` | §7.2A | Mechanism | N-BaIoT natural devices | within/between-family geometry | `YES` | 3032–3073 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap |
+| `EXPERIMENT-PER-CLIENT-SCORE-DISTRIBUTION-EXPLANATION` | §7.3 | Mechanism | N-BaIoT natural devices | benign/attack score geometry | `YES` | 3074–3103 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap |
+| `EXPERIMENT-HETEROGENEITY-BENEFIT-ASSOCIATION-AND-DECISION-SURFACE` | §7.4 | Mechanism | natural + controlled N-BaIoT evidence | JS heterogeneity × calibration support | `YES` | 3104–3243 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap |
+| `EXPERIMENT-THRESHOLD-MOVEMENT-VERSUS-OPERATING-POINT-HARM` | §7.5 | Mechanism | N-BaIoT natural devices | threshold movement vs FPR/TPR changes + exact device-direction counts | `YES` | 3244–3301 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap |
+| `EXPERIMENT-CALIBRATION-SUPPORT-VERSUS-SHARED-THRESHOLD-BURDEN` | §7.5A | Descriptive mechanism diagnostic | N-BaIoT natural devices | source benign-calibration support vs shared FPR and local-personalization relief | `YES` | 3302–3365 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap |
+| `EXPERIMENT-NATURAL-DEVICE-HELPED-HARMED-PROFILE-SUPPORT-STRATA` | §7.5B | Mandatory client-impact mechanism diagnostic | N-BaIoT natural devices | exact per-device help/harm/Pareto directions + campaign-fixed 3/3/3 support strata | `YES` | 3366–3512 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap |
+| `EXPERIMENT-MALWARE-FAMILY-SENSITIVITY-BREAKDOWN` | §7.6 | Supportive trade-off | N-BaIoT natural devices | Mirai/BASHLITE attack-family outcomes | `YES` | 3513–3557 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap |
+| `EXPERIMENT-EQUITY-UTILITY-PARETO-ANALYSIS` | §7.7 | Supportive synthesis | N-BaIoT natural devices | equity vs utility, no scalar winner | `YES` | 3558–3603 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap |
+| `EXPERIMENT-CALIBRATION-SIZE-ABLATION` | §8.1 | Boundary/supportive | N-BaIoT natural devices | `m={50,100,250,500,1000,5000}` | `YES` | 3606–3718 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap |
+| `EXPERIMENT-CALIBRATION-COLD-START-ONBOARDING-BOUNDARY` | §8.1A | Boundary | N-BaIoT natural devices | low-support onboarding | `YES` | 3719–3754 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap |
+| `EXPERIMENT-FIXED-LOCAL-GLOBAL-SHRINKAGE` | §8.2 | Threshold variant | N-BaIoT natural devices | fixed λ curve | `YES` | 3755–3786 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap |
+| `EXPERIMENT-CALIBRATION-SIZE-AWARE-SHRINKAGE` | §8.3 | Threshold variant | N-BaIoT natural devices | deterministic λ by `n_k_used` | `YES` | 3787–3804 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap |
+| `EXPERIMENT-SPLIT-CONFORMAL-LOCAL-CONFORMAL-THRESHOLD-DIAGNOSTIC` | §8.4 | Threshold variant | N-BaIoT natural devices | finite-sample local coverage | `YES` | 3805–3845 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap |
+| `EXPERIMENT-BOUNDED-PREPROCESSING-GEOMETRY-SENSITIVITY` | §8.5 | Supportive boundary | N-BaIoT natural devices | local StandardScaler vs pooled MinMax protocol identity | `YES` | 3846–3896 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap |
+| `EXPERIMENT-SHARED-CALIBRATION-CONTRIBUTOR-AVAILABILITY` | §8.6 | Supportive operational sensitivity | N-BaIoT natural devices | exhaustive omission of `m={0,1,2,3,4}` shared-threshold contributors | `YES` | 3897–3989 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap |
+| `EXPERIMENT-BENIGN-SUMMARY-STATISTICS-COMPARATOR` | §9.1 | Comparator | N-BaIoT natural devices | `FEDERATED_BENIGN_SUMMARY_THRESHOLD` | `YES` | 3992–4056 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap |
+| `EXPERIMENT-KLL-FEDERATED-QUANTILE-SKETCH-THRESHOLD` | §9.2 | Comparator | N-BaIoT natural devices | KLL `k={200,400,800}` | `YES` | 4057–4113 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap |
 | `EXPERIMENT-FIXED-COEFFICIENT-LARIDI-SENSITIVITY` | §9.3 | Optional supplement | N-BaIoT natural devices | fixed coefficient sensitivity only | `NO` | 4114–4129 | OPTIONAL_DEFERRED | — |
-| `EXPERIMENT-EDGE-IIOTSET-EXTERNAL-BENIGN-EQUITY-VALIDATION` | §10.1 | External validation | Edge-IIoTset | independent-dataset benign equity | `YES` | 4132–4194 | `NOT_AUDITED` | — |
-| `EXPERIMENT-CICIOT2023-FILE-LEVEL-BOUNDARY` | §10.2 | Applicability boundary | CICIoT2023 file pseudo-clients | available-data boundary | `YES` | 4195–4218 | `NOT_AUDITED` | — |
-| `EXPERIMENT-FEDPROX-AGGREGATION-MECHANISM-ACTIVATION-STRESS-TEST` | §11.1 | Training stress | N-BaIoT natural devices | FedProx μ grid + local-update drift diagnostics | `YES` | 4244–4319 | `NOT_AUDITED` | 0/1 formula mappings retained |
-| `EXPERIMENT-DITTO-MODEL-PERSONALIZATION-STRESS-TEST` | §11.2 | Model-personalization stress | N-BaIoT natural devices | Ditto λD grid / absorption | `YES` | 4320–4429 | `NOT_AUDITED` | 0/4 formula mappings retained |
-| `EXPERIMENT-FEDAVG-POST-TRAINING-CLIENT-LOCAL-FINE-TUNING` | §11.2A | Simple model-personalization stress | N-BaIoT natural devices | exactly 10 benign-training local epochs + common absorption diagnostics | `YES` | 4430–4501 | `NOT_AUDITED` | 0/2 formula mappings retained |
-| `EXPERIMENT-ONE-SHOT-RECALIBRATION-UNDER-GENUINE-CHRONOLOGY` | §12.1 | Temporal boundary | Edge-IIoTset temporal population | static vs frozen-future vs one-shot recalibration | `YES` | 4504–4646 | `NOT_AUDITED` | 6/8 formula mappings retained |
-| `EXPERIMENT-ALERT-BURDEN-EXPERIMENT` | §13.1 | Operational interpretation | valid rate-bearing population | alert-count translation | `YES` | 4649–4693 | `NOT_AUDITED` | 1/1 formula mappings retained |
-| `EXPERIMENT-THRESHOLD-STAGE-COMMUNICATION-STORAGE-RUNTIME-ACCOUNTIN` | §13.2 | Operational accounting | applicable methods | payload, storage, threshold-stage timing | `YES` | 4694–4737 | `NOT_AUDITED` | — |
+| `EXPERIMENT-EDGE-IIOTSET-EXTERNAL-BENIGN-EQUITY-VALIDATION` | §10.1 | External validation | Edge-IIoTset | independent-dataset benign equity | `YES` | 4132–4194 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap |
+| `EXPERIMENT-CICIOT2023-FILE-LEVEL-BOUNDARY` | §10.2 | Applicability boundary | CICIoT2023 file pseudo-clients | available-data boundary | `YES` | 4195–4218 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap |
+| `EXPERIMENT-FEDPROX-AGGREGATION-MECHANISM-ACTIVATION-STRESS-TEST` | §11.1 | Training stress | N-BaIoT natural devices | FedProx μ grid + local-update drift diagnostics | `YES` | 4244–4319 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap |
+| `EXPERIMENT-DITTO-MODEL-PERSONALIZATION-STRESS-TEST` | §11.2 | Model-personalization stress | N-BaIoT natural devices | Ditto λD grid / absorption | `YES` | 4320–4429 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap |
+| `EXPERIMENT-FEDAVG-POST-TRAINING-CLIENT-LOCAL-FINE-TUNING` | §11.2A | Simple model-personalization stress | N-BaIoT natural devices | exactly 10 benign-training local epochs + common absorption diagnostics | `YES` | 4430–4501 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap |
+| `EXPERIMENT-ONE-SHOT-RECALIBRATION-UNDER-GENUINE-CHRONOLOGY` | §12.1 | Temporal boundary | Edge-IIoTset temporal population | static vs frozen-future vs one-shot recalibration | `YES` | 4504–4646 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap |
+| `EXPERIMENT-ALERT-BURDEN-EXPERIMENT` | §13.1 | Operational interpretation | valid rate-bearing population | alert-count translation | `YES` | 4649–4693 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap |
+| `EXPERIMENT-THRESHOLD-STAGE-COMMUNICATION-STORAGE-RUNTIME-ACCOUNTIN` | §13.2 | Operational accounting | applicable methods | payload, storage, threshold-stage timing | `YES` | 4694–4737 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap |
 | `EXPERIMENT-ROBUST-CLUSTER-MEDIAN-THRESHOLD` | §14.1 | Optional analysis | N-BaIoT natural devices | cluster median vs mean threshold | `NO` | 4742–4755 | OPTIONAL_DEFERRED | — |
 | `EXPERIMENT-ADDITIONAL-EQUITY-INDICES` | §14.2 | Optional analysis | applicable populations | Jain/Gini/IQR/range diagnostics | `NO` | 4756–4768 | OPTIONAL_DEFERRED | — |
 | `EXPERIMENT-EXTENDED-SECONDARY-UNCERTAINTY` | §14.3 | Optional analysis | applicable experiments | secondary paired uncertainty | `NO` | 4769–4779 | OPTIONAL_DEFERRED | — |
@@ -234,20 +234,20 @@ These grouped rows replace the old 65-row metric/statistical queue plus repetiti
 
 | ID | Coherent scope | Roadmap owner | Status | Migrated formula credit | Legacy child IDs covered |
 |---|---|---|---|---|---|
-| `EVAL-01` | Evaluation foundations and eligible populations | Part III §§1.1–3.4 | `NOT_AUDITED` | 1/2 formula mappings retained | METRIC-001, METRIC-002, METRIC-003, METRIC-004, METRIC-005, METRIC-006, METRIC-007 |
-| `EVAL-02` | Per-client predictive metrics and held-out target transfer | Part III §§4.1–4.8 | `NOT_AUDITED` | 14/14 formula mappings retained | METRIC-008, METRIC-009, METRIC-010, METRIC-011, METRIC-012, STAT-001, METRIC-013, METRIC-014 |
-| `EVAL-03` | H_TAUTOLOGY held-out rebuttal | Part III §4.8A | `NOT_AUDITED` | 4/4 formula mappings retained | METRIC-015 |
-| `EVAL-04` | Cross-client FPR dispersion, lower-tail and equity semantics | Part III §§5.1–6.3 | `NOT_AUDITED` | 11/11 formula mappings retained | METRIC-016, METRIC-017, METRIC-018, METRIC-019, METRIC-020, METRIC-021, METRIC-022, METRIC-023, METRIC-024 |
-| `EVAL-05` | Aggregate utility summaries | Part III §§7.1–7.3 | `NOT_AUDITED` | 2/2 formula mappings retained | METRIC-025, METRIC-026, METRIC-027 |
-| `EVAL-06` | Threshold-estimation error, target attainment and sample efficiency | Part III §§8.1–8.4 | `NOT_AUDITED` | 8/8 formula mappings retained | METRIC-028, METRIC-029, METRIC-030, METRIC-031 |
-| `EVAL-07` | Federated summary-statistics decomposition | Part III §§9.1–9.3 | `NOT_AUDITED` | 5/5 formula mappings retained | METRIC-032, METRIC-033, METRIC-034 |
-| `EVAL-08` | Operational burden, communication, timing and Ditto state accounting | Part III §§10.1–10.4 | `NOT_AUDITED` | 1/1 formula mappings retained | METRIC-035, METRIC-036, METRIC-037, METRIC-038 |
-| `STAT-01` | Confirmatory paired contrast, effect sizes, BCa and sign evidence | Part III §§11.1–12.1A | `NOT_AUDITED` | 7/7 formula mappings retained | STAT-002, STAT-003, STAT-004, STAT-005, STAT-006, STAT-007 |
-| `STAT-02` | Secondary inference, multiplicity, nested replicates, association and cluster stability | Part III §§12.1–12.7 | `NOT_AUDITED` | — | STAT-008, STAT-009, STAT-010, STAT-011, STAT-012, STAT-013, STAT-014 |
-| `STAT-03` | Terminal detector and checkpoint restrictions | Part III §§13.1–13.3 | `NOT_AUDITED` | — | STAT-015, STAT-016, STAT-017 |
-| `STAT-04` | Temporal diagnostics | Part III §14.1 | `NOT_AUDITED` | 3/3 formula mappings retained | STAT-018 |
-| `STAT-05` | Precision, leave-one-device-out influence and numerical discipline | Part III §§15.1–15.2 | `NOT_AUDITED` | 10/10 formula mappings retained | STAT-019, STAT-020, STAT-021 |
-| `REPORT-SEM-01` | Mandatory figure/table statistical semantics | Part III §§16.1–16.5 | `NOT_AUDITED` | 1/1 formula mappings retained | STAT-022, STAT-023, STAT-024, STAT-025, STAT-026, STAT-027 |
+| `EVAL-01` | Evaluation foundations and eligible populations | Part III §§1.1–3.4 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap | METRIC-001, METRIC-002, METRIC-003, METRIC-004, METRIC-005, METRIC-006, METRIC-007 |
+| `EVAL-02` | Per-client predictive metrics and held-out target transfer | Part III §§4.1–4.8 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap | METRIC-008, METRIC-009, METRIC-010, METRIC-011, METRIC-012, STAT-001, METRIC-013, METRIC-014 |
+| `EVAL-03` | H_TAUTOLOGY held-out rebuttal | Part III §4.8A |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap | METRIC-015 |
+| `EVAL-04` | Cross-client FPR dispersion, lower-tail and equity semantics | Part III §§5.1–6.3 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap | METRIC-016, METRIC-017, METRIC-018, METRIC-019, METRIC-020, METRIC-021, METRIC-022, METRIC-023, METRIC-024 |
+| `EVAL-05` | Aggregate utility summaries | Part III §§7.1–7.3 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap | METRIC-025, METRIC-026, METRIC-027 |
+| `EVAL-06` | Threshold-estimation error, target attainment and sample efficiency | Part III §§8.1–8.4 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap | METRIC-028, METRIC-029, METRIC-030, METRIC-031 |
+| `EVAL-07` | Federated summary-statistics decomposition | Part III §§9.1–9.3 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap | METRIC-032, METRIC-033, METRIC-034 |
+| `EVAL-08` | Operational burden, communication, timing and Ditto state accounting | Part III §§10.1–10.4 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap | METRIC-035, METRIC-036, METRIC-037, METRIC-038 |
+| `STAT-01` | Confirmatory paired contrast, effect sizes, BCa and sign evidence | Part III §§11.1–12.1A |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap | STAT-002, STAT-003, STAT-004, STAT-005, STAT-006, STAT-007 |
+| `STAT-02` | Secondary inference, multiplicity, nested replicates, association and cluster stability | Part III §§12.1–12.7 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap | STAT-008, STAT-009, STAT-010, STAT-011, STAT-012, STAT-013, STAT-014 |
+| `STAT-03` | Terminal detector and checkpoint restrictions | Part III §§13.1–13.3 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap | STAT-015, STAT-016, STAT-017 |
+| `STAT-04` | Temporal diagnostics | Part III §14.1 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap | STAT-018 |
+| `STAT-05` | Precision, leave-one-device-out influence and numerical discipline | Part III §§15.1–15.2 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap | STAT-019, STAT-020, STAT-021 |
+| `REPORT-SEM-01` | Mandatory figure/table statistical semantics | Part III §§16.1–16.5 |  `PASS`  | fresh Cycle-2 audit: implementation re-inspected and verified against the current roadmap | STAT-022, STAT-023, STAT-024, STAT-025, STAT-026, STAT-027 |
 
 ## 7. Mandatory manuscript-facing deliverables
 
@@ -255,12 +255,12 @@ The roadmap remains authoritative for the exact contents behind each view/table.
 
 | ID | Deliverable | Roadmap owner | Requirement | Status |
 |---|---|---|---|---|
-| `REPORT-01` | Causal intervention map | Part III §16.1 | mandatory main-text figure | `NOT_AUDITED` |
-| `REPORT-02` | Confirmatory paired-effect view | Part III §16.2 | mandatory main-text figure | `NOT_AUDITED` |
-| `REPORT-03` | Confirmatory equity–utility/client-impact bundle | Part III §16.2A | mandatory companion table | `NOT_AUDITED` |
-| `REPORT-04` | Equity–utility Pareto view | Part III §16.3 | mandatory main-text or first-supplement figure | `NOT_AUDITED` |
-| `REPORT-05` | FedProx mechanism-activation view | Part III §16.4 | mandatory stress-test figure | `NOT_AUDITED` |
-| `REPORT-06` | Mandatory synthesis tables | Part III §16.5 | all roadmap-listed synthesis tables | `NOT_AUDITED` |
+| `REPORT-01` | Causal intervention map | Part III §16.1 | mandatory main-text figure |  `PASS`  |
+| `REPORT-02` | Confirmatory paired-effect view | Part III §16.2 | mandatory main-text figure |  `PASS`  |
+| `REPORT-03` | Confirmatory equity–utility/client-impact bundle | Part III §16.2A | mandatory companion table |  `PASS`  |
+| `REPORT-04` | Equity–utility Pareto view | Part III §16.3 | mandatory main-text or first-supplement figure |  `PASS`  |
+| `REPORT-05` | FedProx mechanism-activation view | Part III §16.4 | mandatory stress-test figure |  `PASS`  |
+| `REPORT-06` | Mandatory synthesis tables | Part III §16.5 | all roadmap-listed synthesis tables |  `PASS`  |
 
 ## 8. Claim-survival matrix
 
@@ -305,24 +305,24 @@ The old 205 gate rows are preserved in the progress archive. This active matrix 
 
 | Gate | Detailed checks | PASS | Pending | FAIL | Active status | Unresolved detailed IDs |
 |---|---:|---:|---:|---:|---|---|
-| Gate A | 12 | 0 | 12 | 0 | `NOT_AUDITED` | ALL |
-| Gate B | 9 | 0 | 9 | 0 | `NOT_AUDITED` | ALL |
-| Gate C | 10 | 0 | 10 | 0 | `NOT_AUDITED` | ALL |
-| Gate D | 10 | 0 | 10 | 0 | `NOT_AUDITED` | ALL |
-| Gate E | 8 | 0 | 8 | 0 | `NOT_AUDITED` | ALL |
-| Gate F | 13 | 0 | 13 | 0 | `NOT_AUDITED` | ALL |
-| Gate G | 8 | 0 | 8 | 0 | `NOT_AUDITED` | ALL |
-| Gate H | 12 | 0 | 12 | 0 | `NOT_AUDITED` | ALL |
-| Gate I | 13 | 0 | 13 | 0 | `NOT_AUDITED` | ALL |
-| Gate J | 11 | 0 | 11 | 0 | `NOT_AUDITED` | ALL |
-| Gate K | 9 | 0 | 9 | 0 | `NOT_AUDITED` | ALL |
-| Gate L | 12 | 0 | 12 | 0 | `NOT_AUDITED` | ALL |
-| Gate M | 14 | 0 | 14 | 0 | `NOT_AUDITED` | ALL |
-| Gate N | 20 | 0 | 20 | 0 | `NOT_AUDITED` | ALL |
-| Gate O | 6 | 0 | 6 | 0 | `NOT_AUDITED` | ALL |
-| Gate P | 7 | 0 | 7 | 0 | `NOT_AUDITED` | ALL |
-| Gate Q | 8 | 0 | 8 | 0 | `NOT_AUDITED` | ALL |
-| Gate R | 23 | 0 | 23 | 0 | `NOT_AUDITED` | ALL |
+| Gate A | 12 | 12 | 0 | 0 | `PASS` |  |
+| Gate B | 9 | 9 | 0 | 0 | `PASS` |  |
+| Gate C | 10 | 10 | 0 | 0 | `PASS` |  |
+| Gate D | 10 | 10 | 0 | 0 | `PASS` |  |
+| Gate E | 8 | 8 | 0 | 0 | `PASS` |  |
+| Gate F | 13 | 13 | 0 | 0 | `PASS` |  |
+| Gate G | 8 | 8 | 0 | 0 | `PASS` |  |
+| Gate H | 12 | 12 | 0 | 0 | `PASS` |  |
+| Gate I | 13 | 13 | 0 | 0 | `PASS` |  |
+| Gate J | 11 | 11 | 0 | 0 | `PASS` |  |
+| Gate K | 9 | 9 | 0 | 0 | `PASS` |  |
+| Gate L | 12 | 12 | 0 | 0 | `PASS` |  |
+| Gate M | 14 | 14 | 0 | 0 | `PASS` |  |
+| Gate N | 20 | 20 | 0 | 0 | `PASS` |  |
+| Gate O | 6 | 6 | 0 | 0 | `PASS` |  |
+| Gate P | 7 | 7 | 0 | 0 | `PASS` |  |
+| Gate Q | 8 | 8 | 0 | 0 | `PASS` |  |
+| Gate R | 23 | 21 | 2 | 0 | `PARTIAL` | `GATE-R-012`, `GATE-R-023` |
 
 ### 10.1 Known evidence-only blockers
 
@@ -356,10 +356,10 @@ README_REPRODUCIBILITY.md
 
 | Release responsibility | Current state | Closure |
 |---|---|---|
-| Release builder and exact inventory validation | `NOT_AUDITED` | re-audited unless release code changes |
-| SHA-256 manifest schema/validation | `NOT_AUDITED` | re-audited unless manifest schema changes |
-| Runtime/environment metadata capture | `NOT_AUDITED` | re-audited unless environment schema changes |
-| Release-state typing (`PUBLIC`, `BLINDED_ARCHIVE`, `WITHHELD_LICENSE_RESTRICTED`) | `NOT_AUDITED` | re-audited unless release-state semantics change |
+| Release builder and exact inventory validation | `PASS` | re-audited unless release code changes |
+| SHA-256 manifest schema/validation | `PASS` | re-audited unless manifest schema changes |
+| Runtime/environment metadata capture | `PASS` | re-audited unless environment schema changes |
+| Release-state typing (`PUBLIC`, `BLINDED_ARCHIVE`, `WITHHELD_LICENSE_RESTRICTED`) | `PASS` | re-audited unless release-state semantics change |
 | Submission-time literature date/search record | `EVIDENCE_REQUIRED` | actual submission-stage evidence |
 | Complete real campaign release bundle | `EVIDENCE_REQUIRED` | generate only from retained campaign outputs |
 
