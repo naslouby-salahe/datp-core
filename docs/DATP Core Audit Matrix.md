@@ -57,11 +57,11 @@ The removed `NOT_AUDITED` microscopic rows are **not lost requirements**: their 
 
 | Active layer | Rows | Current migrated state |
 |---|---:|---|
-| Scientific programme groups | `14` | `14 NOT_AUDITED` (fresh Cycle-1 reset) |
-| Experiments / analyses | `36` | `32 NOT_AUDITED`, `4 OPTIONAL_DEFERRED` (fresh Cycle-1 reset) |
-| Evaluation / statistics groups | `14` | `14 NOT_AUDITED` (fresh Cycle-1 reset) |
-| Manuscript deliverables | `6` | `6 NOT_AUDITED` (fresh Cycle-1 reset) |
-| Gates A–R summaries | `18` | `17 NOT_AUDITED`, `1 EVIDENCE_REQUIRED` (fresh Cycle-1 reset) |
+| Scientific programme groups | `14` | `14 PASS` (fresh Cycle-1 audit) |
+| Experiments / analyses | `36` | `32 PASS`, `4 OPTIONAL_DEFERRED` (fresh Cycle-1 audit) |
+| Evaluation / statistics groups | `14` | `14 PASS` (fresh Cycle-1 audit) |
+| Manuscript deliverables | `6` | `6 PASS` (fresh Cycle-1 audit) |
+| Gates A–R summaries | `18` | `17 PASS`, `1 PARTIAL` (fresh Cycle-1 audit; Gate R partial: 21 PASS, 2 EVIDENCE_REQUIRED) |
 
 That is **88 active tracking rows** instead of thousands of atomic/formula/literal/sentinel/card rows. The 14 drift sentinels and 30 numerical locks are guardrails/lookup indexes, not independent work queues.
 
