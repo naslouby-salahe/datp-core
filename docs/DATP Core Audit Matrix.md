@@ -4,9 +4,9 @@
 
 ## 0. Authority, migration, and operating rules
 
-- **Authoritative roadmap:** `Journal_Extension_Master_Roadmap(20260813-183451).md`
+- **Authoritative roadmap:** `Journal_Extension_Master_Roadmap.md`
 - **Roadmap SHA-256:** `f77ad1c1ebc181c184f29f0c22e5e872a105c4f6ace59207a0c35982bcabf7dc`
-- **Roadmap size:** `329257` bytes; `6484` lines
+- **Roadmap size:** `335741` bytes on disk (CRLF; `329257` LF-normalized); `6484` lines
 - **Migrated legacy matrix SHA-256:** `1d26ba846312f467af2b1446dc64a9e29162c0b8d642b1b91a0aa4d9e55766bb`
 - **Migration date:** `2026-08-13`
 - **Repository policy:** no backwards compatibility. Replace obsolete APIs/identities at callers and remove stale paths.
@@ -57,11 +57,11 @@ The removed `NOT_AUDITED` microscopic rows are **not lost requirements**: their 
 
 | Active layer | Rows | Current migrated state |
 |---|---:|---|
-| Scientific programme groups | `14` | `3 PASS`, `8 PARTIAL`, `3 NOT_AUDITED` |
-| Experiments / analyses | `36` | `2 PARTIAL`, `30 NOT_AUDITED`, `4 OPTIONAL_DEFERRED` |
-| Evaluation / statistics groups | `14` | `12 PARTIAL`, `2 NOT_AUDITED` |
-| Manuscript deliverables | `6` | `6 NOT_AUDITED` |
-| Gates A–R summaries | `18` | `7 PASS`, `10 PARTIAL`, `1 EVIDENCE_REQUIRED` |
+| Scientific programme groups | `14` | `14 NOT_AUDITED` (fresh Cycle-1 reset) |
+| Experiments / analyses | `36` | `32 NOT_AUDITED`, `4 OPTIONAL_DEFERRED` (fresh Cycle-1 reset) |
+| Evaluation / statistics groups | `14` | `14 NOT_AUDITED` (fresh Cycle-1 reset) |
+| Manuscript deliverables | `6` | `6 NOT_AUDITED` (fresh Cycle-1 reset) |
+| Gates A–R summaries | `18` | `17 NOT_AUDITED`, `1 EVIDENCE_REQUIRED` (fresh Cycle-1 reset) |
 
 That is **88 active tracking rows** instead of thousands of atomic/formula/literal/sentinel/card rows. The 14 drift sentinels and 30 numerical locks are guardrails/lookup indexes, not independent work queues.
 
@@ -110,18 +110,18 @@ These 14 rows replace the old 95-row active Part-I queue. Detailed completed evi
 | ID | Coherent roadmap scope | Roadmap owner | Status | Migrated progress credit | Unresolved child contracts |
 |---|---|---|---|---|---|
 | `SCIENTIFIC-01` | Programme identity | Part I §§1.1–1.2 | `NOT_AUDITED` | curated 0/2 PASS | GLOBAL-CONTRACT-001, GLOBAL-CONTRACT-002 |
-| `SCIENTIFIC-02` | Core causal / fixed-detector contract | Part I §§2.1–2.4 | `PARTIAL` | curated 3/5 PASS; atomic 51/56 adjudicated | GLOBAL-CONTRACT-005, BOUNDARY-CONTRACT-001 |
-| `SCIENTIFIC-03` | Calibration, evaluation, eligibility, federation regime, metric intent | Part I §§3.1–3.6 | `PARTIAL` | curated 4/8 PASS; atomic 52/52 adjudicated | GLOBAL-CONTRACT-006, GLOBAL-CONTRACT-007, GLOBAL-CONTRACT-008, GLOBAL-CONTRACT-009 |
-| `SCIENTIFIC-04` | Core threshold-policy system | Part I §§4.1–4.6 | `PARTIAL` | curated 4/6 PASS; atomic 5/12 adjudicated | GLOBAL-CONTRACT-010, GLOBAL-CONTRACT-011 |
-| `SCIENTIFIC-05` | Supportive threshold variants | Part I §§5.1–5.4 | `PASS` | curated 5/5 PASS; atomic 8/12 adjudicated | — |
-| `SCIENTIFIC-06` | Federated shared-threshold comparators | Part I §§6.1–6.2 | `PARTIAL` | curated 2/3 PASS; atomic 10/10 adjudicated | GLOBAL-CONTRACT-013 |
-| `SCIENTIFIC-07` | Training-side stress tests and absorption semantics | Part I §§7.1–7.4 | `PASS` | curated 7/7 PASS; atomic 16/16 adjudicated | — |
-| `SCIENTIFIC-08` | Evidence architecture and negative evidence | Part I §§8.1–8.3 | `PARTIAL` | curated 0/3 PASS; atomic 19/19 adjudicated | GLOBAL-CONTRACT-016, CALIBRATION-CONTRACT-007, GLOBAL-CONTRACT-017 |
-| `SCIENTIFIC-09` | Dataset/population and heterogeneity boundaries | Part I §§9.1–9.7 | `PASS` | curated 7/7 PASS; atomic 20/20 adjudicated | — |
-| `SCIENTIFIC-10` | Included scientific scope | Part I §10.A | `PARTIAL` | curated 1/7 PASS; atomic 13/23 adjudicated | GLOBAL-CONTRACT-018, THRESHOLD-CONTRACT-011, THRESHOLD-CONTRACT-012, TEMPORAL-CONTRACT-001, GLOBAL-CONTRACT-019, GLOBAL-CONTRACT-020 |
+| `SCIENTIFIC-02` | Core causal / fixed-detector contract | Part I §§2.1–2.4 | `NOT_AUDITED` | curated 3/5 PASS; atomic 51/56 adjudicated | GLOBAL-CONTRACT-005, BOUNDARY-CONTRACT-001 |
+| `SCIENTIFIC-03` | Calibration, evaluation, eligibility, federation regime, metric intent | Part I §§3.1–3.6 | `NOT_AUDITED` | curated 4/8 PASS; atomic 52/52 adjudicated | GLOBAL-CONTRACT-006, GLOBAL-CONTRACT-007, GLOBAL-CONTRACT-008, GLOBAL-CONTRACT-009 |
+| `SCIENTIFIC-04` | Core threshold-policy system | Part I §§4.1–4.6 | `NOT_AUDITED` | curated 4/6 PASS; atomic 5/12 adjudicated | GLOBAL-CONTRACT-010, GLOBAL-CONTRACT-011 |
+| `SCIENTIFIC-05` | Supportive threshold variants | Part I §§5.1–5.4 | `NOT_AUDITED` | curated 5/5 PASS; atomic 8/12 adjudicated | — |
+| `SCIENTIFIC-06` | Federated shared-threshold comparators | Part I §§6.1–6.2 | `NOT_AUDITED` | curated 2/3 PASS; atomic 10/10 adjudicated | GLOBAL-CONTRACT-013 |
+| `SCIENTIFIC-07` | Training-side stress tests and absorption semantics | Part I §§7.1–7.4 | `NOT_AUDITED` | curated 7/7 PASS; atomic 16/16 adjudicated | — |
+| `SCIENTIFIC-08` | Evidence architecture and negative evidence | Part I §§8.1–8.3 | `NOT_AUDITED` | curated 0/3 PASS; atomic 19/19 adjudicated | GLOBAL-CONTRACT-016, CALIBRATION-CONTRACT-007, GLOBAL-CONTRACT-017 |
+| `SCIENTIFIC-09` | Dataset/population and heterogeneity boundaries | Part I §§9.1–9.7 | `NOT_AUDITED` | curated 7/7 PASS; atomic 20/20 adjudicated | — |
+| `SCIENTIFIC-10` | Included scientific scope | Part I §10.A | `NOT_AUDITED` | curated 1/7 PASS; atomic 13/23 adjudicated | GLOBAL-CONTRACT-018, THRESHOLD-CONTRACT-011, THRESHOLD-CONTRACT-012, TEMPORAL-CONTRACT-001, GLOBAL-CONTRACT-019, GLOBAL-CONTRACT-020 |
 | `SCIENTIFIC-11` | Excluded scope and non-expansion guardrails | Part I §10.B | `NOT_AUDITED` | curated 0/8 PASS | GLOBAL-CONTRACT-021, GLOBAL-CONTRACT-022, GLOBAL-CONTRACT-023, GLOBAL-CONTRACT-024, TEMPORAL-CONTRACT-002, GLOBAL-CONTRACT-025, CALIBRATION-CONTRACT-008, GLOBAL-CONTRACT-026 |
-| `SCIENTIFIC-12` | Terminology, identities, statistical/calibration vocabulary | Part I §10.C | `PARTIAL` | curated 3/9 PASS; atomic 7/13 adjudicated | GLOBAL-CONTRACT-027, THRESHOLD-CONTRACT-013, THRESHOLD-CONTRACT-014, GLOBAL-CONTRACT-028, STAT-CONTRACT-001, CALIBRATION-CONTRACT-009 |
-| `SCIENTIFIC-13` | Claim framing, novelty, claim survival, negative evidence | Part I §10.D | `PARTIAL` | curated 11/14 PASS; atomic 11/49 adjudicated | REPORT-CONTRACT-006, REPORT-CONTRACT-007, GLOBAL-CONTRACT-033 |
+| `SCIENTIFIC-12` | Terminology, identities, statistical/calibration vocabulary | Part I §10.C | `NOT_AUDITED` | curated 3/9 PASS; atomic 7/13 adjudicated | GLOBAL-CONTRACT-027, THRESHOLD-CONTRACT-013, THRESHOLD-CONTRACT-014, GLOBAL-CONTRACT-028, STAT-CONTRACT-001, CALIBRATION-CONTRACT-009 |
+| `SCIENTIFIC-13` | Claim framing, novelty, claim survival, negative evidence | Part I §10.D | `NOT_AUDITED` | curated 11/14 PASS; atomic 11/49 adjudicated | REPORT-CONTRACT-006, REPORT-CONTRACT-007, GLOBAL-CONTRACT-033 |
 | `SCIENTIFIC-14` | Accepted scientific limitations | Part I §10.E | `NOT_AUDITED` | curated 0/11 PASS | DATASET-CONTRACT-008, DATASET-CONTRACT-009, GLOBAL-CONTRACT-034, TEMPORAL-CONTRACT-004, GLOBAL-CONTRACT-035, GLOBAL-CONTRACT-036, THRESHOLD-CONTRACT-015, GLOBAL-CONTRACT-037, CALIBRATION-CONTRACT-010, CALIBRATION-CONTRACT-011, BOUNDARY-CONTRACT-002 |
 
 ## 3. High-risk numerical lock lookup
@@ -163,15 +163,15 @@ This is **lookup-only**, copied from the current roadmap. These rows are not a s
 
 ## 4. Dataset and population capability snapshot
 
-The current dataset/population implementation evidence was already closed in the old matrix's Part-I dataset contracts and is preserved as PASS. Reopen a row only if dataset parsing, population construction, capability typing, or client identity semantics change.
+The current dataset/population implementation evidence is freshly audited in this cycle. No previous PASS conclusion is current proof; every population row below is re-established from the current roadmap and repository.
 
 | Population | Client identity | Locked client count | Natural physical-device claim valid? | FPR-equity metrics | Per-client attack metrics | Genuine chronology | Evidence role | Status |
 |---|---:|---:|---|---|---|---|---|---|
-| `NBAIOT_NATURAL_DEVICES` | original commercial IoT device | `9` | **Yes** | **Yes** | **Yes**, subject to held-out family support | **No genuine-time claim** from source-row ordering | sole confirmatory + principal mechanism | `PASS` |
-| `CICIOT_FILE_CLIENTS` | processed CSV file pseudo-client | `63` | **No** | **Yes** | **Not authorized for DATP claims** | **No** | applicability boundary | `PASS` |
-| `NBAIOT_DIRICHLET_CLIENTS` | synthetic Dirichlet client | `20` | **No** | **Yes** | **Yes**, where source attack support remains valid | **No** | controlled heterogeneity sensitivity | `PASS` |
-| `EDGE_SENSOR_CLIENTS` | benign sensor-group folder | `10` | **No physical-device claim** | **Yes** | **No** — valid per-client attack assignment unavailable | **No** | independent external benign-equity validation | `PASS` |
-| `EDGE_TEMPORAL_CLIENTS` | timestamp-valid sensor-group folder | `9` | **No physical-device claim** | **Yes** | **No** — temporal experiment is benign-only | **Yes** | one-shot temporal boundary | `PASS` |
+| `NBAIOT_NATURAL_DEVICES` | original commercial IoT device | `9` | **Yes** | **Yes** | **Yes**, subject to held-out family support | **No genuine-time claim** from source-row ordering | sole confirmatory + principal mechanism | `NOT_AUDITED` |
+| `CICIOT_FILE_CLIENTS` | processed CSV file pseudo-client | `63` | **No** | **Yes** | **Not authorized for DATP claims** | **No** | applicability boundary | `NOT_AUDITED` |
+| `NBAIOT_DIRICHLET_CLIENTS` | synthetic Dirichlet client | `20` | **No** | **Yes** | **Yes**, where source attack support remains valid | **No** | controlled heterogeneity sensitivity | `NOT_AUDITED` |
+| `EDGE_SENSOR_CLIENTS` | benign sensor-group folder | `10` | **No physical-device claim** | **Yes** | **No** — valid per-client attack assignment unavailable | **No** | independent external benign-equity validation | `NOT_AUDITED` |
+| `EDGE_TEMPORAL_CLIENTS` | timestamp-valid sensor-group folder | `9` | **No physical-device claim** | **Yes** | **No** — temporal experiment is benign-only | **Yes** | one-shot temporal boundary | `NOT_AUDITED` |
 
 ### 4.1 Dataset boundary closures already retained
 
@@ -219,8 +219,8 @@ There is **one row per experiment/analysis**. The old experiment-by-experiment a
 | `EXPERIMENT-FEDPROX-AGGREGATION-MECHANISM-ACTIVATION-STRESS-TEST` | §11.1 | Training stress | N-BaIoT natural devices | FedProx μ grid + local-update drift diagnostics | `YES` | 4244–4319 | `NOT_AUDITED` | 0/1 formula mappings retained |
 | `EXPERIMENT-DITTO-MODEL-PERSONALIZATION-STRESS-TEST` | §11.2 | Model-personalization stress | N-BaIoT natural devices | Ditto λD grid / absorption | `YES` | 4320–4429 | `NOT_AUDITED` | 0/4 formula mappings retained |
 | `EXPERIMENT-FEDAVG-POST-TRAINING-CLIENT-LOCAL-FINE-TUNING` | §11.2A | Simple model-personalization stress | N-BaIoT natural devices | exactly 10 benign-training local epochs + common absorption diagnostics | `YES` | 4430–4501 | `NOT_AUDITED` | 0/2 formula mappings retained |
-| `EXPERIMENT-ONE-SHOT-RECALIBRATION-UNDER-GENUINE-CHRONOLOGY` | §12.1 | Temporal boundary | Edge-IIoTset temporal population | static vs frozen-future vs one-shot recalibration | `YES` | 4504–4646 | `PARTIAL` | 6/8 formula mappings retained |
-| `EXPERIMENT-ALERT-BURDEN-EXPERIMENT` | §13.1 | Operational interpretation | valid rate-bearing population | alert-count translation | `YES` | 4649–4693 | `PARTIAL` | 1/1 formula mappings retained |
+| `EXPERIMENT-ONE-SHOT-RECALIBRATION-UNDER-GENUINE-CHRONOLOGY` | §12.1 | Temporal boundary | Edge-IIoTset temporal population | static vs frozen-future vs one-shot recalibration | `YES` | 4504–4646 | `NOT_AUDITED` | 6/8 formula mappings retained |
+| `EXPERIMENT-ALERT-BURDEN-EXPERIMENT` | §13.1 | Operational interpretation | valid rate-bearing population | alert-count translation | `YES` | 4649–4693 | `NOT_AUDITED` | 1/1 formula mappings retained |
 | `EXPERIMENT-THRESHOLD-STAGE-COMMUNICATION-STORAGE-RUNTIME-ACCOUNTIN` | §13.2 | Operational accounting | applicable methods | payload, storage, threshold-stage timing | `YES` | 4694–4737 | `NOT_AUDITED` | — |
 | `EXPERIMENT-ROBUST-CLUSTER-MEDIAN-THRESHOLD` | §14.1 | Optional analysis | N-BaIoT natural devices | cluster median vs mean threshold | `NO` | 4742–4755 | `OPTIONAL_DEFERRED` | — |
 | `EXPERIMENT-ADDITIONAL-EQUITY-INDICES` | §14.2 | Optional analysis | applicable populations | Jain/Gini/IQR/range diagnostics | `NO` | 4756–4768 | `OPTIONAL_DEFERRED` | — |
@@ -234,20 +234,20 @@ These grouped rows replace the old 65-row metric/statistical queue plus repetiti
 
 | ID | Coherent scope | Roadmap owner | Status | Migrated formula credit | Legacy child IDs covered |
 |---|---|---|---|---|---|
-| `EVAL-01` | Evaluation foundations and eligible populations | Part III §§1.1–3.4 | `PARTIAL` | 1/2 formula mappings retained | METRIC-001, METRIC-002, METRIC-003, METRIC-004, METRIC-005, METRIC-006, METRIC-007 |
-| `EVAL-02` | Per-client predictive metrics and held-out target transfer | Part III §§4.1–4.8 | `PARTIAL` | 14/14 formula mappings retained | METRIC-008, METRIC-009, METRIC-010, METRIC-011, METRIC-012, STAT-001, METRIC-013, METRIC-014 |
-| `EVAL-03` | H_TAUTOLOGY held-out rebuttal | Part III §4.8A | `PARTIAL` | 4/4 formula mappings retained | METRIC-015 |
-| `EVAL-04` | Cross-client FPR dispersion, lower-tail and equity semantics | Part III §§5.1–6.3 | `PARTIAL` | 11/11 formula mappings retained | METRIC-016, METRIC-017, METRIC-018, METRIC-019, METRIC-020, METRIC-021, METRIC-022, METRIC-023, METRIC-024 |
-| `EVAL-05` | Aggregate utility summaries | Part III §§7.1–7.3 | `PARTIAL` | 2/2 formula mappings retained | METRIC-025, METRIC-026, METRIC-027 |
-| `EVAL-06` | Threshold-estimation error, target attainment and sample efficiency | Part III §§8.1–8.4 | `PARTIAL` | 8/8 formula mappings retained | METRIC-028, METRIC-029, METRIC-030, METRIC-031 |
-| `EVAL-07` | Federated summary-statistics decomposition | Part III §§9.1–9.3 | `PARTIAL` | 5/5 formula mappings retained | METRIC-032, METRIC-033, METRIC-034 |
-| `EVAL-08` | Operational burden, communication, timing and Ditto state accounting | Part III §§10.1–10.4 | `PARTIAL` | 1/1 formula mappings retained | METRIC-035, METRIC-036, METRIC-037, METRIC-038 |
-| `STAT-01` | Confirmatory paired contrast, effect sizes, BCa and sign evidence | Part III §§11.1–12.1A | `PARTIAL` | 7/7 formula mappings retained | STAT-002, STAT-003, STAT-004, STAT-005, STAT-006, STAT-007 |
+| `EVAL-01` | Evaluation foundations and eligible populations | Part III §§1.1–3.4 | `NOT_AUDITED` | 1/2 formula mappings retained | METRIC-001, METRIC-002, METRIC-003, METRIC-004, METRIC-005, METRIC-006, METRIC-007 |
+| `EVAL-02` | Per-client predictive metrics and held-out target transfer | Part III §§4.1–4.8 | `NOT_AUDITED` | 14/14 formula mappings retained | METRIC-008, METRIC-009, METRIC-010, METRIC-011, METRIC-012, STAT-001, METRIC-013, METRIC-014 |
+| `EVAL-03` | H_TAUTOLOGY held-out rebuttal | Part III §4.8A | `NOT_AUDITED` | 4/4 formula mappings retained | METRIC-015 |
+| `EVAL-04` | Cross-client FPR dispersion, lower-tail and equity semantics | Part III §§5.1–6.3 | `NOT_AUDITED` | 11/11 formula mappings retained | METRIC-016, METRIC-017, METRIC-018, METRIC-019, METRIC-020, METRIC-021, METRIC-022, METRIC-023, METRIC-024 |
+| `EVAL-05` | Aggregate utility summaries | Part III §§7.1–7.3 | `NOT_AUDITED` | 2/2 formula mappings retained | METRIC-025, METRIC-026, METRIC-027 |
+| `EVAL-06` | Threshold-estimation error, target attainment and sample efficiency | Part III §§8.1–8.4 | `NOT_AUDITED` | 8/8 formula mappings retained | METRIC-028, METRIC-029, METRIC-030, METRIC-031 |
+| `EVAL-07` | Federated summary-statistics decomposition | Part III §§9.1–9.3 | `NOT_AUDITED` | 5/5 formula mappings retained | METRIC-032, METRIC-033, METRIC-034 |
+| `EVAL-08` | Operational burden, communication, timing and Ditto state accounting | Part III §§10.1–10.4 | `NOT_AUDITED` | 1/1 formula mappings retained | METRIC-035, METRIC-036, METRIC-037, METRIC-038 |
+| `STAT-01` | Confirmatory paired contrast, effect sizes, BCa and sign evidence | Part III §§11.1–12.1A | `NOT_AUDITED` | 7/7 formula mappings retained | STAT-002, STAT-003, STAT-004, STAT-005, STAT-006, STAT-007 |
 | `STAT-02` | Secondary inference, multiplicity, nested replicates, association and cluster stability | Part III §§12.1–12.7 | `NOT_AUDITED` | — | STAT-008, STAT-009, STAT-010, STAT-011, STAT-012, STAT-013, STAT-014 |
 | `STAT-03` | Terminal detector and checkpoint restrictions | Part III §§13.1–13.3 | `NOT_AUDITED` | — | STAT-015, STAT-016, STAT-017 |
-| `STAT-04` | Temporal diagnostics | Part III §14.1 | `PARTIAL` | 3/3 formula mappings retained | STAT-018 |
-| `STAT-05` | Precision, leave-one-device-out influence and numerical discipline | Part III §§15.1–15.2 | `PARTIAL` | 10/10 formula mappings retained | STAT-019, STAT-020, STAT-021 |
-| `REPORT-SEM-01` | Mandatory figure/table statistical semantics | Part III §§16.1–16.5 | `PARTIAL` | 1/1 formula mappings retained | STAT-022, STAT-023, STAT-024, STAT-025, STAT-026, STAT-027 |
+| `STAT-04` | Temporal diagnostics | Part III §14.1 | `NOT_AUDITED` | 3/3 formula mappings retained | STAT-018 |
+| `STAT-05` | Precision, leave-one-device-out influence and numerical discipline | Part III §§15.1–15.2 | `NOT_AUDITED` | 10/10 formula mappings retained | STAT-019, STAT-020, STAT-021 |
+| `REPORT-SEM-01` | Mandatory figure/table statistical semantics | Part III §§16.1–16.5 | `NOT_AUDITED` | 1/1 formula mappings retained | STAT-022, STAT-023, STAT-024, STAT-025, STAT-026, STAT-027 |
 
 ## 7. Mandatory manuscript-facing deliverables
 
@@ -305,24 +305,24 @@ The old 205 gate rows are preserved in the progress archive. This active matrix 
 
 | Gate | Detailed checks | PASS | Pending | FAIL | Active status | Unresolved detailed IDs |
 |---|---:|---:|---:|---:|---|---|
-| Gate A | 12 | 5 | 7 | 0 | `PARTIAL` | GATE-A-005, GATE-A-006, GATE-A-007, GATE-A-008, GATE-A-009, GATE-A-010, GATE-A-011 |
-| Gate B | 9 | 9 | 0 | 0 | `PASS` | — |
-| Gate C | 10 | 7 | 3 | 0 | `PARTIAL` | GATE-C-004, GATE-C-009, GATE-C-010 |
-| Gate D | 10 | 7 | 3 | 0 | `PARTIAL` | GATE-D-004, GATE-D-005, GATE-D-008 |
-| Gate E | 8 | 7 | 1 | 0 | `PARTIAL` | GATE-E-005 |
-| Gate F | 13 | 4 | 9 | 0 | `PARTIAL` | GATE-F-002, GATE-F-005, GATE-F-006, GATE-F-007, GATE-F-008, GATE-F-009, GATE-F-010, GATE-F-012, GATE-F-013 |
-| Gate G | 8 | 8 | 0 | 0 | `PASS` | — |
-| Gate H | 12 | 5 | 7 | 0 | `PARTIAL` | GATE-H-006, GATE-H-007, GATE-H-008, GATE-H-009, GATE-H-010, GATE-H-011, GATE-H-012 |
-| Gate I | 13 | 12 | 1 | 0 | `PARTIAL` | GATE-I-012 |
-| Gate J | 11 | 11 | 0 | 0 | `PASS` | — |
-| Gate K | 9 | 5 | 4 | 0 | `PARTIAL` | GATE-K-005, GATE-K-006, GATE-K-007, GATE-K-008 |
-| Gate L | 12 | 9 | 3 | 0 | `PARTIAL` | GATE-L-005, GATE-L-011, GATE-L-012 |
-| Gate M | 14 | 14 | 0 | 0 | `PASS` | — |
-| Gate N | 20 | 19 | 1 | 0 | `PARTIAL` | GATE-N-001 |
-| Gate O | 6 | 6 | 0 | 0 | `PASS` | — |
-| Gate P | 7 | 7 | 0 | 0 | `PASS` | — |
-| Gate Q | 8 | 8 | 0 | 0 | `PASS` | — |
-| Gate R | 23 | 21 | 0 | 2 | `EVIDENCE_REQUIRED` | GATE-R-012, GATE-R-023 |
+| Gate A | 12 | 0 | 12 | 0 | `NOT_AUDITED` | ALL |
+| Gate B | 9 | 0 | 9 | 0 | `NOT_AUDITED` | ALL |
+| Gate C | 10 | 0 | 10 | 0 | `NOT_AUDITED` | ALL |
+| Gate D | 10 | 0 | 10 | 0 | `NOT_AUDITED` | ALL |
+| Gate E | 8 | 0 | 8 | 0 | `NOT_AUDITED` | ALL |
+| Gate F | 13 | 0 | 13 | 0 | `NOT_AUDITED` | ALL |
+| Gate G | 8 | 0 | 8 | 0 | `NOT_AUDITED` | ALL |
+| Gate H | 12 | 0 | 12 | 0 | `NOT_AUDITED` | ALL |
+| Gate I | 13 | 0 | 13 | 0 | `NOT_AUDITED` | ALL |
+| Gate J | 11 | 0 | 11 | 0 | `NOT_AUDITED` | ALL |
+| Gate K | 9 | 0 | 9 | 0 | `NOT_AUDITED` | ALL |
+| Gate L | 12 | 0 | 12 | 0 | `NOT_AUDITED` | ALL |
+| Gate M | 14 | 0 | 14 | 0 | `NOT_AUDITED` | ALL |
+| Gate N | 20 | 0 | 20 | 0 | `NOT_AUDITED` | ALL |
+| Gate O | 6 | 0 | 6 | 0 | `NOT_AUDITED` | ALL |
+| Gate P | 7 | 0 | 7 | 0 | `NOT_AUDITED` | ALL |
+| Gate Q | 8 | 0 | 8 | 0 | `NOT_AUDITED` | ALL |
+| Gate R | 23 | 0 | 23 | 0 | `NOT_AUDITED` | ALL |
 
 ### 10.1 Known evidence-only blockers
 
@@ -356,10 +356,10 @@ README_REPRODUCIBILITY.md
 
 | Release responsibility | Current state | Closure |
 |---|---|---|
-| Release builder and exact inventory validation | `PASS` implementation evidence retained | keep frozen unless release code changes |
-| SHA-256 manifest schema/validation | `PASS` implementation evidence retained | keep frozen unless manifest schema changes |
-| Runtime/environment metadata capture | `PASS` implementation evidence retained | keep frozen unless environment schema changes |
-| Release-state typing (`PUBLIC`, `BLINDED_ARCHIVE`, `WITHHELD_LICENSE_RESTRICTED`) | `PASS` implementation evidence retained | keep frozen unless release-state semantics change |
+| Release builder and exact inventory validation | `NOT_AUDITED` — fresh Cycle-1 audit | re-audited unless release code changes |
+| SHA-256 manifest schema/validation | `NOT_AUDITED` — fresh Cycle-1 audit | re-audited unless manifest schema changes |
+| Runtime/environment metadata capture | `NOT_AUDITED` — fresh Cycle-1 audit | re-audited unless environment schema changes |
+| Release-state typing (`PUBLIC`, `BLINDED_ARCHIVE`, `WITHHELD_LICENSE_RESTRICTED`) | `NOT_AUDITED` — fresh Cycle-1 audit | re-audited unless release-state semantics change |
 | Submission-time literature date/search record | `EVIDENCE_REQUIRED` | actual submission-stage evidence |
 | Complete real campaign release bundle | `EVIDENCE_REQUIRED` | generate only from retained campaign outputs |
 
