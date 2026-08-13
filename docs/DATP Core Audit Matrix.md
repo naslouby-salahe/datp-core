@@ -6352,26 +6352,26 @@ README_REPRODUCIBILITY.md
 | `PREPROCESS-002` | I | 96 | 2.1 Unit of causal comparison | the same preprocessing state; | `NOT_AUDITED` | — |
 | `GLOBAL-003` | I | 97 | 2.1 Unit of causal comparison | the same client identities; | `PASS` | Immutable population and stable client identities are coordinate-bound. |
 | `GLOBAL-004` | I | 98 | 2.1 Unit of causal comparison | the same predefined data partitions; | `PASS` | Persisted split identity is reused and validated. |
-| `CALIBRATION-001` | I | 99 | 2.1 Unit of causal comparison | the same benign calibration records; | `NOT_AUDITED` | — |
+| `CALIBRATION-001` | I | 99 | 2.1 Unit of causal comparison | the same benign calibration records; | `PASS` | Fixed-score comparators share persisted calibration evidence. |
 | `GLOBAL-005` | I | 100 | 2.1 Unit of causal comparison | the same held-out test scores; | `PASS` | Comparator policies consume one immutable fixed-score artifact. |
 | `GLOBAL-006` | I | 101 | 2.1 Unit of causal comparison | the same held-out test labels; | `PASS` | Evaluation labels are persisted with and identity-checked against fixed-score evidence. |
-| `CALIBRATION-002` | I | 102 | 2.1 Unit of causal comparison | the same eligibility rule; | `NOT_AUDITED` | — |
-| `THRESHOLD-001` | I | 103 | 2.1 Unit of causal comparison | the same quantile target unless a declared quantile-sensitivity experiment changes it; | `NOT_AUDITED` | — |
-| `METRIC-001` | I | 104 | 2.1 Unit of causal comparison | the same metric implementation. | `NOT_AUDITED` | — |
+| `CALIBRATION-002` | I | 102 | 2.1 Unit of causal comparison | the same eligibility rule; | `PASS` | Comparator construction requires one shared eligible-client cohort. |
+| `THRESHOLD-001` | I | 103 | 2.1 Unit of causal comparison | the same quantile target unless a declared quantile-sensitivity experiment changes it; | `PASS` | Threshold construction locks q95 outside the declared sensitivity coordinate. |
+| `METRIC-001` | I | 104 | 2.1 Unit of causal comparison | the same metric implementation. | `PASS` | Typed metrics are evaluated from the shared fixed-score artifact. |
 | `GLOBAL-007` | I | 112 | 2.2 Fixed elements | model family; | `PASS` | Training model identity is typed in each execution coordinate. |
-| `DATASET-002` | I | 113 | 2.2 Fixed elements | autoencoder architecture, apart from the input dimension required by the dataset feature schema; | `NOT_AUDITED` | — |
-| `TRAIN-001` | I | 114 | 2.2 Fixed elements | FedAvg as the training algorithm; | `NOT_AUDITED` | — |
+| `DATASET-002` | I | 113 | 2.2 Fixed elements | autoencoder architecture, apart from the input dimension required by the dataset feature schema; | `PASS` | The declared architecture derives only its input dimension from the feature schema. |
+| `TRAIN-001` | I | 114 | 2.2 Fixed elements | FedAvg as the training algorithm; | `PASS` | The confirmatory training declaration is FedAvg. |
 | `GLOBAL-008` | I | 115 | 2.2 Fixed elements | one local epoch per round; | `PASS` | The FedAvg protocol locks one local epoch. |
 | `GLOBAL-009` | I | 116 | 2.2 Fixed elements | full client participation; | `PASS` | The federated protocol enforces full participation every round. |
 | `TRAIN-002` | I | 117 | 2.2 Fixed elements | optimizer and training hyperparameters; | `NOT_AUDITED` | — |
 | `PREPROCESS-003` | I | 118 | 2.2 Fixed elements | preprocessing and normalization semantics; | `NOT_AUDITED` | — |
 | `GLOBAL-010` | I | 119 | 2.2 Fixed elements | split semantics; | `PASS` | Split protocol identity is persisted and validated before scoring. |
 | `GLOBAL-011` | I | 120 | 2.2 Fixed elements | round budget and terminal scientific-model rule; | `PASS` | Active scientific training requires the terminal round-200 artifact. |
-| `GLOBAL-012` | I | 121 | 2.2 Fixed elements | seed cohort; | `NOT_AUDITED` | — |
-| `SCORE-001` | I | 122 | 2.2 Fixed elements | scoring procedure; | `NOT_AUDITED` | — |
-| `CALIBRATION-003` | I | 123 | 2.2 Fixed elements | client eligibility; | `NOT_AUDITED` | — |
-| `DATASET-003` | I | 124 | 2.2 Fixed elements | test population; | `NOT_AUDITED` | — |
-| `METRIC-002` | I | 125 | 2.2 Fixed elements | metric definitions. | `NOT_AUDITED` | — |
+| `GLOBAL-012` | I | 121 | 2.2 Fixed elements | seed cohort; | `PASS` | The exact ten-member confirmatory seed cohort is declaration-tested. |
+| `SCORE-001` | I | 122 | 2.2 Fixed elements | scoring procedure; | `PASS` | Scoring is coordinate-bound and invariant across threshold policies. |
+| `CALIBRATION-003` | I | 123 | 2.2 Fixed elements | client eligibility; | `PASS` | Eligibility is validated before comparator construction. |
+| `DATASET-003` | I | 124 | 2.2 Fixed elements | test population; | `PASS` | Confirmatory population identity is fixed in the execution coordinate. |
+| `METRIC-002` | I | 125 | 2.2 Fixed elements | metric definitions. | `PASS` | Metric identifiers and population aggregation are typed and tested. |
 | `PREPROCESS-004` | I | 135 | 2.2.1 Preprocessing and normalization lock | transformer family: zero-mean unit-variance standardization (`StandardScaler`, `with_mean=True`, `with_std=True`); | `NOT_AUDITED` | — |
 | `PREPROCESS-005` | I | 136 | 2.2.1 Preprocessing and normalization lock | fit scope: **client-local**, fit only on each client’s benign training partition; | `NOT_AUDITED` | — |
 | `PREPROCESS-006` | I | 137 | 2.2.1 Preprocessing and normalization lock | fit partition: train only; calibration, evaluation, and future recalibration rows are transformed only; | `NOT_AUDITED` | — |
