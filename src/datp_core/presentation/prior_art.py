@@ -23,8 +23,8 @@ class PriorArtDistinctionRow:
     distinction: str
 
     def __post_init__(self) -> None:
-        if len(self.categories) != 10:
-            raise ValueError("prior-art rows require the ten locked categorical fields")
+        if len(self.categories) != 11:
+            raise ValueError("prior-art rows require the eleven locked categorical fields")
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,7 +156,7 @@ _COLLISIONS = (
 )
 
 
-_NOT_REPORTED = tuple(PriorArtCategory.NOT_REPORTED for _ in range(10))
+_NOT_REPORTED = tuple(PriorArtCategory.NOT_REPORTED for _ in range(11))
 _ROWS = (
     PriorArtDistinctionRow(
         "FedIoT/FedDetect 2021",
@@ -255,6 +255,7 @@ _ROWS = (
             PriorArtCategory.YES,
             PriorArtCategory.PARTIAL,
             PriorArtCategory.YES,
+            PriorArtCategory.YES,
             PriorArtCategory.NO,
             PriorArtCategory.NO,
         ),
@@ -267,17 +268,17 @@ def render_prior_art_distinction_table() -> str:
     headings = (
         "Work",
         "Primary calibration object",
-        "Detector fixed?",
-        "Mapping modified?",
-        "Benign-only fitting?",
-        "Labels used?",
-        "Shared point?",
-        "Local point?",
-        "Group point?",
-        "Same population?",
-        "FPR dispersion?",
-        "Formal guarantee?",
-        "Byzantine guarantee?",
+        "Detector fixed across the work's threshold/calibration comparison?",
+        "Score/probability mapping modified by the calibration method?",
+        "Benign-only threshold fitting?",
+        "Outcome/class/attack labels used to fit the calibration object?",
+        "Shared/federation-wide operating point present?",
+        "Client-local operating point present?",
+        "Group/cluster operating point present?",
+        "Same evaluation population used across compared scopes?",
+        "Cross-client FPR dispersion reported as an endpoint?",
+        "Formal coverage/risk guarantee?",
+        "Adversarial/Byzantine calibration guarantee?",
         "DATP-Core distinction",
     )
     lines = [
