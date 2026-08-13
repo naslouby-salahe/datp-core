@@ -37,7 +37,7 @@ from datp_core.thresholds.protocols import (
 from datp_core.thresholds.quantiles import ClientBenignCalibrationScores
 from datp_core.thresholds.variants.conformal import ConformalThresholdResult
 from datp_core.thresholds.variants.federated_statistics import FederatedStatisticsThresholdResult
-from datp_core.thresholds.variants.kll import FederatedKllSharedThresholdResult
+from datp_core.thresholds.variants.kll import FederatedKllSharedThresholdResult, derive_kll_reconstruction_seed
 from datp_core.thresholds.variants.moment import MomentLocalThresholdResult, MomentSharedThresholdResult
 from datp_core.thresholds.variants.shrinkage import (
     FixedShrinkageCurveResult,
@@ -148,6 +148,15 @@ def test_kll_dispatch_persists_all_locked_reconstructions_and_client_sketches() 
     assert all(
         sketch.payload_hex for reconstruction in result.reconstructions for sketch in reconstruction.client_sketches
     )
+    assert tuple(reconstruction.random_seed.value for reconstruction in result.reconstructions) == tuple(
+        derive_kll_reconstruction_seed(
+            result.coordinate.training_seed,
+            result.sketch_size,
+            reconstruction.replicate_index,
+        ).value
+        for reconstruction in result.reconstructions
+    )
+    assert len({reconstruction.random_seed for reconstruction in result.reconstructions}) == len(result.reconstructions)
     assert result.uploaded_bytes.value > 0
 
 

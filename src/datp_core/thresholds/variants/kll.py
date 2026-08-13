@@ -16,10 +16,13 @@ from datp_core.core.numeric import (
     Ratio,
     RelativeThresholdError,
     ReplicateIndex,
+    Seed,
+    SeedDerivationComponent,
     ThresholdValue,
 )
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
+from datp_core.runtime.determinism import derive_worker_seed
 from datp_core.thresholds.contracts import ThresholdAssignment
 from datp_core.thresholds.protocols import FederatedKllProtocol
 from datp_core.thresholds.quantiles import ClientBenignCalibrationScores, exact_empirical_quantile
@@ -32,7 +35,7 @@ class _KllDoublesSketch(Protocol):
 
     def merge(self, sketch: "_KllDoublesSketch") -> None: ...
 
-    def get_quantile(self, rank: float) -> float: ...
+    def get_quantile(self, rank: float, inclusive: bool = False) -> float: ...
 
     def normalized_rank_error(self, as_pmf: bool) -> float: ...
 
@@ -56,6 +59,7 @@ class SerializedKllSketch:
 @dataclass(frozen=True, slots=True)
 class KllReconstruction:
     replicate_index: ReplicateIndex
+    random_seed: Seed
     client_sketches: tuple[SerializedKllSketch, ...]
     threshold: ThresholdValue
     normalized_rank_error: Ratio
@@ -105,6 +109,11 @@ def construct_federated_kll_shared_threshold(
             quantile=quantile,
             exact_threshold=exact_threshold,
             replicate_index=ReplicateIndex(index),
+            random_seed=derive_kll_reconstruction_seed(
+                ordered[0].coordinate.training_seed,
+                selected_k,
+                ReplicateIndex(index),
+            ),
         )
         for index in range(protocol.reconstruction_replicate_count.value)
     )
@@ -121,6 +130,17 @@ def construct_federated_kll_shared_threshold(
     )
 
 
+def derive_kll_reconstruction_seed(
+    training_seed: Seed,
+    sketch_size: KllSketchSize,
+    replicate_index: ReplicateIndex,
+) -> Seed:
+    """Derive a reconstruction-local KLL seed from its enclosing training seed."""
+    sketch_component = SeedDerivationComponent(60_000 + sketch_size.value)
+    reconstruction_component = SeedDerivationComponent(70_000 + replicate_index.value)
+    return derive_worker_seed(derive_worker_seed(training_seed, sketch_component), reconstruction_component)
+
+
 def _construct_reconstruction(
     *,
     ordered: tuple[ClientBenignCalibrationScores, ...],
@@ -128,12 +148,14 @@ def _construct_reconstruction(
     quantile: Quantile,
     exact_threshold: ThresholdValue,
     replicate_index: ReplicateIndex,
+    random_seed: Seed,
 ) -> KllReconstruction:
     client_sketches: list[SerializedKllSketch] = []
     for scores in ordered:
         client_started = perf_counter()
         sketch = _new_kll_sketch(sketch_size)
-        sketch.update(scores.as_array)
+        randomized_scores = np.random.default_rng(random_seed.value).permutation(scores.as_array)
+        sketch.update(randomized_scores)
         payload = sketch.serialize()
         client_sketches.append(
             SerializedKllSketch(
@@ -147,7 +169,7 @@ def _construct_reconstruction(
     merged = _new_kll_sketch(sketch_size)
     for serialized in client_sketches:
         merged.merge(_deserialize_kll_sketch(bytes.fromhex(serialized.payload_hex)))
-    threshold = ThresholdValue(float(merged.get_quantile(quantile.value)))
+    threshold = ThresholdValue(float(merged.get_quantile(quantile.value, inclusive=True)))
     server_elapsed = ElapsedSeconds(perf_counter() - server_started)
     pooled = np.concatenate(tuple(item.as_array for item in ordered))
     empirical_cdf = float(np.count_nonzero(pooled <= threshold.value) / pooled.size)
@@ -159,6 +181,7 @@ def _construct_reconstruction(
     )
     return KllReconstruction(
         replicate_index=replicate_index,
+        random_seed=random_seed,
         client_sketches=tuple(client_sketches),
         threshold=threshold,
         normalized_rank_error=Ratio(float(merged.normalized_rank_error(False))),
