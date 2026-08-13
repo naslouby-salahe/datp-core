@@ -19,7 +19,13 @@ from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
 )
-from datp_core.core.identifiers import CoordinateStableKey, EvaluationCohort, EvidenceRole, FederatedThresholdMethod
+from datp_core.core.identifiers import (
+    CalibrationSupportLevel,
+    CoordinateStableKey,
+    EvaluationCohort,
+    EvidenceRole,
+    FederatedThresholdMethod,
+)
 from datp_core.core.numeric import (
     CalibrationSize,
     OnboardingCalibrationSize,
@@ -114,6 +120,8 @@ class ConstructCalibrationSizeAblationRequest:
     family_by_client: tuple[FamilyAssignment, ...]
     calibration: BuildCalibrationResult
     execution_identity: ExternalTemporalExecutionIdentity | None
+    interaction_support: CalibrationSupportLevel | None = None
+    interaction_replicate: ReplicateIndex | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -481,72 +489,95 @@ def construct_calibration_size_ablation(
     capabilities = population_capabilities(request.score_manifest.coordinate.population)
     replicate_count = require_calibration_subsample_replicate_count()
     by_client_replicate = CalibrationReplicateLookup(manifests=request.calibration.replicate_manifests)
-    for size in CALIBRATION_SIZE_PROTOCOL.sizes:
-        for replicate_value in range(replicate_count.value):
-            replicate_index = ReplicateIndex(replicate_value)
-            eligible = _eligible_scores_for_size(
-                request.calibration.eligible_clients,
-                by_client_replicate,
-                size,
-                replicate_index,
+    for size, replicate_index in _selected_calibration_cells(request, replicate_count):
+        if size is None or replicate_index is None:
+            raise ValueError("calibration-size ablation cells require finite support and a replicate")
+        eligible = _eligible_scores_for_size(
+            request.calibration.eligible_clients,
+            by_client_replicate,
+            size,
+            replicate_index,
+        )
+        if not eligible:
+            continue
+        threshold = dispatch_federated_threshold(
+            ThresholdConstructionRequest(
+                method=request.method,
+                coordinate=request.score_manifest.coordinate,
+                quantile=request.quantile,
+                capabilities=capabilities,
+                eligible=eligible,
+                family_by_client=request.family_by_client,
+                support_rule=CalibrationSupportRule.DECLARED_SIZE_ABLATION,
+                cluster_threshold_aggregation=(
+                    ClusterThresholdAggregation.ARITHMETIC_MEAN_OF_ELIGIBLE_LOCAL_THRESHOLDS
+                    if request.method is FederatedThresholdMethod.CLUSTER_THRESHOLD
+                    else None
+                ),
             )
-            if not eligible:
-                continue
-            threshold = dispatch_federated_threshold(
-                ThresholdConstructionRequest(
-                    method=request.method,
-                    coordinate=request.score_manifest.coordinate,
-                    quantile=request.quantile,
-                    capabilities=capabilities,
-                    eligible=eligible,
-                    family_by_client=request.family_by_client,
-                    support_rule=CalibrationSupportRule.DECLARED_SIZE_ABLATION,
-                    cluster_threshold_aggregation=(
-                        ClusterThresholdAggregation.ARITHMETIC_MEAN_OF_ELIGIBLE_LOCAL_THRESHOLDS
-                        if request.method is FederatedThresholdMethod.CLUSTER_THRESHOLD
-                        else None
-                    ),
-                )
+        )
+        if isinstance(threshold, ThresholdUnavailableResult):
+            continue
+        publication = prepare_federated_evaluation(
+            FederatedEvaluationRequest(
+                execution_key=request.execution_key,
+                score_manifest=request.score_manifest,
+                threshold_result=threshold,
+                cohort=_cell_cohort(request.cohort, tuple(item.client for item in eligible)),
+                fixed_score_evidence=request.fixed_score_evidence,
+                evidence_role=request.evidence_role,
+                calibration_scores=eligible,
+                target_quantile=request.quantile,
+                conformal_coverage_inputs=(),
+                threshold_estimation_inputs=(),
+                communication_messages=(),
+                traffic_rate_evidence=None,
+                temporal_provenance=None,
+                temporal_threshold_provenance=None,
+                execution_identity=request.execution_identity,
+                calibration_size_ablation=(),
             )
-            if isinstance(threshold, ThresholdUnavailableResult):
-                continue
-            publication = prepare_federated_evaluation(
-                FederatedEvaluationRequest(
-                    execution_key=request.execution_key,
-                    score_manifest=request.score_manifest,
-                    threshold_result=threshold,
-                    cohort=_cell_cohort(request.cohort, tuple(item.client for item in eligible)),
-                    fixed_score_evidence=request.fixed_score_evidence,
-                    evidence_role=request.evidence_role,
-                    calibration_scores=eligible,
-                    target_quantile=request.quantile,
-                    conformal_coverage_inputs=(),
-                    threshold_estimation_inputs=(),
-                    communication_messages=(),
-                    traffic_rate_evidence=None,
-                    temporal_provenance=None,
-                    temporal_threshold_provenance=None,
-                    execution_identity=request.execution_identity,
-                    calibration_size_ablation=(),
-                )
+        )
+        cells.append(
+            CalibrationSizeAblationCell(
+                calibration_size=size,
+                replicate_index=replicate_index,
+                method=request.method,
+                clients=publication.artifacts.clients,
+                population=publication.artifacts.population,
+                held_out_operating_points=publication.artifacts.diagnostics.held_out_operating_points,
+                held_out_operating_point_summary=publication.artifacts.diagnostics.held_out_operating_point_summary,
             )
-            cells.append(
-                CalibrationSizeAblationCell(
-                    calibration_size=size,
-                    replicate_index=replicate_index,
-                    method=request.method,
-                    clients=publication.artifacts.clients,
-                    population=publication.artifacts.population,
-                    held_out_operating_points=publication.artifacts.diagnostics.held_out_operating_points,
-                    held_out_operating_point_summary=publication.artifacts.diagnostics.held_out_operating_point_summary,
-                )
-            )
+        )
     if not cells:
         raise ScientificContractError(
             ErrorMessage("calibration-size ablation produced no evaluable size/replicate cells"),
             subject=request.method,
         )
     return tuple(cells)
+
+
+def _selected_calibration_cells(
+    request: ConstructCalibrationSizeAblationRequest,
+    replicate_count: SubsampleReplicateCount,
+) -> tuple[tuple[CalibrationSize | None, ReplicateIndex | None], ...]:
+    support = request.interaction_support
+    if support is None:
+        return tuple(
+            (size, ReplicateIndex(replicate_value))
+            for size in CALIBRATION_SIZE_PROTOCOL.sizes
+            for replicate_value in range(replicate_count.value)
+        )
+    if support is CalibrationSupportLevel.FULL:
+        raise ValueError("full interaction support is evaluated through the canonical threshold path")
+    if request.interaction_replicate is None:
+        raise ValueError("finite interaction support requires a replicate")
+    size_by_support = {
+        CalibrationSupportLevel.M50: CalibrationSize(50),
+        CalibrationSupportLevel.M100: CalibrationSize(100),
+        CalibrationSupportLevel.M500: CalibrationSize(500),
+    }
+    return ((size_by_support[support], request.interaction_replicate),)
 
 
 def _eligible_scores_for_size(

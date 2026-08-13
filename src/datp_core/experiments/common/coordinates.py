@@ -9,6 +9,7 @@ from datp_core.core.errors import (
     ScientificContractError,
 )
 from datp_core.core.identifiers import (
+    CalibrationSupportLevel,
     CoordinateStableKey,
     DatasetId,
     EvidenceRole,
@@ -22,7 +23,14 @@ from datp_core.core.identifiers import (
     ThresholdEstimator,
     TrainingModelId,
 )
-from datp_core.core.numeric import DirichletConcentration, KllSketchSize, ModelCoefficientValue, Quantile, Seed
+from datp_core.core.numeric import (
+    DirichletConcentration,
+    KllSketchSize,
+    ModelCoefficientValue,
+    Quantile,
+    ReplicateIndex,
+    Seed,
+)
 from datp_core.data.populations.contracts import ControlledPartitionKind
 
 _MODEL_COEFFICIENT_TRAINING_MODELS = frozenset(
@@ -133,6 +141,7 @@ class CoordinateIdentitySegment(StrEnum):
     NON_TEMPORAL = "non_temporal"
     CANONICAL_QUANTILE = "canonical_quantile"
     NO_CONTROLLED_PARTITION = "no_controlled_partition"
+    NO_CALIBRATION_SUPPORT = "no_calibration_support"
 
 
 class ExecutionRoute(StrEnum):
@@ -159,6 +168,8 @@ class ExperimentCoordinate:
     controlled_partition_kind: ControlledPartitionKind | None = None
     dirichlet_concentration: DirichletConcentration | None = None
     kll_sketch_size: KllSketchSize | None = None
+    calibration_support: CalibrationSupportLevel | None = None
+    calibration_replicate: ReplicateIndex | None = None
     threshold_estimator: ThresholdEstimator = ThresholdEstimator.TYPE7_Q95
 
     def __post_init__(self) -> None:
@@ -175,6 +186,16 @@ class ExperimentCoordinate:
             raise ValueError("a Dirichlet concentration requires a controlled partition kind")
         if self.population is PopulationId.NBAIOT_DIRICHLET_CLIENTS and self.controlled_partition_kind is None:
             raise ValueError("Dirichlet-client populations require an explicit controlled partition condition")
+        is_interaction = self.experiment is ExperimentId.HETEROGENEITY_CALIBRATION_SUPPORT_INTERACTION
+        if is_interaction and self.calibration_support is None:
+            raise ValueError("heterogeneity-support interaction coordinates require calibration support")
+        if not is_interaction and (self.calibration_support is not None or self.calibration_replicate is not None):
+            raise ValueError("calibration-support coordinates are reserved for the heterogeneity-support interaction")
+        if self.calibration_support is CalibrationSupportLevel.FULL:
+            if self.calibration_replicate is not None:
+                raise ValueError("full calibration support has no subsampling replicate")
+        elif self.calibration_support is not None and self.calibration_replicate is None:
+            raise ValueError("finite calibration support requires a nested-subsampling replicate")
 
     @property
     def stable_key(self) -> CoordinateStableKey:
@@ -201,6 +222,14 @@ class ExperimentCoordinate:
             else CoordinateIdentitySegment.CANONICAL_QUANTILE.value
         )
         kll_sketch_size = f"k{self.kll_sketch_size.value}" if self.kll_sketch_size is not None else "no_kll"
+        calibration_support = (
+            self.calibration_support.value
+            if self.calibration_support is not None
+            else CoordinateIdentitySegment.NO_CALIBRATION_SUPPORT.value
+        )
+        calibration_replicate = (
+            str(self.calibration_replicate.value) if self.calibration_replicate is not None else "no_replicate"
+        )
         if self.controlled_partition_kind is None:
             partition = CoordinateIdentitySegment.NO_CONTROLLED_PARTITION.value
         elif self.controlled_partition_kind is ControlledPartitionKind.IID:
@@ -228,6 +257,8 @@ class ExperimentCoordinate:
                     quantile,
                     partition,
                     kll_sketch_size,
+                    calibration_support,
+                    calibration_replicate,
                     self.threshold_estimator.value,
                 )
             )

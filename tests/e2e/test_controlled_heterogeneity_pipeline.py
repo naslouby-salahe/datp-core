@@ -1,5 +1,6 @@
 from datp_core.app.planning import PlanDisposition, PlanningEvidence, PlanReason, expand_experiment_plan
 from datp_core.core.identifiers import (
+    CalibrationSupportLevel,
     EvidenceRole,
     ExperimentId,
     FederatedThresholdMethod,
@@ -48,3 +49,37 @@ def test_controlled_heterogeneity_is_mechanism_evidence_not_a_second_confirmatio
     )
     assert concentrations == frozenset(item.value for item in DIRICHLET_CONCENTRATIONS)
     assert all(entry.coordinate.controlled_partition_kind is not None for entry in plan.entries)
+
+
+def test_heterogeneity_support_interaction_enumerates_every_locked_cell() -> None:
+    declaration = next(
+        item for item in EXPERIMENTS if item.id is ExperimentId.HETEROGENEITY_CALIBRATION_SUPPORT_INTERACTION
+    )
+    plan = expand_experiment_plan(
+        declarations=(declaration,),
+        seed_cohort=SeedCohort(values=(Seed(0),)),
+        evidence=(
+            PlanningEvidence(
+                experiment=declaration.id,
+                disposition=PlanDisposition.EXECUTABLE,
+                reason=PlanReason("interaction conditions are resolved"),
+            ),
+        ),
+    )
+
+    support_cells = frozenset(
+        (entry.coordinate.calibration_support, entry.coordinate.calibration_replicate)
+        for entry in plan.entries
+    )
+    assert (CalibrationSupportLevel.FULL, None) in support_cells
+    for support in (CalibrationSupportLevel.M50, CalibrationSupportLevel.M100, CalibrationSupportLevel.M500):
+        assert sum(1 for level, _ in support_cells if level is support) == 10
+    assert frozenset(entry.coordinate.threshold_method for entry in plan.entries) == frozenset(
+        {
+            FederatedThresholdMethod.SHARED_THRESHOLD,
+            FederatedThresholdMethod.LOCAL_THRESHOLD,
+            FederatedThresholdMethod.CLUSTER_THRESHOLD,
+            FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE,
+            FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE,
+        }
+    )

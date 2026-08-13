@@ -77,6 +77,7 @@ class ExperimentId(StrEnum):
     QUANTILE_SENSITIVITY = "quantile_sensitivity"
     THRESHOLD_ESTIMATOR_SCOPE_SENSITIVITY = "threshold_estimator_scope_sensitivity"
     CONTROLLED_HETEROGENEITY_SWEEP = "controlled_heterogeneity_sweep"
+    HETEROGENEITY_CALIBRATION_SUPPORT_INTERACTION = "heterogeneity_calibration_support_interaction"
     FAMILY_AND_GROUPED_GRANULARITY = "family_and_grouped_granularity"
     PER_CLIENT_SCORE_GEOMETRY = "per_client_score_geometry"
     HETEROGENEITY_BENEFIT_ASSOCIATION = "heterogeneity_benefit_association"
@@ -130,6 +131,13 @@ class FederatedThresholdMethod(StrEnum):
     LOCAL_CONFORMAL_THRESHOLD = "local_conformal_threshold"
     FEDERATED_BENIGN_STATISTICS = "federated_benign_statistics"
     FEDERATED_KLL_SHARED_THRESHOLD = "federated_kll_shared_threshold"
+
+
+class CalibrationSupportLevel(StrEnum):
+    M50 = "m50"
+    M100 = "m100"
+    M500 = "m500"
+    FULL = "full"
 
 
 class ThresholdEstimator(StrEnum):

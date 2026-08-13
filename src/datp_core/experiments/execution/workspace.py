@@ -40,6 +40,7 @@ from datp_core.core.errors import (
     ScientificContractError,
 )
 from datp_core.core.identifiers import (
+    CalibrationSupportLevel,
     CommunicationEstimationMethod,
     ExperimentId,
     FeatureNameSequence,
@@ -263,7 +264,10 @@ class ExperimentWorkspace:
 
     @cached_property
     def calibration(self) -> BuildCalibrationResult | None:
-        if self.coordinate.experiment is not ExperimentId.CALIBRATION_SIZE_ABLATION:
+        if self.coordinate.experiment not in {
+            ExperimentId.CALIBRATION_SIZE_ABLATION,
+            ExperimentId.HETEROGENEITY_CALIBRATION_SUPPORT_INTERACTION,
+        }:
             return None
         return build_declared_calibration(self.scores)
 
@@ -303,7 +307,12 @@ class ExperimentWorkspace:
 
     @cached_property
     def calibration_size_ablation(self) -> tuple[CalibrationSizeAblationCell, ...]:
-        if self.coordinate.experiment is not ExperimentId.CALIBRATION_SIZE_ABLATION:
+        if self.coordinate.experiment not in {
+            ExperimentId.CALIBRATION_SIZE_ABLATION,
+            ExperimentId.HETEROGENEITY_CALIBRATION_SUPPORT_INTERACTION,
+        }:
+            return ()
+        if self.coordinate.calibration_support is CalibrationSupportLevel.FULL:
             return ()
         if self.calibration is None:
             raise ScientificContractError(ErrorMessage("calibration-size ablation requires a calibration lattice"))
@@ -320,6 +329,8 @@ class ExperimentWorkspace:
                 family_by_client=self.context.family_by_client,
                 calibration=self.calibration,
                 execution_identity=self.context.execution_identity,
+                interaction_support=self.coordinate.calibration_support,
+                interaction_replicate=self.coordinate.calibration_replicate,
             )
         )
 

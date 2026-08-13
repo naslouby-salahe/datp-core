@@ -4,7 +4,7 @@ from typing import Literal
 from pydantic import model_validator
 
 from datp_core.core.contracts import StrictModel
-from datp_core.core.identifiers import CentralizedThresholdMethod, FederatedThresholdMethod
+from datp_core.core.identifiers import CalibrationSupportLevel, CentralizedThresholdMethod, FederatedThresholdMethod
 from datp_core.core.numeric import (
     CalibrationSize,
     CoverageTarget,
@@ -238,6 +238,12 @@ MINIMUM_BENIGN_SUPPORT = CalibrationSize(100)
 
 LOCKED_CALIBRATION_SUBSAMPLE_REPLICATE_COUNT = SubsampleReplicateCount(10)
 CALIBRATION_SIZES = tuple(CalibrationSize(value) for value in (50, 100, 250, 500, 1000, 5000))
+INTERACTION_CALIBRATION_SUPPORT_LEVELS = (
+    CalibrationSupportLevel.M50,
+    CalibrationSupportLevel.M100,
+    CalibrationSupportLevel.M500,
+    CalibrationSupportLevel.FULL,
+)
 SAMPLE_STARVED_CALIBRATION_SIZE = CalibrationSize(50)
 FIXED_SHRINKAGE_WEIGHTS = tuple(ShrinkageWeight(value) for value in (0, 0.25, 0.5, 0.75, 1))
 CONFORMAL_COVERAGE = CoverageTarget(0.95)

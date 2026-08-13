@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from datp_core.core.identifiers import (
+    CalibrationSupportLevel,
     CoordinateStableKey,
     ExperimentId,
     ExperimentReadiness,
@@ -17,7 +18,14 @@ from datp_core.core.identifiers import (
     ThresholdEstimator,
     TrainingModelId,
 )
-from datp_core.core.numeric import DirichletConcentration, KllSketchSize, ModelCoefficientValue, Quantile, Seed
+from datp_core.core.numeric import (
+    DirichletConcentration,
+    KllSketchSize,
+    ModelCoefficientValue,
+    Quantile,
+    ReplicateIndex,
+    Seed,
+)
 from datp_core.data.populations.contracts import ControlledPartitionKind
 from datp_core.data.populations.declarations import DIRICHLET_CONCENTRATIONS, split_protocol_for_population
 from datp_core.data.registry import population_capabilities, population_declaration
@@ -30,7 +38,12 @@ from datp_core.experiments.common.seeds import (
     SeedCohort,
 )
 from datp_core.experiments.registry import ExperimentDeclaration, require_experiment_declaration
-from datp_core.thresholds.protocols import FEDERATED_KLL_PROTOCOL, QUANTILE_GRID
+from datp_core.thresholds.protocols import (
+    FEDERATED_KLL_PROTOCOL,
+    INTERACTION_CALIBRATION_SUPPORT_LEVELS,
+    QUANTILE_GRID,
+    require_calibration_subsample_replicate_count,
+)
 
 
 class PlanReason(NonEmptyString):
@@ -158,6 +171,8 @@ class _SweptCell:
     controlled_partition_kind: ControlledPartitionKind | None
     dirichlet_concentration: DirichletConcentration | None
     kll_sketch_size: KllSketchSize | None
+    calibration_support: CalibrationSupportLevel | None
+    calibration_replicate: ReplicateIndex | None
     threshold_estimator: ThresholdEstimator
     preprocessing_protocol: PreprocessingProtocolId
 
@@ -184,6 +199,8 @@ def _swept_cells(declaration: ExperimentDeclaration, seed_cohort: SeedCohort) ->
             controlled_partition_kind=partition_kind,
             dirichlet_concentration=concentration,
             kll_sketch_size=kll_sketch_size,
+            calibration_support=calibration_support,
+            calibration_replicate=calibration_replicate,
             threshold_estimator=threshold_estimator,
             preprocessing_protocol=preprocessing_protocol,
         )
@@ -195,6 +212,7 @@ def _swept_cells(declaration: ExperimentDeclaration, seed_cohort: SeedCohort) ->
         for threshold_quantile in _threshold_quantiles(declaration.id)
         for partition_kind, concentration in _controlled_partition_cells(declaration)
         for kll_sketch_size in _kll_sketch_sizes(declaration.id, threshold_method)
+        for calibration_support, calibration_replicate in _calibration_support_cells(declaration.id)
         for threshold_estimator in _threshold_estimators(declaration.id)
         for preprocessing_protocol in declaration.preprocessing_protocols
     )
@@ -221,6 +239,21 @@ def _threshold_estimators(experiment: ExperimentId) -> tuple[ThresholdEstimator,
             ThresholdEstimator.MEAN_PLUS_STANDARD_DEVIATION_ESTIMATOR,
         )
     return (ThresholdEstimator.TYPE7_Q95,)
+
+
+def _calibration_support_cells(
+    experiment: ExperimentId,
+) -> tuple[tuple[CalibrationSupportLevel | None, ReplicateIndex | None], ...]:
+    if experiment is not ExperimentId.HETEROGENEITY_CALIBRATION_SUPPORT_INTERACTION:
+        return ((None, None),)
+    replicate_count = require_calibration_subsample_replicate_count()
+    cells: list[tuple[CalibrationSupportLevel, ReplicateIndex | None]] = []
+    for support in INTERACTION_CALIBRATION_SUPPORT_LEVELS:
+        if support is CalibrationSupportLevel.FULL:
+            cells.append((support, None))
+        else:
+            cells.extend((support, ReplicateIndex(index)) for index in range(replicate_count.value))
+    return tuple(cells)
 
 
 def _controlled_partition_cells(
@@ -265,6 +298,8 @@ def _planned_entry(
             controlled_partition_kind=cell.controlled_partition_kind,
             dirichlet_concentration=cell.dirichlet_concentration,
             kll_sketch_size=cell.kll_sketch_size,
+            calibration_support=cell.calibration_support,
+            calibration_replicate=cell.calibration_replicate,
             threshold_estimator=cell.threshold_estimator,
         ),
         disposition=disposition,
