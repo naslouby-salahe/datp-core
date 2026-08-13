@@ -16,6 +16,7 @@ from tools.reproducibility.release import (
     campaign_bounded_training_release_artifacts,
     campaign_evaluation_release_artifacts,
     campaign_publication_release_artifacts,
+    campaign_release_artifacts,
     campaign_standard_training_release_artifacts,
     campaign_threshold_release_artifacts,
     preparation_release_artifacts,
@@ -378,6 +379,27 @@ def test_campaign_analysis_release_discovery_retains_only_declared_derived_evide
         Path("STATISTICS/experiment/analysis/summary.json"),
         Path("AUDIT_REPORTS/experiment/analysis_report.md"),
     )
+
+
+def test_campaign_release_assembly_requires_unique_destinations(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "source.json"
+    source.write_text("{}", encoding="utf-8")
+    artifact = ReleaseArtifact(source, Path("METRICS/evidence.json"), "evidence")
+    for mapper in (
+        "preparation_release_artifacts",
+        "campaign_evaluation_release_artifacts",
+        "campaign_threshold_release_artifacts",
+        "campaign_standard_training_release_artifacts",
+        "campaign_bounded_training_release_artifacts",
+        "campaign_analysis_release_artifacts",
+        "campaign_publication_release_artifacts",
+    ):
+        monkeypatch.setattr(release, mapper, lambda *_: (artifact,))
+
+    with pytest.raises(ArtifactIntegrityError, match="destinations must be unique"):
+        campaign_release_artifacts(tmp_path, tmp_path)
 
 
 def test_campaign_publication_release_discovery_requires_the_rendered_publication(tmp_path: Path) -> None:

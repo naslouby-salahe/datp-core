@@ -276,6 +276,26 @@ def campaign_analysis_release_artifacts(output_root: Path) -> tuple[ReleaseArtif
     return tuple(artifacts)
 
 
+def campaign_release_artifacts(output_root: Path, data_root: Path) -> tuple[ReleaseArtifact, ...]:
+    """Assemble every required campaign evidence category before release bundle construction."""
+
+    artifacts = tuple(
+        artifact
+        for group in (
+            preparation_release_artifacts(data_root),
+            campaign_evaluation_release_artifacts(output_root),
+            campaign_threshold_release_artifacts(output_root),
+            campaign_standard_training_release_artifacts(output_root),
+            campaign_bounded_training_release_artifacts(output_root),
+            campaign_analysis_release_artifacts(output_root),
+            campaign_publication_release_artifacts(output_root),
+        )
+        for artifact in group
+    )
+    _require_unique_release_artifacts(artifacts)
+    return artifacts
+
+
 def _standard_training_release_artifacts(
     output_root: Path,
     directory: Path,
