@@ -73,6 +73,11 @@ class ClaimGuardPhrase(StrEnum):
     UNSEEN_CLIENT = "unseen client"
     CONTINUOUS_ADAPTATION = "continuous adaptation"
     ONLINE_ADAPTATION = "online adaptation"
+    ONLINE_LEARNING = "online learning"
+    STREAMING_DRIFT_DETECTION = "streaming drift detection"
+    DRIFT_TRIGGERED_RECALIBRATION = "drift-triggered recalibration"
+    PRODUCTION_STABILITY = "production stability"
+    REPEATED_CYCLES = "repeated cycles"
     CONCEPT_DRIFT_SOLUTION = "concept drift solution"
     DRIFT_HANDLING = "drift handling"
 
@@ -93,6 +98,11 @@ _TEMPORAL_GUARD_PHRASES = frozenset(
     {
         ClaimGuardPhrase.CONTINUOUS_ADAPTATION,
         ClaimGuardPhrase.ONLINE_ADAPTATION,
+        ClaimGuardPhrase.ONLINE_LEARNING,
+        ClaimGuardPhrase.STREAMING_DRIFT_DETECTION,
+        ClaimGuardPhrase.DRIFT_TRIGGERED_RECALIBRATION,
+        ClaimGuardPhrase.PRODUCTION_STABILITY,
+        ClaimGuardPhrase.REPEATED_CYCLES,
         ClaimGuardPhrase.CONCEPT_DRIFT_SOLUTION,
         ClaimGuardPhrase.DRIFT_HANDLING,
     }

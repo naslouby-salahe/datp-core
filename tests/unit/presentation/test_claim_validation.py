@@ -174,13 +174,20 @@ def test_edge_average_precision_claim_is_blocked_without_attack_assignment() -> 
     assert not decision.wording
 
 
-def test_one_shot_recalibration_cannot_be_called_continuous_adaptation() -> None:
+@pytest.mark.parametrize("wording", (
+    "The method provides continuous adaptation under concept drift",
+    "The method performs online learning after deployment",
+    "The method supplies streaming drift detection",
+    "The method uses drift-triggered recalibration",
+    "The method establishes production stability over repeated cycles",
+))
+def test_one_shot_recalibration_cannot_be_called_general_drift_handling(wording: str) -> None:
     decision = validate_claim(
         claim_request(
             kind=ClaimKind.TEMPORAL,
             evidence_role=EvidenceRole.TEMPORAL_BOUNDARY,
             metric=MetricId.FALSE_POSITIVE_RATE,
-            wording="The method provides continuous adaptation under concept drift",
+            wording=wording,
         )
     )
     assert not decision.wording

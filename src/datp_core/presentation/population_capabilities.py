@@ -19,7 +19,7 @@ class PopulationCapabilityTableRow:
 
 _ROWS = (
     PopulationCapabilityTableRow(
-        PopulationId.NBAIOT_NATURAL_DEVICES, "original commercial IoT device", 9, "Yes", "Yes",
+        PopulationId.NBAIOT_NATURAL_DEVICES, "original commercial IoT device", 9, "Yes (small client population)", "Yes",
         "Yes, subject to held-out family support", "No genuine-time claim from source-row ordering",
         "sole confirmatory + principal mechanism",
     ),

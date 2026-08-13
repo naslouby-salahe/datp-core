@@ -6525,26 +6525,26 @@ README_REPRODUCIBILITY.md
 | `CALIBRATION-052` | I | 1161 | 8.2 Supporting evidence families | applicability boundary; | `PASS` | CIC file-client evidence has the locked applicability-boundary role. |
 | `CALIBRATION-053` | I | 1162 | 8.2 Supporting evidence families | temporal boundary; | `PASS` | One-shot Edge recalibration has the locked temporal-boundary role. |
 | `CALIBRATION-054` | I | 1163 | 8.2 Supporting evidence families | exploratory supplement; | `PASS` | Group-median supplement has the locked exploratory role. |
-| `DATASET-005` | I | 1189 | 9.1 N-BaIoT physical-device anchor | the nine physical devices are the natural clients; | `NOT_AUDITED` | — |
-| `DATASET-006` | I | 1190 | 9.1 N-BaIoT physical-device anchor | this is the only confirmatory client population; | `NOT_AUDITED` | — |
-| `CALIBRATION-055` | I | 1191 | 9.1 N-BaIoT physical-device anchor | the device-family taxonomy may support FAMILY_THRESHOLD; | `NOT_AUDITED` | — |
-| `DATASET-007` | I | 1192 | 9.1 N-BaIoT physical-device anchor | all nine clients remain visible in mechanism reporting; | `NOT_AUDITED` | — |
-| `DATASET-008` | I | 1193 | 9.1 N-BaIoT physical-device anchor | the small client count is an explicit limitation. | `NOT_AUDITED` | — |
-| `DATASET-009` | I | 1203 | 9.2 CICIoT2023 available-data boundary | available-data pseudo-clients may be used only as a dataset-specific applicability boundary; | `NOT_AUDITED` | — |
-| `DATASET-010` | I | 1204 | 9.2 CICIoT2023 available-data boundary | a null result cannot be generalized to the original 105-device topology; | `NOT_AUDITED` | — |
-| `DATASET-011` | I | 1205 | 9.2 CICIoT2023 available-data boundary | source-paper device counts cannot be substituted for missing artifact metadata; | `NOT_AUDITED` | — |
-| `DATASET-012` | I | 1206 | 9.2 CICIoT2023 available-data boundary | device-aware wording is prohibited for this population. | `NOT_AUDITED` | — |
-| `DATASET-013` | I | 1234 | 9.4 Edge-IIoTset external validation | per-client TPR is unavailable; | `NOT_AUDITED` | — |
-| `DATASET-014` | I | 1235 | 9.4 Edge-IIoTset external validation | per-client Macro-F1 is unavailable; | `NOT_AUDITED` | — |
-| `DATASET-015` | I | 1236 | 9.4 Edge-IIoTset external validation | per-client balanced accuracy is unavailable; | `NOT_AUDITED` | — |
-| `SCORE-006` | I | 1237 | 9.4 Edge-IIoTset external validation | per-client AUROC is unavailable; | `NOT_AUDITED` | — |
-| `DATASET-016` | I | 1238 | 9.4 Edge-IIoTset external validation | attack-sensitive cross-client equity is unavailable. | `NOT_AUDITED` | — |
-| `DATASET-017` | I | 1250 | 9.5 Temporal external population | continuous adaptation; | `NOT_AUDITED` | — |
-| `DATASET-018` | I | 1251 | 9.5 Temporal external population | online learning; | `NOT_AUDITED` | — |
-| `DATASET-019` | I | 1252 | 9.5 Temporal external population | streaming drift detection; | `NOT_AUDITED` | — |
-| `CALIBRATION-056` | I | 1253 | 9.5 Temporal external population | drift-triggered recalibration; | `NOT_AUDITED` | — |
-| `DATASET-020` | I | 1254 | 9.5 Temporal external population | concept-drift resolution; | `NOT_AUDITED` | — |
-| `DATASET-021` | I | 1255 | 9.5 Temporal external population | production stability over repeated cycles. | `NOT_AUDITED` | — |
+| `DATASET-005` | I | 1189 | 9.1 N-BaIoT physical-device anchor | the nine physical devices are the natural clients; | `PASS` | Natural population is locked to nine physical-device identities. |
+| `DATASET-006` | I | 1190 | 9.1 N-BaIoT physical-device anchor | this is the only confirmatory client population; | `PASS` | Population declarations permit confirmatory status only for N-BaIoT physical devices. |
+| `CALIBRATION-055` | I | 1191 | 9.1 N-BaIoT physical-device anchor | the device-family taxonomy may support FAMILY_THRESHOLD; | `PASS` | N-BaIoT capability contract authorizes the source-defined family threshold. |
+| `DATASET-007` | I | 1192 | 9.1 N-BaIoT physical-device anchor | all nine clients remain visible in mechanism reporting; | `PASS` | Capability table and mechanism tests retain the nine-device population. |
+| `DATASET-008` | I | 1193 | 9.1 N-BaIoT physical-device anchor | the small client count is an explicit limitation. | `PASS` | Capability table explicitly labels the small client population. |
+| `DATASET-009` | I | 1203 | 9.2 CICIoT2023 available-data boundary | available-data pseudo-clients may be used only as a dataset-specific applicability boundary; | `PASS` | CIC capability and execution identity lock the file-client applicability-boundary role. |
+| `DATASET-010` | I | 1204 | 9.2 CICIoT2023 available-data boundary | a null result cannot be generalized to the original 105-device topology; | `PASS` | Physical-device identity is unavailable and fleet-scale claims are blocked. |
+| `DATASET-011` | I | 1205 | 9.2 CICIoT2023 available-data boundary | source-paper device counts cannot be substituted for missing artifact metadata; | `PASS` | Capability contract prohibits deriving physical identities or taxonomy from source-paper counts. |
+| `DATASET-012` | I | 1206 | 9.2 CICIoT2023 available-data boundary | device-aware wording is prohibited for this population. | `PASS` | Claim validation blocks physical-device wording for file-defined pseudo-clients. |
+| `DATASET-013` | I | 1234 | 9.4 Edge-IIoTset external validation | per-client TPR is unavailable; | `PASS` | Edge metric capability marks TPR unavailable without client attack assignment. |
+| `DATASET-014` | I | 1235 | 9.4 Edge-IIoTset external validation | per-client Macro-F1 is unavailable; | `PASS` | Edge metric capability marks Macro-F1 unavailable without client attack assignment. |
+| `DATASET-015` | I | 1236 | 9.4 Edge-IIoTset external validation | per-client balanced accuracy is unavailable; | `PASS` | Edge metric capability marks balanced accuracy unavailable without client attack assignment. |
+| `SCORE-006` | I | 1237 | 9.4 Edge-IIoTset external validation | per-client AUROC is unavailable; | `PASS` | Edge metric capability marks AUROC unavailable without client attack assignment. |
+| `DATASET-016` | I | 1238 | 9.4 Edge-IIoTset external validation | attack-sensitive cross-client equity is unavailable. | `PASS` | Client-level attack assignment and all attack-sensitive Edge metrics are unavailable. |
+| `DATASET-017` | I | 1250 | 9.5 Temporal external population | continuous adaptation; | `PASS` | Temporal claim validation blocks continuous-adaptation language. |
+| `DATASET-018` | I | 1251 | 9.5 Temporal external population | online learning; | `PASS` | Temporal claim validation blocks online-learning language. |
+| `DATASET-019` | I | 1252 | 9.5 Temporal external population | streaming drift detection; | `PASS` | Temporal claim validation blocks streaming-drift language. |
+| `CALIBRATION-056` | I | 1253 | 9.5 Temporal external population | drift-triggered recalibration; | `PASS` | Temporal claim validation blocks drift-triggered-recalibration language. |
+| `DATASET-020` | I | 1254 | 9.5 Temporal external population | concept-drift resolution; | `PASS` | Temporal claim validation blocks general concept-drift-solution language. |
+| `DATASET-021` | I | 1255 | 9.5 Temporal external population | production stability over repeated cycles. | `PASS` | Temporal claim validation blocks production-stability and repeated-cycle language. |
 | `TRAIN-019` | I | 1318 | 10.A.3 Training-side robustness | heterogeneity-aware federated optimization through FedProx; | `NOT_AUDITED` | — |
 | `TRAIN-020` | I | 1319 | 10.A.3 Training-side robustness | simple post-FedAvg client-local fine-tuning through `FEDAVG_LOCAL_FINE_TUNING`; | `NOT_AUDITED` | — |
 | `TRAIN-021` | I | 1320 | 10.A.3 Training-side robustness | persistent proximal client model personalization through Ditto. | `NOT_AUDITED` | — |

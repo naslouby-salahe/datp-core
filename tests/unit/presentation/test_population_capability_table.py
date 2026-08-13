@@ -10,3 +10,4 @@ def test_population_capability_table_contains_all_locked_population_boundaries()
     assert "`EDGE_SENSOR_CLIENTS`" in rendered
     assert "`EDGE_TEMPORAL_CLIENTS`" in rendered
     assert "sole confirmatory + principal mechanism" in rendered
+    assert "small client population" in rendered
