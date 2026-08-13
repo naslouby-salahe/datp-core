@@ -32,6 +32,7 @@ from datp_core.core.numeric import (
     Seed,
 )
 from datp_core.data.populations.contracts import ControlledPartitionKind
+from datp_core.thresholds.protocols import ClusterFingerprintFeature
 
 _MODEL_COEFFICIENT_TRAINING_MODELS = frozenset(
     (TrainingModelId.FEDPROX_AUTOENCODER, TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER)
@@ -171,6 +172,7 @@ class ExperimentCoordinate:
     calibration_support: CalibrationSupportLevel | None = None
     calibration_replicate: ReplicateIndex | None = None
     threshold_estimator: ThresholdEstimator = ThresholdEstimator.TYPE7_Q95
+    cluster_fingerprint_omission: ClusterFingerprintFeature | None = None
 
     def __post_init__(self) -> None:
         requires_coefficient = self.training_model in _MODEL_COEFFICIENT_TRAINING_MODELS
@@ -196,6 +198,11 @@ class ExperimentCoordinate:
                 raise ValueError("full calibration support has no subsampling replicate")
         elif self.calibration_support is not None and self.calibration_replicate is None:
             raise ValueError("finite calibration support requires a nested-subsampling replicate")
+        if (
+            self.cluster_fingerprint_omission is not None
+            and self.threshold_method is not FederatedThresholdMethod.CLUSTER_THRESHOLD
+        ):
+            raise ValueError("cluster fingerprint omission requires the cluster threshold method")
 
     @property
     def stable_key(self) -> CoordinateStableKey:
@@ -230,6 +237,11 @@ class ExperimentCoordinate:
         calibration_replicate = (
             str(self.calibration_replicate.value) if self.calibration_replicate is not None else "no_replicate"
         )
+        cluster_fingerprint_omission = (
+            self.cluster_fingerprint_omission.value
+            if self.cluster_fingerprint_omission is not None
+            else "no_cluster_fingerprint_omission"
+        )
         if self.controlled_partition_kind is None:
             partition = CoordinateIdentitySegment.NO_CONTROLLED_PARTITION.value
         elif self.controlled_partition_kind is ControlledPartitionKind.IID:
@@ -260,6 +272,7 @@ class ExperimentCoordinate:
                     calibration_support,
                     calibration_replicate,
                     self.threshold_estimator.value,
+                    cluster_fingerprint_omission,
                 )
             )
         )

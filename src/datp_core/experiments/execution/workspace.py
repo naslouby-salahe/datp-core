@@ -293,6 +293,7 @@ class ExperimentWorkspace:
                     cluster_threshold_aggregation=self._cluster_aggregation(),
                     kll_sketch_size=self.coordinate.kll_sketch_size,
                     estimator=self.coordinate.threshold_estimator,
+                    cluster_fingerprint_omission=self.coordinate.cluster_fingerprint_omission,
                 ),
                 output_directory=self.run_directory() / EvaluationRunAssetDirectory.THRESHOLD,
                 overwrite=False,

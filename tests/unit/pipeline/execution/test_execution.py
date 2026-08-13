@@ -29,6 +29,7 @@ from datp_core.experiments.execution.models import (
     StageExecution,
     StageOutcome,
 )
+from datp_core.thresholds.protocols import ClusterFingerprintFeature
 
 
 class Runner:
@@ -57,6 +58,17 @@ def coordinate() -> ExperimentCoordinate:
         metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
         temporal_state=None,
     )
+
+
+def test_cluster_fingerprint_omission_is_part_of_the_execution_identity() -> None:
+    canonical = coordinate()
+    ablation = replace(
+        canonical,
+        threshold_method=FederatedThresholdMethod.CLUSTER_THRESHOLD,
+        cluster_fingerprint_omission=ClusterFingerprintFeature.BENIGN_ERROR_P95,
+    )
+
+    assert canonical.execution_key != ablation.execution_key
 
 
 def test_clean_experiment_runs_every_stage(tmp_path: Path) -> None:

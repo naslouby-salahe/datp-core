@@ -22,7 +22,11 @@ from datp_core.thresholds.contracts import (
     ThresholdInfeasibilityReason,
     ThresholdUnavailableResult,
 )
-from datp_core.thresholds.policies.cluster import GroupedThresholdResult, construct_grouped_threshold
+from datp_core.thresholds.policies.cluster import (
+    GroupedThresholdResult,
+    construct_grouped_threshold,
+    construct_grouped_threshold_with_omitted_feature,
+)
 from datp_core.thresholds.policies.family import FamilyThresholdResult, construct_family_threshold
 from datp_core.thresholds.policies.local import LocalThresholdResult, construct_local_threshold
 from datp_core.thresholds.policies.shared import (
@@ -42,6 +46,7 @@ from datp_core.thresholds.protocols import (
     MINIMUM_BENIGN_SUPPORT,
     SIZE_AWARE_SHRINKAGE_PROTOCOL,
     CalibrationSupportRule,
+    ClusterFingerprintFeature,
     ClusterThresholdAggregation,
     QuantileProtocol,
 )
@@ -115,6 +120,7 @@ class ThresholdConstructionRequest:
     cluster_threshold_aggregation: ClusterThresholdAggregation | None
     kll_sketch_size: KllSketchSize | None = None
     estimator: ThresholdEstimator = ThresholdEstimator.TYPE7_Q95
+    cluster_fingerprint_omission: ClusterFingerprintFeature | None = None
 
     def __post_init__(self) -> None:
         if not self.eligible:
@@ -268,4 +274,10 @@ def _cluster_threshold_or_unavailable(request: ThresholdConstructionRequest) -> 
         case _:
             assert_never(request.cluster_threshold_aggregation)
     protocol = base_protocol.model_copy(update={"quantile": request.quantile})
-    return construct_grouped_threshold(request.eligible, protocol)
+    if request.cluster_fingerprint_omission is None:
+        return construct_grouped_threshold(request.eligible, protocol)
+    return construct_grouped_threshold_with_omitted_feature(
+        request.eligible,
+        protocol,
+        omitted_feature=request.cluster_fingerprint_omission,
+    )
