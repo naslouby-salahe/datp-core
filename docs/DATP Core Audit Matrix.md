@@ -5978,10 +5978,10 @@ The implementation must distinguish at least these roadmap-defined scientific st
 
 | ID | Source line | Audit requirement | Implementation disposition | Audit outcome | Evidence / remediation |
 |---|---:|---|---|---|---|
-| `GATE-A-001` | 5994 | Every executable experiment maps to exactly one Part II experiment or explicitly declared diagnostic extension. | `NOT_AUDITED` | — | — |
-| `GATE-A-002` | 5995 | No stale method name, retired alias, or opaque experiment code changes the active descriptive scientific identity defined in Part I §10.C. | `NOT_AUDITED` | — | — |
-| `GATE-A-003` | 5996 | No opaque B-number threshold alias appears in active configuration, manifests, artifacts, tables, figures, reports, or manuscript-facing exports. | `NOT_AUDITED` | — | — |
-| `GATE-A-004` | 5997 | No lettered population alias appears in active configuration, manifests, artifacts, tables, figures, reports, or manuscript-facing exports. | `NOT_AUDITED` | — | — |
+| `GATE-A-001` | 5994 | Every executable experiment maps to exactly one Part II experiment or explicitly declared diagnostic extension. | `IMPLEMENTED` | `PASS` | `validate_programme` requires every non-suppressed declaration to have exactly one registered recipe; `test_every_non_suppressed_experiment_has_exactly_one_recipe` covers it. |
+| `GATE-A-002` | 5995 | No stale method name, retired alias, or opaque experiment code changes the active descriptive scientific identity defined in Part I §10.C. | `IMPLEMENTED` | `PASS` | The canonical protocol graph validates active scientific identities; release validation rejects retired opaque metadata. |
+| `GATE-A-003` | 5996 | No opaque B-number threshold alias appears in active configuration, manifests, artifacts, tables, figures, reports, or manuscript-facing exports. | `IMPLEMENTED` | `PASS` | Graph and release validators reject B-number identities; `test_graph_rejects_opaque_active_protocol_aliases` and release tests cover both boundaries. |
+| `GATE-A-004` | 5997 | No lettered population alias appears in active configuration, manifests, artifacts, tables, figures, reports, or manuscript-facing exports. | `IMPLEMENTED` | `PASS` | Graph and release validators reject lettered population aliases; `test_graph_rejects_opaque_active_protocol_aliases` covers the active-configuration boundary. |
 | `GATE-A-005` | 5998 | Threshold policies use exactly `CENTRALIZED_REFERENCE`, `SHARED_THRESHOLD`, `LOCAL_THRESHOLD`, `FAMILY_THRESHOLD`, or `CLUSTER_THRESHOLD` where applicable. | `NOT_AUDITED` | — | — |
 | `GATE-A-006` | 5999 | Dataset populations use exactly `NBAIOT_NATURAL_DEVICES`, `CICIOT_FILE_CLIENTS`, `NBAIOT_DIRICHLET_CLIENTS`, `EDGE_SENSOR_CLIENTS`, or `EDGE_TEMPORAL_CLIENTS` where applicable. | `NOT_AUDITED` | — | — |
 | `GATE-A-007` | 6000 | Every locked numerical value used by code is traceable to Part I §11 or its authoritative detailed section. | `NOT_AUDITED` | — | — |
@@ -5989,7 +5989,7 @@ The implementation must distinguish at least these roadmap-defined scientific st
 | `GATE-A-009` | 6002 | No unregistered value has been inserted into a locked grid. | `NOT_AUDITED` | — | — |
 | `GATE-A-010` | 6003 | Canonical and sensitivity conditions are distinguishable in configuration and artifacts. | `NOT_AUDITED` | — | — |
 | `GATE-A-011` | 6004 | A sensitivity cell cannot be relabelled as canonical after outcomes are observed. | `NOT_AUDITED` | — | — |
-| `GATE-A-012` | 6005 | Optional analyses remain explicitly optional and cannot replace mandatory evidence. | `NOT_AUDITED` | — | — |
+| `GATE-A-012` | 6005 | Optional analyses remain explicitly optional and cannot replace mandatory evidence. | `IMPLEMENTED` | `PASS` | Recipes carry a typed campaign role and campaign reporting records optional missing evidence without substituting it for mandatory requirements. |
 
 ### Gate B
 
@@ -7299,10 +7299,10 @@ README_REPRODUCIBILITY.md
 | `CALIBRATION-208` | III | 5945 | 16.5 Mandatory synthesis tables | the Part II §7.5A calibration-support-versus-burden table and seed-level association summary; | `NOT_AUDITED` | — |
 | `CALIBRATION-209` | III | 5946 | 16.5 Mandatory synthesis tables | the Part II §7.5B natural-device helped/harmed table with the campaign-fixed support strata; | `NOT_AUDITED` | — |
 | `METRIC-030` | III | 5947 | 16.5 Mandatory synthesis tables | the Part II §7.4 typed empirical policy-selection surface and its reconstructable raw metric table. | `NOT_AUDITED` | — |
-| `REPORT-034` | IV | 5994 | 3. Gate A — Roadmap and configuration integrity | Every executable experiment maps to exactly one Part II experiment or explicitly declared diagnostic extension. | `NOT_AUDITED` | — |
-| `GLOBAL-111` | IV | 5995 | 3. Gate A — Roadmap and configuration integrity | No stale method name, retired alias, or opaque experiment code changes the active descriptive scientific identity defined in Part I §10.C. | `NOT_AUDITED` | — |
-| `THRESHOLD-306` | IV | 5996 | 3. Gate A — Roadmap and configuration integrity | No opaque B-number threshold alias appears in active configuration, manifests, artifacts, tables, figures, reports, or manuscript-facing exports. | `NOT_AUDITED` | — |
-| `DATASET-082` | IV | 5997 | 3. Gate A — Roadmap and configuration integrity | No lettered population alias appears in active configuration, manifests, artifacts, tables, figures, reports, or manuscript-facing exports. | `NOT_AUDITED` | — |
+| `REPORT-034` | IV | 5994 | 3. Gate A — Roadmap and configuration integrity | Every executable experiment maps to exactly one Part II experiment or explicitly declared diagnostic extension. | `PASS` | `validate_programme` requires exact non-suppressed declaration-to-recipe coverage. |
+| `GLOBAL-111` | IV | 5995 | 3. Gate A — Roadmap and configuration integrity | No stale method name, retired alias, or opaque experiment code changes the active descriptive scientific identity defined in Part I §10.C. | `PASS` | Canonical graph and release validation reject stale opaque identities. |
+| `THRESHOLD-306` | IV | 5996 | 3. Gate A — Roadmap and configuration integrity | No opaque B-number threshold alias appears in active configuration, manifests, artifacts, tables, figures, reports, or manuscript-facing exports. | `PASS` | Active graph and release manifest validators reject B-number identities. |
+| `DATASET-082` | IV | 5997 | 3. Gate A — Roadmap and configuration integrity | No lettered population alias appears in active configuration, manifests, artifacts, tables, figures, reports, or manuscript-facing exports. | `PASS` | Active graph and release manifest validators reject lettered aliases. |
 | `THRESHOLD-307` | IV | 5998 | 3. Gate A — Roadmap and configuration integrity | Threshold policies use exactly `CENTRALIZED_REFERENCE`, `SHARED_THRESHOLD`, `LOCAL_THRESHOLD`, `FAMILY_THRESHOLD`, or `CLUSTER_THRESHOLD` where applicable. | `NOT_AUDITED` | — |
 | `DATASET-083` | IV | 5999 | 3. Gate A — Roadmap and configuration integrity | Dataset populations use exactly `NBAIOT_NATURAL_DEVICES`, `CICIOT_FILE_CLIENTS`, `NBAIOT_DIRICHLET_CLIENTS`, `EDGE_SENSOR_CLIENTS`, or `EDGE_TEMPORAL_CLIENTS` where applicable. | `NOT_AUDITED` | — |
 | `GLOBAL-112` | IV | 6000 | 3. Gate A — Roadmap and configuration integrity | Every locked numerical value used by code is traceable to Part I §11 or its authoritative detailed section. | `NOT_AUDITED` | — |
@@ -7310,7 +7310,7 @@ README_REPRODUCIBILITY.md
 | `GLOBAL-114` | IV | 6002 | 3. Gate A — Roadmap and configuration integrity | No unregistered value has been inserted into a locked grid. | `NOT_AUDITED` | — |
 | `PROVENANCE-012` | IV | 6003 | 3. Gate A — Roadmap and configuration integrity | Canonical and sensitivity conditions are distinguishable in configuration and artifacts. | `NOT_AUDITED` | — |
 | `GLOBAL-115` | IV | 6004 | 3. Gate A — Roadmap and configuration integrity | A sensitivity cell cannot be relabelled as canonical after outcomes are observed. | `NOT_AUDITED` | — |
-| `GLOBAL-116` | IV | 6005 | 3. Gate A — Roadmap and configuration integrity | Optional analyses remain explicitly optional and cannot replace mandatory evidence. | `NOT_AUDITED` | — |
+| `GLOBAL-116` | IV | 6005 | 3. Gate A — Roadmap and configuration integrity | Optional analyses remain explicitly optional and cannot replace mandatory evidence. | `PASS` | Typed recipe campaign roles preserve optional status through campaign reporting. |
 | `DATASET-084` | IV | 6011 | 4. Gate B — Dataset integrity | The physical source and canonical dataset identity are recorded. | `NOT_AUDITED` | — |
 | `DATASET-085` | IV | 6012 | 4. Gate B — Dataset integrity | Declared model-input features match the dataset-specific protocol. | `NOT_AUDITED` | — |
 | `PREPROCESS-043` | IV | 6013 | 4. Gate B — Dataset integrity | Label normalization is deterministic and auditable. | `NOT_AUDITED` | — |
