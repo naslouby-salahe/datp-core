@@ -62,7 +62,7 @@ def require_experiment_execution_ready(experiment_id: ExperimentId) -> None:
 
 def validate_programme(experiment_id: ExperimentId | None) -> ValidationResult:
     graph = validate_protocol_graph(CANONICAL_PROTOCOL_GRAPH)
-    _validate_gate_a_active_identities()
+    _validate_active_protocol_identities()
     registered = registered_experiment_ids()
     if len(registered) != len(frozenset(registered)):
         raise ProtocolValidationError(
@@ -115,8 +115,8 @@ def validate_programme(experiment_id: ExperimentId | None) -> ValidationResult:
     )
 
 
-def _validate_gate_a_active_identities() -> None:
-    if any(fullmatch(r"b\d+", method.value) for method in FederatedThresholdMethod):
+def _validate_active_protocol_identities() -> None:
+    if any(fullmatch(r"b\d+", method.value.casefold()) for method in FederatedThresholdMethod):
         raise ProtocolValidationError(ErrorMessage("active threshold methods must not use opaque B-number identities"))
-    if any(fullmatch(r"[a-z]", population.value) for population in PopulationId):
+    if any(fullmatch(r"[a-z]", population.value.casefold()) for population in PopulationId):
         raise ProtocolValidationError(ErrorMessage("active populations must not use lettered alias identities"))
