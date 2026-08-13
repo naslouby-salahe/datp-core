@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from time import monotonic
+from time import perf_counter
 from typing import ClassVar, Protocol, cast
 
 import datasketches  # type: ignore[import-untyped]
@@ -131,7 +131,7 @@ def _construct_reconstruction(
 ) -> KllReconstruction:
     client_sketches: list[SerializedKllSketch] = []
     for scores in ordered:
-        client_started = monotonic()
+        client_started = perf_counter()
         sketch = _new_kll_sketch(sketch_size)
         sketch.update(scores.as_array)
         payload = sketch.serialize()
@@ -140,15 +140,15 @@ def _construct_reconstruction(
                 client=scores.client,
                 payload_hex=payload.hex(),
                 byte_count=ByteCount(len(payload)),
-                build_serialization_elapsed=ElapsedSeconds(monotonic() - client_started),
+                build_serialization_elapsed=ElapsedSeconds(perf_counter() - client_started),
             )
         )
-    server_started = monotonic()
+    server_started = perf_counter()
     merged = _new_kll_sketch(sketch_size)
     for serialized in client_sketches:
         merged.merge(_deserialize_kll_sketch(bytes.fromhex(serialized.payload_hex)))
     threshold = ThresholdValue(float(merged.get_quantile(quantile.value)))
-    server_elapsed = ElapsedSeconds(monotonic() - server_started)
+    server_elapsed = ElapsedSeconds(perf_counter() - server_started)
     pooled = np.concatenate(tuple(item.as_array for item in ordered))
     empirical_cdf = float(np.count_nonzero(pooled <= threshold.value) / pooled.size)
     absolute_error = AbsoluteThresholdError(abs(threshold.value - exact_threshold.value))
