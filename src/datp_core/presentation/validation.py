@@ -204,6 +204,7 @@ def _external_assignment_failure(request: ClaimRequest) -> ClaimDecision | None:
         MetricId.BALANCED_ACCURACY,
         MetricId.BINARY_MACRO_F1,
         MetricId.AUROC,
+        MetricId.AVERAGE_PRECISION,
     }:
         return _blocked(ClaimReason("Edge external evidence has no valid client-level attack assignment"))
     return None

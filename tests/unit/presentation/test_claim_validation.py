@@ -110,6 +110,18 @@ def test_edge_attack_sensitive_claim_is_blocked() -> None:
     assert not decision.wording
 
 
+def test_edge_average_precision_claim_is_blocked_without_attack_assignment() -> None:
+    decision = validate_claim(
+        claim_request(
+            kind=ClaimKind.EXTERNAL,
+            evidence_role=EvidenceRole.EXTERNAL_VALIDATION,
+            metric=MetricId.AVERAGE_PRECISION,
+            wording="Edge client-level average precision improves",
+        )
+    )
+    assert not decision.wording
+
+
 def test_one_shot_recalibration_cannot_be_called_continuous_adaptation() -> None:
     decision = validate_claim(
         claim_request(

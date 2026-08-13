@@ -13,4 +13,5 @@ def test_metric_semantics_are_explicit() -> None:
     assert MetricId.FPR_RANGE in CONFIRMATORY_METRICS
     assert MetricId.WORST_CLIENT_FPR in CONFIRMATORY_METRICS
     assert MetricId.P10_BINARY_MACRO_F1 in ATTACK_QUALITY_CONTROL_METRICS
+    assert MetricId.AVERAGE_PRECISION in ATTACK_QUALITY_CONTROL_METRICS
     assert NEAR_ZERO_MEAN_FPR_WARNING_CUTOFF.value == 0.01
