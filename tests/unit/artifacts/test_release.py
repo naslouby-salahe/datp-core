@@ -12,6 +12,7 @@ from tools.reproducibility.release import (
     ReleaseBuildRequest,
     ReleaseState,
     build_release_bundle,
+    campaign_bounded_training_release_artifacts,
     campaign_evaluation_release_artifacts,
     campaign_publication_release_artifacts,
     campaign_standard_training_release_artifacts,
@@ -21,7 +22,14 @@ from tools.reproducibility.release import (
 
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.core.errors import ArtifactIntegrityError
-from datp_core.core.identifiers import CoordinateStableKey, FederatedThresholdMethod, PopulationId, TrainingModelId
+from datp_core.core.identifiers import (
+    CoordinateStableKey,
+    EvidenceRole,
+    ExperimentId,
+    FederatedThresholdMethod,
+    PopulationId,
+    TrainingModelId,
+)
 from datp_core.core.numeric import Seed
 
 _DIRECTORIES = (
@@ -155,9 +163,10 @@ def test_release_evaluation_metadata_is_derived_from_the_persisted_coordinate(tm
                 population=PopulationId.NBAIOT_NATURAL_DEVICES,
                 model=TrainingModelId.FEDAVG_AUTOENCODER,
                 training_seed=Seed(4),
-            ),
-            threshold_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
-            execution_key=CoordinateStableKey("shared_vs_local_confirmation/coordinate"),
+                ),
+                threshold_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
+                execution_key=CoordinateStableKey("shared_vs_local_confirmation/coordinate"),
+                execution_coordinate=SimpleNamespace(experiment=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION),
         ),
     )
 
@@ -282,6 +291,49 @@ def test_standard_training_release_discovery_retains_models_history_and_scores(
         "score_artifact",
         "score_artifact",
     )
+    assert all(item.training_seed == "4" for item in artifacts)
+
+
+def test_bounded_training_release_discovery_uses_persisted_execution_coordinate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    evaluation = tmp_path / "experiment" / "evaluation" / "federated_evaluation.json"
+    evaluation.parent.mkdir(parents=True)
+    evaluation.write_text("{}", encoding="utf-8")
+    training = tmp_path / "bounded-training" / "training"
+    client = "device_a"
+    for name in ("terminal_model.safetensors", "round_summary.parquet", "client_rounds.parquet", "device_name.txt"):
+        path = training / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(name, encoding="utf-8")
+    for name in ("calibration.parquet", "evaluation.parquet"):
+        path = training / "scores" / client / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(name, encoding="utf-8")
+    execution_coordinate = SimpleNamespace(
+        experiment=ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION,
+        population=PopulationId.EDGE_SENSOR_GROUPS,
+        evidence_role=EvidenceRole.EXTERNAL_VALIDATION,
+        temporal_state=None,
+        training_seed=Seed(4),
+    )
+    document = cast(
+        FederatedEvaluationDocument,
+        SimpleNamespace(
+            score_coordinate=SimpleNamespace(),
+            execution_coordinate=execution_coordinate,
+            clients=(SimpleNamespace(client=SimpleNamespace(client_id=SimpleNamespace(value=client))),),
+            threshold_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
+        ),
+    )
+    coordinate = ReleaseArtifact(evaluation, Path("METRICS/evaluation.json"), "evaluation", training_seed="4")
+    monkeypatch.setattr(release, "_load_evaluation_document", lambda _: document)
+    monkeypatch.setattr(release, "bounded_evidence_seed_directory", lambda *_: training.parent)
+    monkeypatch.setattr(release, "_release_artifact_from_document", lambda *_: coordinate)
+
+    artifacts = campaign_bounded_training_release_artifacts(tmp_path)
+
+    assert len(artifacts) == 6
     assert all(item.training_seed == "4" for item in artifacts)
 
 

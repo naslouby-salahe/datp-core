@@ -21,7 +21,12 @@ from datp_core.core.errors import ArtifactIntegrityError, ErrorMessage
 from datp_core.data.registry import population_declaration
 from datp_core.detector.checkpoints.identities import FederatedHistoryAssetName
 from datp_core.detector.scoring.models import FederatedScoreAssetName
-from datp_core.experiments.execution.layout import ExecutionArtifactDirectory, federated_training_directory
+from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity
+from datp_core.experiments.execution.layout import (
+    ExecutionArtifactDirectory,
+    bounded_evidence_seed_directory,
+    federated_training_directory,
+)
 
 _MANIFEST_FILENAME = "MANIFEST_SHA256.csv"
 _SIDECAR_FILENAME = "MANIFEST_SHA256.sha256"
@@ -169,6 +174,39 @@ def campaign_standard_training_release_artifacts(output_root: Path) -> tuple[Rel
             source, Path("METRICS") / source.relative_to(output_root), document
         )
         artifacts.extend(_standard_training_release_artifacts(output_root, directory, document, coordinate))
+    return tuple(artifacts)
+
+
+def campaign_bounded_training_release_artifacts(output_root: Path) -> tuple[ReleaseArtifact, ...]:
+    """Release bounded/temporal model and score evidence using each persisted full execution coordinate."""
+
+    documents = tuple(sorted(output_root.rglob(FederatedEvaluationAssetName.DOCUMENT.value)))
+    training_evidence: dict[Path, tuple[Path, FederatedEvaluationDocument]] = {}
+    for source in documents:
+        document = _load_evaluation_document(source)
+        coordinate = document.execution_coordinate
+        if coordinate is None:
+            continue
+        identity = ExternalTemporalExecutionIdentity(
+            experiment=coordinate.experiment,
+            population=coordinate.population,
+            evidence_role=coordinate.evidence_role,
+            temporal_state=coordinate.temporal_state,
+        )
+        directory = (
+            bounded_evidence_seed_directory(identity, coordinate.training_seed, output_root)
+            / ExecutionArtifactDirectory.TRAINING
+        )
+        if directory.is_dir():
+            training_evidence.setdefault(directory, (source, document))
+    if not training_evidence:
+        raise ArtifactIntegrityError(ErrorMessage("campaign release requires bounded training evidence"))
+    artifacts: list[ReleaseArtifact] = []
+    for directory, (source, document) in sorted(training_evidence.items()):
+        coordinate_artifact = _release_artifact_from_document(
+            source, Path("METRICS") / source.relative_to(output_root), document
+        )
+        artifacts.extend(_standard_training_release_artifacts(output_root, directory, document, coordinate_artifact))
     return tuple(artifacts)
 
 
@@ -354,7 +392,11 @@ def _release_artifact_from_document(
         training_method=coordinate.model.value,
         training_seed=str(coordinate.training_seed.value),
         threshold_policy=document.threshold_method.value,
-        experiment_id=document.execution_key.split("/")[0],
+        experiment_id=(
+            document.execution_coordinate.experiment.value
+            if document.execution_coordinate is not None
+            else document.execution_key.split("/")[0]
+        ),
     )
 
 
