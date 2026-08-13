@@ -5995,9 +5995,9 @@ The implementation must distinguish at least these roadmap-defined scientific st
 
 | ID | Source line | Audit requirement | Implementation disposition | Audit outcome | Evidence / remediation |
 |---|---:|---|---|---|---|
-| `GATE-B-001` | 6011 | The physical source and canonical dataset identity are recorded. | `NOT_AUDITED` | — | — |
-| `GATE-B-002` | 6012 | Declared model-input features match the dataset-specific protocol. | `NOT_AUDITED` | — | — |
-| `GATE-B-003` | 6013 | Label normalization is deterministic and auditable. | `NOT_AUDITED` | — | — |
+| `GATE-B-001` | 6011 | The physical source and canonical dataset identity are recorded. | `IMPLEMENTED` | `PASS` | Canonical manifests bind each materialized dataset to its typed identity and are rejected on absence, corruption, or identity mismatch. |
+| `GATE-B-002` | 6012 | Declared model-input features match the dataset-specific protocol. | `IMPLEMENTED` | `PASS` | Dataset schemas lock ordered feature fields; readers reject unaudited source schemas and preprocessing consumes each protocol’s declared input-feature sequence. |
+| `GATE-B-003` | 6013 | Label normalization is deterministic and auditable. | `IMPLEMENTED` | `PASS` | CICIoT retains the raw label, applies deterministic trim/uppercase normalization, validates it against the locked vocabulary, and exposes unrecognized labels in its audit. |
 | `GATE-B-004` | 6014 | Missing, non-finite, and ineligible rows follow Part I §2.2.1 exactly; no silent imputation, zero-fill, clipping, capping, infinity replacement, or label inference occurs. | `IMPLEMENTED` | `PASS` | Model-input admission excludes null/non-finite rows without transformation and records exact exclusion evidence; preprocessing and N-BaIoT reader tests cover both behaviors. |
 | `GATE-B-005` | 6015 | Stable row identity and source provenance survive preprocessing and splitting. | `IMPLEMENTED` | `PASS` | Readers emit stable row and relative source identities, while preprocessing exclusion evidence persists affected stable row IDs. |
 | `GATE-B-006` | 6016 | Dataset-specific exclusions are counted and reported. | `IMPLEMENTED` | `PASS` | Typed validation/exclusion contracts require positive affected counts and exact aggregate totals; preprocessing tests verify persisted evidence. |
@@ -7311,9 +7311,9 @@ README_REPRODUCIBILITY.md
 | `PROVENANCE-012` | IV | 6003 | 3. Gate A — Roadmap and configuration integrity | Canonical and sensitivity conditions are distinguishable in configuration and artifacts. | `NOT_AUDITED` | — |
 | `GLOBAL-115` | IV | 6004 | 3. Gate A — Roadmap and configuration integrity | A sensitivity cell cannot be relabelled as canonical after outcomes are observed. | `NOT_AUDITED` | — |
 | `GLOBAL-116` | IV | 6005 | 3. Gate A — Roadmap and configuration integrity | Optional analyses remain explicitly optional and cannot replace mandatory evidence. | `PASS` | Typed recipe campaign roles preserve optional status through campaign reporting. |
-| `DATASET-084` | IV | 6011 | 4. Gate B — Dataset integrity | The physical source and canonical dataset identity are recorded. | `NOT_AUDITED` | — |
-| `DATASET-085` | IV | 6012 | 4. Gate B — Dataset integrity | Declared model-input features match the dataset-specific protocol. | `NOT_AUDITED` | — |
-| `PREPROCESS-043` | IV | 6013 | 4. Gate B — Dataset integrity | Label normalization is deterministic and auditable. | `NOT_AUDITED` | — |
+| `DATASET-084` | IV | 6011 | 4. Gate B — Dataset integrity | The physical source and canonical dataset identity are recorded. | `PASS` | Canonical manifest validation binds and checks the typed dataset identity. |
+| `DATASET-085` | IV | 6012 | 4. Gate B — Dataset integrity | Declared model-input features match the dataset-specific protocol. | `PASS` | Locked schemas/readers and protocol input-feature sequences enforce declared fields. |
+| `PREPROCESS-043` | IV | 6013 | 4. Gate B — Dataset integrity | Label normalization is deterministic and auditable. | `PASS` | Raw/normalized labels and eligibility audit retain deterministic normalization evidence. |
 | `DATASET-086` | IV | 6014 | 4. Gate B — Dataset integrity | Missing, non-finite, and ineligible rows follow Part I §2.2.1 exactly; no silent imputation, zero-fill, clipping, capping, infinity replacement, or label inference occurs. | `PASS` | Admission excludes invalid rows without fabrication and retains typed evidence. |
 | `PREPROCESS-044` | IV | 6015 | 4. Gate B — Dataset integrity | Stable row identity and source provenance survive preprocessing and splitting. | `PASS` | Readers and persisted exclusion evidence retain stable/source identities. |
 | `DATASET-087` | IV | 6016 | 4. Gate B — Dataset integrity | Dataset-specific exclusions are counted and reported. | `PASS` | Typed exclusion contracts validate totals and persisted evidence. |
