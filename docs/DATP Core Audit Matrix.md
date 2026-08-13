@@ -6137,12 +6137,12 @@ The implementation must distinguish at least these roadmap-defined scientific st
 | `GATE-K-001` | 6143 | Every declared factor level was executed or has a recorded pre-specified infeasibility reason. | `IMPLEMENTED` | `PASS` | Materialized coordinates are rejected when missing or unauthorized; graph-validated infeasibility has a typed disposition. |
 | `GATE-K-002` | 6144 | Every required comparison method is present. | `IMPLEMENTED` | `PASS` | Coordinate completeness derives the full declaration grid and rejects absent method coordinates. |
 | `GATE-K-003` | 6145 | Every required seed is present; confirmatory inference requires exactly ten valid paired seed deltas. | `IMPLEMENTED` | `PASS` | The pre-registered confirmatory cohort and inference protocol both require exactly ten seeds. |
-| `GATE-K-004` | 6146 | All declared nested replicates are present where required. | `NOT_AUDITED` | — | — |
+| `GATE-K-004` | 6146 | All declared nested replicates are present where required. | `IMPLEMENTED` | `PASS` | Nested reconstruction and calibration analyses retain their declared replicate identities and validate complete grids. |
 | `GATE-K-005` | 6147 | Required outcomes, diagnostics, tables, and figures were produced or explicitly marked unavailable under a roadmap rule. | `NOT_AUDITED` | — | — |
 | `GATE-K-006` | 6148 | Null, reversed, unstable, and unfavorable outcomes remain in the result set. | `NOT_AUDITED` | — | — |
 | `GATE-K-007` | 6149 | No experiment was dropped because it weakened the narrative. | `NOT_AUDITED` | — | — |
 | `GATE-K-008` | 6150 | Optional experiments are visually and semantically separated from mandatory evidence. | `NOT_AUDITED` | — | — |
-| `GATE-K-009` | 6151 | Part II §8.6 produces every feasible `m in {0,1,2,3,4}` omission subset, exact seed-level subset summaries, and the identities of worst-case omission sets. | `NOT_AUDITED` | — | — |
+| `GATE-K-009` | 6151 | Part II §8.6 produces every feasible `m in {0,1,2,3,4}` omission subset, exact seed-level subset summaries, and the identities of worst-case omission sets. | `IMPLEMENTED` | `PASS` | The contributor report retains each omission cell, m-level seed summaries, unavailable cells, and worst-case omission identities. |
 
 ### Gate L
 
@@ -7408,12 +7408,12 @@ README_REPRODUCIBILITY.md
 | `GLOBAL-117` | IV | 6143 | 13. Gate K — Experiment completeness | Every declared factor level was executed or has a recorded pre-specified infeasibility reason. | `PASS` | Materialized coordinates are rejected when missing or unauthorized; graph-validated infeasibility has a typed disposition. |
 | `GLOBAL-118` | IV | 6144 | 13. Gate K — Experiment completeness | Every required comparison method is present. | `PASS` | Coordinate completeness derives the full declaration grid and rejects absent method coordinates. |
 | `GLOBAL-119` | IV | 6145 | 13. Gate K — Experiment completeness | Every required seed is present; confirmatory inference requires exactly ten valid paired seed deltas. | `PASS` | The pre-registered confirmatory cohort and inference protocol both require exactly ten seeds. |
-| `GLOBAL-120` | IV | 6146 | 13. Gate K — Experiment completeness | All declared nested replicates are present where required. | `NOT_AUDITED` | — |
+| `GLOBAL-120` | IV | 6146 | 13. Gate K — Experiment completeness | All declared nested replicates are present where required. | `PASS` | Nested reconstruction and calibration analyses retain their declared replicate identities and validate complete grids. |
 | `REPORT-035` | IV | 6147 | 13. Gate K — Experiment completeness | Required outcomes, diagnostics, tables, and figures were produced or explicitly marked unavailable under a roadmap rule. | `NOT_AUDITED` | — |
 | `REPORT-036` | IV | 6148 | 13. Gate K — Experiment completeness | Null, reversed, unstable, and unfavorable outcomes remain in the result set. | `NOT_AUDITED` | — |
 | `GLOBAL-121` | IV | 6149 | 13. Gate K — Experiment completeness | No experiment was dropped because it weakened the narrative. | `NOT_AUDITED` | — |
 | `GLOBAL-122` | IV | 6150 | 13. Gate K — Experiment completeness | Optional experiments are visually and semantically separated from mandatory evidence. | `NOT_AUDITED` | — |
-| `GLOBAL-123` | IV | 6151 | 13. Gate K — Experiment completeness | Part II §8.6 produces every feasible `m in {0,1,2,3,4}` omission subset, exact seed-level subset summaries, and the identities of worst-case omission sets. | `NOT_AUDITED` | — |
+| `GLOBAL-123` | IV | 6151 | 13. Gate K — Experiment completeness | Part II §8.6 produces every feasible `m in {0,1,2,3,4}` omission subset, exact seed-level subset summaries, and the identities of worst-case omission sets. | `PASS` | The contributor report retains each omission cell, m-level seed summaries, unavailable cells, and worst-case omission identities. |
 | `THRESHOLD-333` | IV | 6155 | 14. Gate L — Evaluation and metric integrity | Prediction semantics are exactly `attack iff score > threshold`. | `NOT_AUDITED` | — |
 | `METRIC-031` | IV | 6156 | 14. Gate L — Evaluation and metric integrity | Confusion counts are computed from held-out evaluation rows only. | `NOT_AUDITED` | — |
 | `METRIC-032` | IV | 6157 | 14. Gate L — Evaluation and metric integrity | Per-client metrics are computed before cross-client aggregation where valid client identity exists. | `NOT_AUDITED` | — |
