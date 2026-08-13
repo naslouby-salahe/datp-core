@@ -989,6 +989,11 @@ def _render_confirmatory_descriptive_effects(effects: ConfirmatoryDescriptiveEff
         if not relative_values
         else _format_publication_metric(sum(relative_values) / len(relative_values))
     )
+    mean_relative_percent = (
+        "unavailable"
+        if not relative_values
+        else _format_publication_metric(100.0 * sum(relative_values) / len(relative_values)) + "%"
+    )
     mean_worst = _format_publication_metric(
         sum(item.delta_worst_fpr.value for item in effects.values) / len(effects.values)
     )
@@ -998,12 +1003,12 @@ def _render_confirmatory_descriptive_effects(effects: ConfirmatoryDescriptiveEff
     lines = [
         "## Confirmatory Descriptive Effects",
         "",
-        f"Mean relative CV(FPR) reduction: {mean_relative}",
+        f"Mean relative CV(FPR) reduction: {mean_relative} ({mean_relative_percent})",
         f"Mean DeltaWorstFPR: {mean_worst}",
         f"Mean DeltaIQR: {mean_iqr}",
         "",
-        "| Seed | Relative CV reduction | DeltaWorstFPR | DeltaIQR |",
-        "|---:|---:|---:|---:|",
+        "| Seed | Relative CV reduction | Relative CV reduction (%) | DeltaWorstFPR | DeltaIQR |",
+        "|---:|---:|---:|---:|---:|",
     ]
     lines.extend(
         "| "
@@ -1013,6 +1018,12 @@ def _render_confirmatory_descriptive_effects(effects: ConfirmatoryDescriptiveEff
             "unavailable (shared CV(FPR) <= 1e-12)"
             if item.relative_cv_reduction is None
             else _format_publication_metric(item.relative_cv_reduction.value)
+        )
+        + " | "
+        + (
+            "unavailable"
+            if item.relative_cv_reduction is None
+            else _format_publication_metric(100.0 * item.relative_cv_reduction.value) + "%"
         )
         + " | "
         + _format_publication_metric(item.delta_worst_fpr.value)
