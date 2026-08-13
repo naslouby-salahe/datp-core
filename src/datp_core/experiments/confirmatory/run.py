@@ -627,6 +627,7 @@ def _confirmatory_cluster_mechanisms() -> tuple[MechanismEvidence, ...]:
         ClusterEvidenceRecord,
         cluster_assignment_switch_frequencies,
         cluster_evidence_from_grouped_result,
+        cluster_feature_ablation_evidence,
         cluster_score_divergence,
         cluster_silhouette_from_grouped_result,
         cluster_stability,
@@ -692,10 +693,41 @@ def _confirmatory_cluster_mechanisms() -> tuple[MechanismEvidence, ...]:
             )
         )
     mechanisms.append(cluster_assignment_switch_frequencies(tuple(cluster_records)))
+    canonical_by_seed = {seed: result for seed, result in available}
+    for omitted_feature in ClusterFingerprintFeature:
+        ablations, ablation_unavailable, ablation_corrupt = _load_cluster_threshold_results(omitted_feature)
+        if ablation_unavailable or ablation_corrupt or len(ablations) != len(available):
+            raise ScientificContractError(
+                ErrorMessage(
+                    f"cluster feature ablation is incomplete for {omitted_feature.value}; "
+                    f"available={[seed.value for seed, _ in ablations]} "
+                    f"unavailable={[seed.value for seed in ablation_unavailable]} "
+                    f"corrupt={[seed.value for seed in ablation_corrupt]}"
+                )
+            )
+        for seed, ablation in ablations:
+            document = load_evaluation_document(
+                _evaluation_path(
+                    seed,
+                    FederatedThresholdMethod.CLUSTER_THRESHOLD,
+                    cluster_fingerprint_omission=omitted_feature,
+                )
+            )
+            mechanisms.append(
+                cluster_feature_ablation_evidence(
+                    canonical_by_seed[seed],
+                    ablation,
+                    omitted_feature=omitted_feature,
+                    cv_fpr=population_metric(document, MetricId.FPR_COEFFICIENT_OF_VARIATION),
+                    worst_client_fpr=population_metric(document, MetricId.WORST_CLIENT_FPR),
+                )
+            )
     return tuple(mechanisms)
 
 
-def _load_cluster_threshold_results() -> tuple[
+def _load_cluster_threshold_results(
+    cluster_fingerprint_omission: ClusterFingerprintFeature | None = None,
+) -> tuple[
     list[tuple[Seed, GroupedThresholdResult]],
     list[Seed],
     list[Seed],
@@ -709,7 +741,11 @@ def _load_cluster_threshold_results() -> tuple[
     unavailable: list[Seed] = []
     corrupt: list[Seed] = []
     for seed in CONFIRMATORY_SEED_COHORT.values:
-        coordinate = _confirmatory_coordinate(seed, FederatedThresholdMethod.CLUSTER_THRESHOLD)
+        coordinate = _confirmatory_coordinate(
+            seed,
+            FederatedThresholdMethod.CLUSTER_THRESHOLD,
+            cluster_fingerprint_omission=cluster_fingerprint_omission,
+        )
         directory = evaluation_run_directory(OUTPUTS_ROOT, coordinate) / EvaluationRunAssetDirectory.THRESHOLD
         result_path = directory / FederatedThresholdAssetName.RESULT
         if not result_path.is_file():

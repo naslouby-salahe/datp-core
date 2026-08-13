@@ -7,6 +7,7 @@ from datp_core.analysis.mechanisms.clustering import (
     ClusterEvidenceRecord,
     ClusterPartitionSummary,
     cluster_assignment_switch_frequencies,
+    cluster_feature_ablation_evidence,
     cluster_score_divergence,
     cluster_silhouette_from_grouped_result,
     cluster_stability,
@@ -38,6 +39,7 @@ from datp_core.thresholds.policies.cluster import (
     FingerprintFeatures,
     GroupedThresholdResult,
 )
+from datp_core.thresholds.protocols import ClusterFingerprintFeature
 
 
 def _membership(index: int, client_name: str, threshold: float) -> ClusterMembership:
@@ -197,6 +199,47 @@ def test_cluster_score_divergence_separates_within_and_between_pairs() -> None:
     assert result.between_cluster_mean is not None and result.between_cluster_mean.value > 0.9
 
 
+def test_cluster_feature_ablation_retains_all_required_per_seed_outcomes() -> None:
+    canonical = _cluster_result(
+        (_membership(0, "client_a", 0.1), _membership(1, "client_b", 0.2)),
+        ((identity("client_a"), 0.0), (identity("client_b"), 1.0)),
+    )
+    ablation = _cluster_result(
+        (
+            ClusterMembership(
+                cluster_index=ClusterIndex(0),
+                members=(identity("client_a"), identity("client_b")),
+                contributing_local_quantiles=(
+                    _local_quantile(identity("client_a"), 0.1),
+                    _local_quantile(identity("client_b"), 0.2),
+                ),
+                cluster_threshold=ThresholdValue(0.15000000000000002),
+            ),
+            ClusterMembership(
+                cluster_index=ClusterIndex(1),
+                members=(),
+                contributing_local_quantiles=(),
+                cluster_threshold=None,
+            ),
+        ),
+        ((identity("client_a"), 0.0), (identity("client_b"), 1.0)),
+    )
+
+    evidence = cluster_feature_ablation_evidence(
+        canonical,
+        ablation,
+        omitted_feature=ClusterFingerprintFeature.BENIGN_ERROR_MEAN,
+        cv_fpr=MetricValue(0.2),
+        worst_client_fpr=MetricValue(0.3),
+    )
+
+    assert evidence.omitted_feature is ClusterFingerprintFeature.BENIGN_ERROR_MEAN
+    assert evidence.mean_silhouette is None
+    assert evidence.silhouette_unavailable_reason is not None
+    assert evidence.cv_fpr == MetricValue(0.2)
+    assert evidence.worst_client_fpr == MetricValue(0.3)
+
+
 def _local_quantile(client, value: float) -> LocalQuantile:
     return LocalQuantile(
         client=client,
@@ -221,6 +264,7 @@ def _cluster_result(
         SimpleNamespace(
             coordinate=COORDINATE,
             clusters=clusters,
+            group_count=GroupCount(len(clusters)),
             fingerprints=tuple(
                 ClusterFingerprint(
                     client=client,

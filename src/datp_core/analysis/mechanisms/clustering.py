@@ -23,6 +23,7 @@ from datp_core.core.numeric import (
 )
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.thresholds.policies.cluster import ClusterFingerprint, ClusterMembership, GroupedThresholdResult
+from datp_core.thresholds.protocols import ClusterFingerprintFeature
 
 MINIMUM_STABILITY_CLIENTS = PairedObservationCount(2)
 
@@ -176,6 +177,24 @@ class ClusterScoreDivergenceResult(StrictModel):
             raise ValueError("cluster score divergence requires both means or one unavailable reason")
         if available and (self.within_cluster_pair_count.value == 0 or self.between_cluster_pair_count.value == 0):
             raise ValueError("available cluster score divergence requires within and between pairs")
+        return self
+
+
+class ClusterFeatureAblationEvidence(StrictModel):
+    seed: Seed
+    omitted_feature: ClusterFingerprintFeature
+    adjusted_rand_index: CorrelationCoefficient
+    mean_silhouette: MetricValue | None
+    silhouette_unavailable_reason: AnalysisReasonText | None
+    cv_fpr: MetricValue
+    worst_client_fpr: MetricValue
+
+    evidence_role: ClassVar[EvidenceRole] = EvidenceRole.MECHANISM
+
+    @model_validator(mode="after")
+    def validate_evidence(self) -> "ClusterFeatureAblationEvidence":
+        if (self.mean_silhouette is None) != (self.silhouette_unavailable_reason is not None):
+            raise ValueError("ablation silhouette requires exactly one value or unavailable reason")
         return self
 
 
@@ -453,6 +472,34 @@ def cluster_score_divergence(
         within_cluster_pair_count=PairedObservationCount(len(within)),
         between_cluster_pair_count=PairedObservationCount(len(between)),
         unavailable_reason=None,
+    )
+
+
+def cluster_feature_ablation_evidence(
+    canonical: GroupedThresholdResult,
+    ablation: GroupedThresholdResult,
+    *,
+    omitted_feature: ClusterFingerprintFeature,
+    cv_fpr: MetricValue,
+    worst_client_fpr: MetricValue,
+) -> ClusterFeatureAblationEvidence:
+    if canonical.coordinate.training_seed != ablation.coordinate.training_seed:
+        raise ValueError("cluster feature ablation requires a seed-matched canonical result")
+    stability = cluster_stability(
+        canonical.clusters,
+        ablation.clusters,
+        left_declared_group_count=canonical.group_count,
+        right_declared_group_count=ablation.group_count,
+    )
+    silhouette = cluster_silhouette_from_grouped_result(ablation)
+    return ClusterFeatureAblationEvidence(
+        seed=ablation.coordinate.training_seed,
+        omitted_feature=omitted_feature,
+        adjusted_rand_index=stability.adjusted_rand_index,
+        mean_silhouette=silhouette.mean_silhouette,
+        silhouette_unavailable_reason=silhouette.unavailable_reason,
+        cv_fpr=cv_fpr,
+        worst_client_fpr=worst_client_fpr,
     )
 
 

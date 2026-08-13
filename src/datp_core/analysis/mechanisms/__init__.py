@@ -33,6 +33,7 @@ from datp_core.analysis.mechanisms.clustering import (
     ClusterContingencyRow,
     ClusterEvidenceAvailability,
     ClusterEvidenceRecord,
+    ClusterFeatureAblationEvidence,
     ClusterScoreDivergenceResult,
     ClusterSilhouetteObservation,
     ClusterSilhouetteResult,
@@ -40,6 +41,7 @@ from datp_core.analysis.mechanisms.clustering import (
     RecoveryAssessment,
     cluster_assignment_switch_frequencies,
     cluster_evidence_from_grouped_result,
+    cluster_feature_ablation_evidence,
     cluster_score_divergence,
     cluster_silhouette_from_grouped_result,
     cluster_stability,
@@ -157,6 +159,7 @@ type MechanismEvidence = (
     AbsorptionCohortResult
     | AssociationResult
     | ClusterEvidenceRecord
+    | ClusterFeatureAblationEvidence
     | ClusterSilhouetteResult
     | ClusterScoreDivergenceResult
     | ClusterAssignmentSwitchSummary
@@ -203,6 +206,7 @@ __all__ = (
     "ClientImpactSeedSummary",
     "ClusterEvidenceAvailability",
     "ClusterEvidenceRecord",
+    "ClusterFeatureAblationEvidence",
     "ClusterSilhouetteObservation",
     "ClusterSilhouetteResult",
     "ClusterScoreDivergenceResult",
@@ -274,6 +278,7 @@ __all__ = (
     "campaign_fixed_support_strata",
     "alignment_reductions",
     "cluster_evidence_from_grouped_result",
+    "cluster_feature_ablation_evidence",
     "cluster_silhouette_from_grouped_result",
     "cluster_score_divergence",
     "cluster_assignment_switch_frequencies",

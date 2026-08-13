@@ -29,6 +29,7 @@ from datp_core.analysis.mechanisms.client_impact import (
 from datp_core.analysis.mechanisms.clustering import (
     ClusterAssignmentSwitchSummary,
     ClusterEvidenceRecord,
+    ClusterFeatureAblationEvidence,
     ClusterScoreDivergenceResult,
     ClusterSilhouetteResult,
     ClusterStabilityResult,
@@ -1057,6 +1058,7 @@ _MECHANISM_TITLES: dict[type[object], ReportLine] = {
     ClusterStabilityResult: ReportLine("cluster_stability"),
     ClusterAssignmentSwitchSummary: ReportLine("cluster_assignment_switch_frequency"),
     ClusterEvidenceRecord: ReportLine("cluster_evidence"),
+    ClusterFeatureAblationEvidence: ReportLine("cluster_feature_ablation"),
     ClusterSilhouetteResult: ReportLine("cluster_silhouette"),
     ClusterScoreDivergenceResult: ReportLine("cluster_score_divergence"),
     GroupedDispersionResult: ReportLine("grouped_dispersion"),
@@ -1494,6 +1496,26 @@ def _render_cluster_score_divergence_result(mechanism: ClusterScoreDivergenceRes
             f"Seed: {mechanism.seed.value}",
             f"Within-cluster JS mean: {within}; pairs={mechanism.within_cluster_pair_count.value}",
             f"Between-cluster JS mean: {between}; pairs={mechanism.between_cluster_pair_count.value}",
+        ]
+    ]
+
+
+@_render_one_mechanism.register
+def _render_cluster_feature_ablation_evidence(mechanism: ClusterFeatureAblationEvidence) -> list[ReportLine]:
+    silhouette = (
+        _format_publication_metric(mechanism.mean_silhouette.value)
+        if mechanism.mean_silhouette is not None
+        else f"unavailable ({mechanism.silhouette_unavailable_reason})"
+    )
+    return [
+        ReportLine(line)
+        for line in [
+            f"Seed: {mechanism.seed.value}",
+            f"Omitted fingerprint feature: {mechanism.omitted_feature.value}",
+            f"Canonical-versus-ablation ARI: {_format_publication_metric(mechanism.adjusted_rand_index.value)}",
+            f"Ablation mean silhouette: {silhouette}",
+            f"Ablation CV(FPR): {_format_publication_metric(mechanism.cv_fpr.value)}",
+            f"Ablation worst-client FPR: {_format_publication_metric(mechanism.worst_client_fpr.value)}",
         ]
     ]
 
