@@ -55,6 +55,7 @@ from datp_core.experiments.confirmatory.run import (
     ConfirmatoryAssetDirectory,
     analyze_calibration_support_burden,
     analyze_confirmatory_campaign,
+    analyze_equity_utility_pareto,
     analyze_malware_family_sensitivity,
     analyze_natural_device_client_impact,
     analyze_physical_family_adequacy,
@@ -220,6 +221,7 @@ _ANALYSIS_ONLY_EXPERIMENTS = frozenset(
         ExperimentId.CALIBRATION_SUPPORT_BURDEN,
         ExperimentId.NATURAL_DEVICE_CLIENT_IMPACT,
         ExperimentId.MALWARE_FAMILY_SENSITIVITY,
+        ExperimentId.EQUITY_UTILITY_PARETO,
         ExperimentId.PER_CLIENT_SCORE_GEOMETRY,
         ExperimentId.HETEROGENEITY_BENEFIT_ASSOCIATION,
         ExperimentId.THRESHOLD_MOVEMENT_TRADEOFF,
@@ -613,6 +615,8 @@ def _report_heterogeneity(experiment_id: ExperimentId) -> ReportResult:
         path = analyze_natural_device_client_impact(overwrite=True)
     elif experiment_id is ExperimentId.MALWARE_FAMILY_SENSITIVITY:
         path = analyze_malware_family_sensitivity(overwrite=True)
+    elif experiment_id is ExperimentId.EQUITY_UTILITY_PARETO:
+        path = analyze_equity_utility_pareto(overwrite=True)
     elif experiment_id is ExperimentId.PER_CLIENT_SCORE_GEOMETRY:
         path = analyze_per_client_score_geometry(overwrite=True)
     elif experiment_id is ExperimentId.HETEROGENEITY_BENEFIT_ASSOCIATION:
@@ -1098,6 +1102,7 @@ def _heterogeneity_marker(experiment_id: ExperimentId) -> bool:
         ExperimentId.CALIBRATION_SUPPORT_BURDEN,
         ExperimentId.NATURAL_DEVICE_CLIENT_IMPACT,
         ExperimentId.MALWARE_FAMILY_SENSITIVITY,
+        ExperimentId.EQUITY_UTILITY_PARETO,
     }:
         output = (
             OUTPUTS_ROOT
@@ -1112,6 +1117,8 @@ def _heterogeneity_marker(experiment_id: ExperimentId) -> bool:
                 else ConfirmatoryAssetDirectory.NATURAL_DEVICE_CLIENT_IMPACT
                 if experiment_id is ExperimentId.NATURAL_DEVICE_CLIENT_IMPACT
                 else ConfirmatoryAssetDirectory.MALWARE_FAMILY_SENSITIVITY
+                if experiment_id is ExperimentId.MALWARE_FAMILY_SENSITIVITY
+                else ConfirmatoryAssetDirectory.EQUITY_UTILITY_PARETO
             )
         )
     if experiment_id is ExperimentId.HETEROGENEITY_CALIBRATION_SUPPORT_INTERACTION:
@@ -1459,6 +1466,14 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         anchor_requirement=AnchorRequirement.REQUIRED,
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_analysis_recipe(ExperimentId.MALWARE_FAMILY_SENSITIVITY),
+        report=_report_heterogeneity,
+        analysis_marker=_heterogeneity_marker,
+    ),
+    ExperimentRecipe(
+        experiment=ExperimentId.EQUITY_UTILITY_PARETO,
+        anchor_requirement=AnchorRequirement.REQUIRED,
+        campaign_role=CampaignRole.MANDATORY,
+        dispatch=_analysis_recipe(ExperimentId.EQUITY_UTILITY_PARETO),
         report=_report_heterogeneity,
         analysis_marker=_heterogeneity_marker,
     ),

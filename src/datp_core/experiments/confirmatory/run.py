@@ -134,6 +134,7 @@ class ConfirmatoryAssetDirectory(StrEnum):
     CALIBRATION_SUPPORT_BURDEN = "calibration_support_burden"
     NATURAL_DEVICE_CLIENT_IMPACT = "natural_device_client_impact"
     MALWARE_FAMILY_SENSITIVITY = "malware_family_sensitivity"
+    EQUITY_UTILITY_PARETO = "equity_utility_pareto"
 
 
 _FAMILY_RECALL_METHODS = (
@@ -482,6 +483,39 @@ def analyze_malware_family_sensitivity(*, overwrite: bool) -> Path:
         output_directory=output,
         evidence_role=EvidenceRole.SUPPORTIVE,
     )
+    return output
+
+
+def analyze_equity_utility_pareto(*, overwrite: bool) -> Path:
+    """Publish the §7.7 supportive Pareto views from fixed evaluation evidence."""
+
+    output = (
+        OUTPUTS_ROOT
+        / ConfirmatoryAssetDirectory.ROOT
+        / PopulationId.NBAIOT_NATURAL_DEVICES.value
+        / ConfirmatoryAssetDirectory.ANALYSIS
+        / ConfirmatoryAssetDirectory.EQUITY_UTILITY_PARETO
+    )
+    if overwrite and output.exists():
+        from shutil import rmtree
+
+        rmtree(output)
+    views = _confirmatory_pareto_views()
+    export_mechanism_publication(
+        views,
+        experiment=ExperimentId.EQUITY_UTILITY_PARETO,
+        population=PopulationId.NBAIOT_NATURAL_DEVICES,
+        output_directory=output,
+        evidence_role=EvidenceRole.SUPPORTIVE,
+        figures=tuple(
+            equity_utility_pareto_figure(
+                view,
+                title=FigureTitle(f"N-BaIoT equity–utility Pareto: CV(FPR) versus {view.utility_metric.value}"),
+            )
+            for view in views
+        ),
+    )
+    export_target_attainment_table(views[0], output / "calibration_target_attainment.md")
     return output
 
 

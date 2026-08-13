@@ -67,6 +67,18 @@ _FULL_THRESHOLD_LADDER = (
     FederatedThresholdMethod.CLUSTER_THRESHOLD,
     FederatedThresholdMethod.LOCAL_THRESHOLD,
 )
+_PARETO_METHODS = (
+    FederatedThresholdMethod.SHARED_THRESHOLD,
+    FederatedThresholdMethod.POOLED_SHARED_QUANTILE,
+    FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD,
+    FederatedThresholdMethod.FEDERATED_KLL_SHARED_THRESHOLD,
+    FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS,
+    FederatedThresholdMethod.FAMILY_THRESHOLD,
+    FederatedThresholdMethod.CLUSTER_THRESHOLD,
+    FederatedThresholdMethod.LOCAL_THRESHOLD,
+    FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE,
+    FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE,
+)
 _SHARED_THRESHOLD_CONSTRUCTION_PANEL = (
     FederatedThresholdMethod.SHARED_THRESHOLD,
     FederatedThresholdMethod.POOLED_SHARED_QUANTILE,
@@ -219,6 +231,15 @@ EXPERIMENTS = (
         TrainingModelId.FEDAVG_AUTOENCODER,
         PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
         _FULL_THRESHOLD_LADDER,
+        CONFIRMATORY_METRICS,
+    ),
+    _declare(
+        ExperimentId.EQUITY_UTILITY_PARETO,
+        EvidenceRole.SUPPORTIVE,
+        PopulationId.NBAIOT_NATURAL_DEVICES,
+        TrainingModelId.FEDAVG_AUTOENCODER,
+        PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
+        _PARETO_METHODS,
         CONFIRMATORY_METRICS,
     ),
     _declare(
