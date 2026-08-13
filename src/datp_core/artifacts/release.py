@@ -111,6 +111,14 @@ def release_artifact_from_evaluation(source: Path, relative_path: Path) -> Relea
         document = FederatedEvaluationDocument.model_validate_json(source.read_text(encoding="utf-8"))
     except (OSError, ValueError) as error:
         raise ArtifactIntegrityError(ErrorMessage(f"released evaluation document is unreadable: {source}")) from error
+    return _release_artifact_from_document(source, relative_path, document)
+
+
+def _release_artifact_from_document(
+    source: Path,
+    relative_path: Path,
+    document: FederatedEvaluationDocument,
+) -> ReleaseArtifact:
     coordinate = document.score_coordinate
     return ReleaseArtifact(
         source=source,

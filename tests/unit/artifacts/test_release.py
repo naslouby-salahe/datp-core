@@ -2,9 +2,13 @@ import csv
 from datetime import date
 from hashlib import sha256
 from pathlib import Path
+from types import SimpleNamespace
+from typing import cast
 
 import pytest
 
+from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
+from datp_core.artifacts import release
 from datp_core.artifacts.release import (
     ReleaseArtifact,
     ReleaseBuildRequest,
@@ -13,6 +17,8 @@ from datp_core.artifacts.release import (
     validate_release_bundle,
 )
 from datp_core.core.errors import ArtifactIntegrityError
+from datp_core.core.identifiers import CoordinateStableKey, FederatedThresholdMethod, PopulationId, TrainingModelId
+from datp_core.core.numeric import Seed
 
 _DIRECTORIES = (
     "DATA_PROVENANCE",
@@ -135,3 +141,28 @@ def test_release_builder_packages_explicit_retained_evidence_and_validates_it(tm
 
     assert len(release.entries) == 5
     assert (release.root / "METRICS" / "confirmatory.json").read_bytes() == source.read_bytes()
+
+
+def test_release_evaluation_metadata_is_derived_from_the_persisted_coordinate(tmp_path: Path) -> None:
+    document = cast(
+        FederatedEvaluationDocument,
+        SimpleNamespace(
+            score_coordinate=SimpleNamespace(
+                population=PopulationId.NBAIOT_NATURAL_DEVICES,
+                model=TrainingModelId.FEDAVG_AUTOENCODER,
+                training_seed=Seed(4),
+            ),
+            threshold_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
+            execution_key=CoordinateStableKey("shared_vs_local_confirmation/coordinate"),
+        ),
+    )
+
+    artifact = release._release_artifact_from_document(
+        tmp_path / "evaluation.json", Path("METRICS/evaluation.json"), document
+    )
+
+    assert artifact.dataset_id == "nbaiot"
+    assert artifact.population_id == "nbaiot_natural_devices"
+    assert artifact.training_seed == "4"
+    assert artifact.threshold_policy == "local_threshold"
+    assert artifact.experiment_id == "shared_vs_local_confirmation"
