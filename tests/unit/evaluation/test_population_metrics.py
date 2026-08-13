@@ -83,7 +83,9 @@ def test_attack_aggregates_use_attack_evaluable_clients_not_fpr_cohort() -> None
     result = calculate_population_metrics((fpr_evaluable, attack_evaluable))
 
     average_precision = metric_by_id(result.metrics, MetricId.AVERAGE_PRECISION)
+    pooled_macro_f1 = metric_by_id(result.metrics, MetricId.POOLED_MACRO_F1)
     assert average_precision.value == MetricValue(1.0)
     assert average_precision.denominator == RowCount(1)
+    assert pooled_macro_f1.denominator == RowCount(1)
     assert result.fpr_evaluable_client_count == RowCount(1)
     assert result.attack_evaluable_client_count == RowCount(1)

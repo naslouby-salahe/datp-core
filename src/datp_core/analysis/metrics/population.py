@@ -335,15 +335,29 @@ def _pooled_macro_f1_or_unavailable(results: tuple[ClientMetricResult, ...]) -> 
             false_negative += result.confusion.false_negative.value
 
     if not eligible_count:
-        return unavailable(MetricId.POOLED_MACRO_F1, MetricStatus.UNAVAILABLE, MetricReason.NO_EVALUABLE_CLIENTS)
+        return unavailable(
+            MetricId.POOLED_MACRO_F1,
+            MetricStatus.UNAVAILABLE,
+            MetricReason.NO_EVALUABLE_CLIENTS,
+            denominator=RowCount(eligible_count),
+        )
 
     attack_denominator = 2 * true_positive + false_positive + false_negative
     benign_denominator = 2 * true_negative + false_positive + false_negative
 
     if attack_denominator == 0 or benign_denominator == 0:
-        return unavailable(MetricId.POOLED_MACRO_F1, MetricStatus.UNDEFINED, MetricReason.UNDEFINED_CLASS_F1)
+        return unavailable(
+            MetricId.POOLED_MACRO_F1,
+            MetricStatus.UNDEFINED,
+            MetricReason.UNDEFINED_CLASS_F1,
+            denominator=RowCount(eligible_count),
+        )
 
     attack_f1 = 2.0 * true_positive / attack_denominator
     benign_f1 = 2.0 * true_negative / benign_denominator
 
-    return available(MetricId.POOLED_MACRO_F1, MetricValue((attack_f1 + benign_f1) / 2.0))
+    return available(
+        MetricId.POOLED_MACRO_F1,
+        MetricValue((attack_f1 + benign_f1) / 2.0),
+        denominator=RowCount(eligible_count),
+    )
