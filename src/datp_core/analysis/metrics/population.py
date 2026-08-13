@@ -29,6 +29,7 @@ from datp_core.data.populations.contracts import ClientIdentity
 @dataclass(frozen=True, slots=True)
 class _PopulationResultClassification:
     fpr_evaluable_results: tuple[ClientMetricResult, ...]
+    attack_evaluable_results: tuple[ClientMetricResult, ...]
     fpr_values: tuple[MetricValue, ...]
     excluded_clients: tuple[ClientIdentity, ...]
     attack_evaluable_count: RowCount
@@ -67,6 +68,7 @@ def calculate_population_metrics(
 
     aggregates = _population_metric_records(
         classification.fpr_evaluable_results,
+        classification.attack_evaluable_results,
         classification.fpr_values,
     )
 
@@ -91,6 +93,7 @@ def _classify_population_results(
     results: tuple[ClientMetricResult, ...],
 ) -> _PopulationResultClassification:
     fpr_evaluable: list[ClientMetricResult] = []
+    attack_evaluable: list[ClientMetricResult] = []
     fpr_values: list[MetricValue] = []
     excluded_clients: list[ClientIdentity] = []
     attack_evaluable_count = 0
@@ -98,10 +101,11 @@ def _classify_population_results(
     unavailable_count = 0
 
     for result in results:
+        if result.attack_evaluable:
+            attack_evaluable.append(result)
+            attack_evaluable_count += 1
         if result.cohort is EvaluationCohort.FPR_EVALUABLE:
             fpr_evaluable.append(result)
-            if result.attack_evaluable:
-                attack_evaluable_count += 1
             fpr_values.extend(_fpr_evaluable_values(result))
         else:
             excluded_clients.append(result.client)
@@ -112,6 +116,7 @@ def _classify_population_results(
 
     return _PopulationResultClassification(
         fpr_evaluable_results=tuple(fpr_evaluable),
+        attack_evaluable_results=tuple(attack_evaluable),
         fpr_values=tuple(fpr_values),
         excluded_clients=tuple(excluded_clients),
         attack_evaluable_count=RowCount(attack_evaluable_count),
@@ -132,11 +137,13 @@ def _fpr_evaluable_values(result: ClientMetricResult) -> tuple[MetricValue, ...]
 
 
 def _population_metric_records(
-    results: tuple[ClientMetricResult, ...], fpr_values: tuple[MetricValue, ...]
+    fpr_evaluable_results: tuple[ClientMetricResult, ...],
+    attack_evaluable_results: tuple[ClientMetricResult, ...],
+    fpr_values: tuple[MetricValue, ...],
 ) -> PopulationMetricAggregates:
     fpr_aggregates = _fpr_aggregates(fpr_values)
     return PopulationMetricAggregates(
-        metrics=(*fpr_aggregates.metrics, *_attack_aggregates(results)),
+        metrics=(*fpr_aggregates.metrics, *_attack_aggregates(attack_evaluable_results)),
         warnings=fpr_aggregates.warnings,
     )
 

@@ -260,8 +260,8 @@ class PopulationMetricResult(MetricResultHeader):
             raise ValueError("population aggregates must be labelled as FPR-evaluable")
         if self.fpr_evaluable_client_count > self.calibration_eligible_client_count:
             raise ValueError("FPR-evaluable clients must belong to the calibration-eligible cohort")
-        if self.attack_evaluable_client_count > self.calibration_eligible_client_count:
-            raise ValueError("attack-evaluable clients must belong to the calibration-eligible cohort")
+        if self.attack_evaluable_client_count > self.candidate_client_count:
+            raise ValueError("attack-evaluable client count cannot exceed the candidate count")
         if self.calibration_eligible_client_count > self.candidate_client_count:
             raise ValueError("calibration-eligible client count cannot exceed the candidate count")
         if self.deployment_fallback_count.plus(self.unavailable_client_count) > self.candidate_client_count:
