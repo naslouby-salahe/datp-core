@@ -6606,16 +6606,16 @@ README_REPRODUCIBILITY.md
 | `REPORT-012` | I | 1637 | 10.D.1 Permitted central framing | a false-alarm-equity analysis on a fixed anomaly detector; | `NOT_AUDITED` | — |
 | `REPORT-013` | I | 1638 | 10.D.1 Permitted central framing | a journal extension with external, stress-test, and mechanism evidence; | `NOT_AUDITED` | — |
 | `THRESHOLD-042` | I | 1639 | 10.D.1 Permitted central framing | an evaluation of when threshold personalization remains useful. | `NOT_AUDITED` | — |
-| `TRAIN-026` | I | 1645 | 10.D.2 Prohibited central framing | a new federated-learning optimizer; | `NOT_AUDITED` | — |
-| `REPORT-014` | I | 1646 | 10.D.2 Prohibited central framing | a complete FL-IDS framework benchmark; | `NOT_AUDITED` | — |
-| `REPORT-015` | I | 1647 | 10.D.2 Prohibited central framing | a privacy-preserving security system; | `NOT_AUDITED` | — |
-| `REPORT-016` | I | 1648 | 10.D.2 Prohibited central framing | a robust federated-learning defense; | `NOT_AUDITED` | — |
-| `REPORT-017` | I | 1649 | 10.D.2 Prohibited central framing | a drift-adaptive production IDS; | `NOT_AUDITED` | — |
-| `REPORT-018` | I | 1650 | 10.D.2 Prohibited central framing | a fleet-scale deployment; | `NOT_AUDITED` | — |
-| `THRESHOLD-043` | I | 1651 | 10.D.2 Prohibited central framing | a universal thresholding method; | `NOT_AUDITED` | — |
-| `REPORT-019` | I | 1652 | 10.D.2 Prohibited central framing | a method that improves every client; | `NOT_AUDITED` | — |
-| `METRIC-012` | I | 1653 | 10.D.2 Prohibited central framing | a method that improves global Macro-F1; | `NOT_AUDITED` | — |
-| `REPORT-020` | I | 1654 | 10.D.2 Prohibited central framing | a solution to non-IID federated learning. | `NOT_AUDITED` | — |
+| `TRAIN-026` | I | 1645 | 10.D.2 Prohibited central framing | a new federated-learning optimizer; | `PASS` | Claim validation suppresses this prohibited framing. |
+| `REPORT-014` | I | 1646 | 10.D.2 Prohibited central framing | a complete FL-IDS framework benchmark; | `PASS` | Claim validation suppresses this prohibited framing. |
+| `REPORT-015` | I | 1647 | 10.D.2 Prohibited central framing | a privacy-preserving security system; | `PASS` | Claim validation suppresses this prohibited framing. |
+| `REPORT-016` | I | 1648 | 10.D.2 Prohibited central framing | a robust federated-learning defense; | `PASS` | Claim validation suppresses this prohibited framing. |
+| `REPORT-017` | I | 1649 | 10.D.2 Prohibited central framing | a drift-adaptive production IDS; | `PASS` | Claim validation suppresses this prohibited framing. |
+| `REPORT-018` | I | 1650 | 10.D.2 Prohibited central framing | a fleet-scale deployment; | `PASS` | Claim validation suppresses this prohibited framing. |
+| `THRESHOLD-043` | I | 1651 | 10.D.2 Prohibited central framing | a universal thresholding method; | `PASS` | Claim validation suppresses this prohibited framing. |
+| `REPORT-019` | I | 1652 | 10.D.2 Prohibited central framing | a method that improves every client; | `PASS` | Claim validation suppresses this prohibited framing. |
+| `METRIC-012` | I | 1653 | 10.D.2 Prohibited central framing | a method that improves global Macro-F1; | `PASS` | Claim validation suppresses this prohibited framing. |
+| `REPORT-020` | I | 1654 | 10.D.2 Prohibited central framing | a solution to non-IID federated learning. | `PASS` | Claim validation suppresses this prohibited framing. |
 | `THRESHOLD-044` | I | 1766 | 10.D.9 Novelty boundary and mandatory prior-art audit | local anomaly-threshold estimators; | `NOT_AUDITED` | — |
 | `THRESHOLD-045` | I | 1767 | 10.D.9 Novelty boundary and mandatory prior-art audit | federated/shared threshold aggregation; | `NOT_AUDITED` | — |
 | `THRESHOLD-046` | I | 1768 | 10.D.9 Novelty boundary and mandatory prior-art audit | anomaly-informed supervised global threshold optimization; | `NOT_AUDITED` | — |

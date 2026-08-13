@@ -118,6 +118,32 @@ def test_claims_cannot_overstate_novelty_or_adversarial_calibration_scope(wordin
     assert reason in decision.reason
 
 
+@pytest.mark.parametrize("wording", (
+    "This is a new federated-learning optimizer",
+    "This is a complete FL-IDS framework benchmark",
+    "This is a privacy-preserving security system",
+    "This is a robust federated-learning defense",
+    "This is a drift-adaptive production IDS",
+    "This is a fleet-scale deployment",
+    "This is a universal thresholding method",
+    "The method improves every client",
+    "The method improves global Macro-F1",
+    "This is a solution to non-IID federated learning",
+))
+def test_claims_cannot_use_prohibited_central_framing(wording: str) -> None:
+    decision = validate_claim(
+        claim_request(
+            kind=ClaimKind.SUPPORTIVE,
+            evidence_role=EvidenceRole.SUPPORTIVE,
+            metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
+            wording=wording,
+        )
+    )
+
+    assert decision.status is ClaimStatus.SUPPRESSED
+    assert "locked threshold-scope" in decision.reason
+
+
 def test_blocked_anchor_blocks_confirmatory_claim() -> None:
     decision = validate_claim(
         claim_request(

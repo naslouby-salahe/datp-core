@@ -71,6 +71,16 @@ class ClaimGuardPhrase(StrEnum):
     ADVERSARIAL_CALIBRATION = "adversarial calibration"
     INTERMITTENT_CROSS_DEVICE = "intermittent cross-device"
     UNSEEN_CLIENT = "unseen client"
+    NEW_FEDERATED_LEARNING_OPTIMIZER = "new federated-learning optimizer"
+    COMPLETE_FL_IDS_FRAMEWORK = "complete fl-ids framework benchmark"
+    PRIVACY_PRESERVING_SECURITY_SYSTEM = "privacy-preserving security system"
+    ROBUST_FEDERATED_LEARNING_DEFENSE = "robust federated-learning defense"
+    DRIFT_ADAPTIVE_PRODUCTION_IDS = "drift-adaptive production ids"
+    FLEET_SCALE_DEPLOYMENT = "fleet-scale deployment"
+    UNIVERSAL_THRESHOLDING_METHOD = "universal thresholding method"
+    IMPROVES_EVERY_CLIENT = "improves every client"
+    IMPROVES_GLOBAL_MACRO_F1 = "improves global macro-f1"
+    SOLUTION_TO_NON_IID = "solution to non-iid federated learning"
     CONTINUOUS_ADAPTATION = "continuous adaptation"
     ONLINE_ADAPTATION = "online adaptation"
     ONLINE_LEARNING = "online learning"
@@ -133,6 +143,20 @@ _PERSISTENCE_GUARD_PHRASES = frozenset(
     {
         ClaimGuardPhrase.INTERMITTENT_CROSS_DEVICE,
         ClaimGuardPhrase.UNSEEN_CLIENT,
+    }
+)
+_CENTRAL_FRAMING_GUARD_PHRASES = frozenset(
+    {
+        ClaimGuardPhrase.NEW_FEDERATED_LEARNING_OPTIMIZER,
+        ClaimGuardPhrase.COMPLETE_FL_IDS_FRAMEWORK,
+        ClaimGuardPhrase.PRIVACY_PRESERVING_SECURITY_SYSTEM,
+        ClaimGuardPhrase.ROBUST_FEDERATED_LEARNING_DEFENSE,
+        ClaimGuardPhrase.DRIFT_ADAPTIVE_PRODUCTION_IDS,
+        ClaimGuardPhrase.FLEET_SCALE_DEPLOYMENT,
+        ClaimGuardPhrase.UNIVERSAL_THRESHOLDING_METHOD,
+        ClaimGuardPhrase.IMPROVES_EVERY_CLIENT,
+        ClaimGuardPhrase.IMPROVES_GLOBAL_MACRO_F1,
+        ClaimGuardPhrase.SOLUTION_TO_NON_IID,
     }
 )
 
@@ -200,6 +224,7 @@ def _claim_failures(
     yield _novelty_guard_suppression(normalized_wording)
     yield _adversarial_calibration_guard_suppression(normalized_wording)
     yield _persistence_guard_suppression(normalized_wording)
+    yield _central_framing_guard_suppression(normalized_wording)
     yield _applicability_boundary_failure(request, normalized_wording)
 
 
@@ -316,6 +341,12 @@ def _persistence_guard_suppression(normalized_wording: NormalizedClaimWording) -
         return _suppressed(
             ClaimReason("DATP-Core applies only to persistent identifiable clients, not intermittent or unseen clients")
         )
+    return None
+
+
+def _central_framing_guard_suppression(normalized_wording: NormalizedClaimWording) -> ClaimDecision | None:
+    if any(phrase.value in normalized_wording for phrase in _CENTRAL_FRAMING_GUARD_PHRASES):
+        return _suppressed(ClaimReason("claim exceeds DATP-Core's locked threshold-scope study framing"))
     return None
 
 
