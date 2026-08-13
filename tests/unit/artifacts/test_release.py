@@ -15,6 +15,7 @@ from datp_core.artifacts.release import (
     ReleaseState,
     build_release_bundle,
     campaign_evaluation_release_artifacts,
+    campaign_publication_release_artifacts,
     validate_release_bundle,
 )
 from datp_core.core.errors import ArtifactIntegrityError
@@ -172,3 +173,20 @@ def test_release_evaluation_metadata_is_derived_from_the_persisted_coordinate(tm
 def test_campaign_release_discovery_rejects_output_roots_without_evaluation_evidence(tmp_path: Path) -> None:
     with pytest.raises(ArtifactIntegrityError, match="requires persisted evaluation documents"):
         campaign_evaluation_release_artifacts(tmp_path)
+
+
+def test_campaign_publication_release_discovery_requires_the_rendered_publication(tmp_path: Path) -> None:
+    manifest = tmp_path / "analysis" / "publication_source_manifest.json"
+    manifest.parent.mkdir()
+    manifest.write_text("{}", encoding="utf-8")
+
+    with pytest.raises(ArtifactIntegrityError, match="has no publication"):
+        campaign_publication_release_artifacts(tmp_path)
+
+    publication = manifest.parent / "publication.md"
+    publication.write_text("# results\n", encoding="utf-8")
+    artifacts = campaign_publication_release_artifacts(tmp_path)
+    assert tuple(item.relative_path for item in artifacts) == (
+        Path("FIGURE_TABLE_DATA/analysis/publication_source_manifest.json"),
+        Path("FIGURE_TABLE_DATA/analysis/publication.md"),
+    )
