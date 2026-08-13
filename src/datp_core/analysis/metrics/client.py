@@ -190,9 +190,14 @@ def calculate_average_precision(
         return unavailable(MetricId.AVERAGE_PRECISION, MetricStatus.UNAVAILABLE, MetricReason.EMPTY_ATTACK_DENOMINATOR)
     descending = np.argsort(-score_values, kind="mergesort")
     ordered = binary[descending]
-    cumulative_positives = np.cumsum(ordered)
-    ranks = np.arange(1, ordered.size + 1, dtype=np.float64)
-    value = float(np.sum((cumulative_positives / ranks)[ordered == 1]) / positives)
+    ordered_scores = score_values[descending]
+    threshold_ends = np.append(np.flatnonzero(ordered_scores[:-1] != ordered_scores[1:]), ordered.size - 1)
+    cumulative_positives = np.cumsum(ordered)[threshold_ends]
+    ranks = threshold_ends + 1
+    previous_positives = np.insert(cumulative_positives[:-1], 0, 0)
+    recall_steps = (cumulative_positives - previous_positives) / positives
+    precision = cumulative_positives / ranks
+    value = float(np.sum(recall_steps * precision))
     return available(MetricId.AVERAGE_PRECISION, MetricValue(value), denominator=RowCount(binary.size))
 
 
