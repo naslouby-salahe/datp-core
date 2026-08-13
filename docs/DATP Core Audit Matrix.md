@@ -1966,7 +1966,7 @@ benign\_traffic\_rate_{k,\mathrm{day}}
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `predicted_attack` / `calculate_confusion_counts` | `PASS` | Strict `score > threshold` attack rule; equality remains benign. | `test_confusion.py` |
 
 ### FORMULA-129 — III / source lines 4860–4864
 
@@ -1994,7 +1994,7 @@ FPR_k
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `calculate_client_metrics` | `PASS` | FPR uses false positives divided by benign evaluation denominator and preserves unavailable states. | `test_client_metrics.py` |
 
 ### FORMULA-131 — III / source lines 4886–4890
 
@@ -2008,7 +2008,7 @@ TPR_k
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `calculate_client_metrics` | `PASS` | TPR uses true positives divided by attack evaluation denominator and preserves unavailable states. | `test_client_metrics.py` |
 
 ### FORMULA-132 — III / source lines 4896–4900
 
@@ -2022,7 +2022,7 @@ BA_k
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `_balanced_accuracy` | `PASS` | Implements `(TPR + 1 − FPR) / 2` only when both constituent metrics are available. | `test_client_metrics.py` |
 
 ### FORMULA-133 — III / source lines 4908–4916
 
@@ -2040,7 +2040,7 @@ F1_{k,\mathrm{attack}}
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `_binary_macro_f1` | `PASS` | Averages attack and benign F1 with explicit zero-denominator unavailability. | `test_client_metrics.py` |
 
 ### FORMULA-134 — III / source lines 4936–4938
 
@@ -2052,7 +2052,7 @@ AP=\sum_n (R_n-R_{n-1})P_n.
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `calculate_average_precision` | `PASS` | Descending-score recall-step precision integral with tied-score grouping. | `test_client_metrics.py` |
 
 ### FORMULA-135 — III / source lines 4946–4948
 
