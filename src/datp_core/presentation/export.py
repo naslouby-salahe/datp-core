@@ -50,6 +50,7 @@ from datp_core.analysis.mechanisms.family_recall import FamilyRecallPolicyCampai
 from datp_core.analysis.mechanisms.movement import (
     ThresholdMovement,
     ThresholdMovementCohort,
+    ThresholdMovementDirectionCampaign,
     ThresholdMovementMultiSeedUncertainty,
 )
 from datp_core.analysis.mechanisms.support_burden import (
@@ -1066,6 +1067,7 @@ _MECHANISM_TITLES: dict[type[object], ReportLine] = {
     ThresholdMovement: ReportLine("threshold_movement"),
     ThresholdMovementCohort: ReportLine("threshold_movement_cohort"),
     ThresholdMovementMultiSeedUncertainty: ReportLine("threshold_movement_across_seed_uncertainty"),
+    ThresholdMovementDirectionCampaign: ReportLine("threshold_movement_direction_counts"),
     ClientImpactSeedSummary: ReportLine("natural_device_client_impact"),
     ClientImpactCampaignSummary: ReportLine("natural_device_client_impact_campaign_summary"),
     ConfirmatoryEquityUtilityBundle: ReportLine("confirmatory_equity_utility_bundle"),
@@ -1915,6 +1917,44 @@ def _render_threshold_movement_uncertainty(mechanism: ThresholdMovementMultiSeed
             f"Across-seed dispersion of mean Δ FPR: {across}",
         ]
     ]
+
+
+@_render_one_mechanism.register
+def _render_threshold_movement_direction_campaign(mechanism: ThresholdMovementDirectionCampaign) -> list[ReportLine]:
+    lines = []
+    for counts in mechanism.seed_counts:
+        fpr = f"down={counts.fpr_down.value}, same={counts.fpr_same.value}, up={counts.fpr_up.value}"
+        tpr = (
+            f"down={counts.tpr_down.value}, same={counts.tpr_same.value}, up={counts.tpr_up.value}"
+            if counts.tpr_unavailable_reason is None
+            and counts.tpr_down is not None
+            and counts.tpr_same is not None
+            and counts.tpr_up is not None
+            else f"unavailable ({counts.tpr_unavailable_reason})"
+        )
+        lines.append(f"Seed {counts.seed.value}: FPR [{fpr}]; TPR [{tpr}]")
+    assert mechanism.median_fpr_down is not None
+    assert mechanism.median_fpr_same is not None
+    assert mechanism.median_fpr_up is not None
+    lines.append(
+        "Across-seed median FPR counts: "
+        f"down={_format_publication_metric(mechanism.median_fpr_down.value)}, "
+        f"same={_format_publication_metric(mechanism.median_fpr_same.value)}, "
+        f"up={_format_publication_metric(mechanism.median_fpr_up.value)}"
+    )
+    if mechanism.tpr_unavailable_reason is None:
+        assert mechanism.median_tpr_down is not None
+        assert mechanism.median_tpr_same is not None
+        assert mechanism.median_tpr_up is not None
+        lines.append(
+            "Across-seed median TPR counts: "
+            f"down={_format_publication_metric(mechanism.median_tpr_down.value)}, "
+            f"same={_format_publication_metric(mechanism.median_tpr_same.value)}, "
+            f"up={_format_publication_metric(mechanism.median_tpr_up.value)}"
+        )
+    else:
+        lines.append(f"Across-seed median TPR counts: unavailable ({mechanism.tpr_unavailable_reason})")
+    return [ReportLine(line) for line in lines]
 
 
 @_render_one_mechanism.register

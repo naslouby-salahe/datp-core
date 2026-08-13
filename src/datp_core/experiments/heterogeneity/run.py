@@ -20,7 +20,9 @@ from datp_core.analysis.mechanisms import (
     heterogeneity_benefit_association,
     jensen_shannon_from_client_scores,
     summarize_support_interaction,
+    summarize_threshold_movement_direction_counts,
     summarize_threshold_movements_across_seeds,
+    threshold_movement_direction_counts,
     threshold_movements_from_evaluations,
 )
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
@@ -725,6 +727,11 @@ def analyze_threshold_movement_tradeoff(*, overwrite: bool) -> Path:
         summarize_threshold_movements_across_seeds(
             tuple(movement_cohorts),
             required_seed_count=CONFIRMATORY_SEED_COHORT.member_count,
+        )
+    )
+    mechanisms.append(
+        summarize_threshold_movement_direction_counts(
+            tuple(threshold_movement_direction_counts(cohort.movements) for cohort in movement_cohorts)
         )
     )
     export_mechanism_publication(

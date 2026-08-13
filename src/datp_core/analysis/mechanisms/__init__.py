@@ -109,12 +109,16 @@ from datp_core.analysis.mechanisms.movement import (
     ThresholdMethodComparison,
     ThresholdMovement,
     ThresholdMovementCohort,
+    ThresholdMovementDirectionCampaign,
+    ThresholdMovementDirectionCounts,
     ThresholdMovementMultiSeedUncertainty,
     ThresholdMovementSeedSummary,
     ThresholdOperatingPoint,
+    summarize_threshold_movement_direction_counts,
     summarize_threshold_movements,
     summarize_threshold_movements_across_seeds,
     threshold_movement,
+    threshold_movement_direction_counts,
 )
 from datp_core.analysis.mechanisms.policy_surface import (
     PolicySurfaceCell,
@@ -182,6 +186,7 @@ type MechanismEvidence = (
     | ThresholdMovement
     | ThresholdMovementCohort
     | ThresholdMovementMultiSeedUncertainty
+    | ThresholdMovementDirectionCampaign
     | CampaignFixedSupportStrata
     | SupportStratumOutcomeReport
     | SupportStratumCampaignSummary
@@ -276,6 +281,8 @@ __all__ = (
     "ThresholdMovement",
     "ThresholdMovementCohort",
     "ThresholdMovementMultiSeedUncertainty",
+    "ThresholdMovementDirectionCampaign",
+    "ThresholdMovementDirectionCounts",
     "ThresholdMovementSeedSummary",
     "ThresholdMethodComparison",
     "ThresholdOperatingPoint",
@@ -310,12 +317,14 @@ __all__ = (
     "summarize_family_recall_campaign",
     "summarize_client_impact_campaign",
     "summarize_threshold_movements",
+    "summarize_threshold_movement_direction_counts",
     "summarize_threshold_movements_across_seeds",
     "summarize_support_stratum_campaign",
     "summarize_calibration_support_burden",
     "summarize_calibration_support_burden_devices",
     "support_stratum_seed_outcomes",
     "threshold_movement",
+    "threshold_movement_direction_counts",
     "threshold_movements_from_evaluations",
 )
 

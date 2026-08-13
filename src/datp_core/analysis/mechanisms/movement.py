@@ -11,7 +11,15 @@ from datp_core.core.identifiers import (
     FederatedThresholdMethod,
     PopulationId,
 )
-from datp_core.core.numeric import ClientCount, MetricValue, Ratio, Seed, SeedCount, ThresholdValue
+from datp_core.core.numeric import (
+    ClientCount,
+    MetricValue,
+    PairedObservationCount,
+    Ratio,
+    Seed,
+    SeedCount,
+    ThresholdValue,
+)
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 
@@ -113,6 +121,41 @@ class ThresholdMovementMultiSeedUncertainty(StrictModel):
     evidence_role: ClassVar[EvidenceRole] = EvidenceRole.MECHANISM
 
 
+class ThresholdMovementDirectionCounts(StrictModel):
+    seed: Seed
+    fpr_down: PairedObservationCount
+    fpr_same: PairedObservationCount
+    fpr_up: PairedObservationCount
+    tpr_down: PairedObservationCount | None
+    tpr_same: PairedObservationCount | None
+    tpr_up: PairedObservationCount | None
+    tpr_unavailable_reason: AnalysisReasonText | None
+
+    evidence_role: ClassVar[EvidenceRole] = EvidenceRole.MECHANISM
+
+    @model_validator(mode="after")
+    def validate_counts(self) -> "ThresholdMovementDirectionCounts":
+        tpr_counts = (self.tpr_down, self.tpr_same, self.tpr_up)
+        if self.tpr_unavailable_reason is None and any(value is None for value in tpr_counts):
+            raise ValueError("available TPR direction counts require each direction")
+        if self.tpr_unavailable_reason is not None and any(value is not None for value in tpr_counts):
+            raise ValueError("unavailable TPR direction counts cannot contain values")
+        return self
+
+
+class ThresholdMovementDirectionCampaign(StrictModel):
+    seed_counts: tuple[ThresholdMovementDirectionCounts, ...]
+    median_fpr_down: MetricValue | None
+    median_fpr_same: MetricValue | None
+    median_fpr_up: MetricValue | None
+    median_tpr_down: MetricValue | None
+    median_tpr_same: MetricValue | None
+    median_tpr_up: MetricValue | None
+    tpr_unavailable_reason: AnalysisReasonText | None
+
+    evidence_role: ClassVar[EvidenceRole] = EvidenceRole.MECHANISM
+
+
 def threshold_movement(
     *,
     client: ClientIdentity,
@@ -180,6 +223,76 @@ def summarize_threshold_movements(
         availability=AvailabilityStatus.AVAILABLE,
         reason=None,
     )
+
+
+def threshold_movement_direction_counts(
+    movements: tuple[ThresholdMovement, ...],
+) -> ThresholdMovementDirectionCounts:
+    if not movements:
+        raise ValueError("direction counts require threshold-movement observations")
+    seed = movements[0].seed
+    if any(item.seed != seed for item in movements):
+        raise ValueError("direction counts require one seed")
+    fpr = tuple(item.delta_fpr.value for item in movements)
+    tpr = tuple(item.delta_tpr.value for item in movements if item.delta_tpr is not None)
+    tpr_available = len(tpr) == len(movements)
+    return ThresholdMovementDirectionCounts(
+        seed=seed,
+        fpr_down=PairedObservationCount(sum(value < 0.0 for value in fpr)),
+        fpr_same=PairedObservationCount(sum(value == 0.0 for value in fpr)),
+        fpr_up=PairedObservationCount(sum(value > 0.0 for value in fpr)),
+        tpr_down=PairedObservationCount(sum(value < 0.0 for value in tpr)) if tpr_available else None,
+        tpr_same=PairedObservationCount(sum(value == 0.0 for value in tpr)) if tpr_available else None,
+        tpr_up=PairedObservationCount(sum(value > 0.0 for value in tpr)) if tpr_available else None,
+        tpr_unavailable_reason=None
+        if tpr_available
+        else AnalysisReasonText("TPR is unavailable for one or more devices"),
+    )
+
+
+def summarize_threshold_movement_direction_counts(
+    seed_counts: tuple[ThresholdMovementDirectionCounts, ...],
+) -> ThresholdMovementDirectionCampaign:
+    if not seed_counts:
+        raise ValueError("campaign direction counts require seed summaries")
+    if len({item.seed for item in seed_counts}) != len(seed_counts):
+        raise ValueError("campaign direction counts require unique seeds")
+    ordered = tuple(sorted(seed_counts, key=lambda item: item.seed))
+    fpr_medians = tuple(
+        MetricValue(_median(tuple(getattr(item, field).value for item in ordered)))
+        for field in ("fpr_down", "fpr_same", "fpr_up")
+    )
+    if any(item.tpr_unavailable_reason is not None for item in ordered):
+        return ThresholdMovementDirectionCampaign(
+            seed_counts=ordered,
+            median_fpr_down=fpr_medians[0],
+            median_fpr_same=fpr_medians[1],
+            median_fpr_up=fpr_medians[2],
+            median_tpr_down=None,
+            median_tpr_same=None,
+            median_tpr_up=None,
+            tpr_unavailable_reason=AnalysisReasonText("TPR direction counts are unavailable for one or more seeds"),
+        )
+    tpr_medians = tuple(
+        MetricValue(_median(tuple(getattr(item, field).value for item in ordered)))
+        for field in ("tpr_down", "tpr_same", "tpr_up")
+    )
+    return ThresholdMovementDirectionCampaign(
+        seed_counts=ordered,
+        median_fpr_down=fpr_medians[0],
+        median_fpr_same=fpr_medians[1],
+        median_fpr_up=fpr_medians[2],
+        median_tpr_down=tpr_medians[0],
+        median_tpr_same=tpr_medians[1],
+        median_tpr_up=tpr_medians[2],
+        tpr_unavailable_reason=None,
+    )
+
+
+def _median(values: tuple[int, ...]) -> float:
+    ordered = tuple(sorted(values))
+    middle = len(ordered) // 2
+    return float(ordered[middle]) if len(ordered) % 2 else (ordered[middle - 1] + ordered[middle]) / 2.0
 
 
 def summarize_threshold_movements_across_seeds(
