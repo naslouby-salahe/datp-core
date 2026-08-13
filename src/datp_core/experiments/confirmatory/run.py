@@ -45,6 +45,7 @@ from datp_core.analysis.mechanisms import (
     confirmatory_equity_utility_bundle,
     equity_utility_pareto,
     family_explanatory_adequacy,
+    grouped_cv_fpr_recovery,
     grouped_dispersion,
     heterogeneity_benefit_association,
     jensen_shannon_from_client_scores,
@@ -361,6 +362,16 @@ def _confirmatory_mechanisms() -> tuple[MechanismEvidence, ...]:
         family_comparisons.append(family_comparison)
         shared_cv = population_metric(shared, MetricId.FPR_COEFFICIENT_OF_VARIATION)
         local_cv = population_metric(local, MetricId.FPR_COEFFICIENT_OF_VARIATION)
+        family_cv = population_metric(family, MetricId.FPR_COEFFICIENT_OF_VARIATION)
+        mechanisms.append(
+            grouped_cv_fpr_recovery(
+                seed=seed,
+                method=FederatedThresholdMethod.FAMILY_THRESHOLD,
+                shared_cv_fpr=shared_cv,
+                grouped_cv_fpr=family_cv,
+                local_cv_fpr=local_cv,
+            )
+        )
         benefit = MetricValue(shared_cv.value - local_cv.value)
         vectors = _client_score_vectors(shared)
         divergence = jensen_shannon_from_client_scores(vectors)

@@ -38,6 +38,7 @@ from datp_core.analysis.mechanisms.clustering import (
     ClusterSilhouetteObservation,
     ClusterSilhouetteResult,
     ClusterStabilityResult,
+    GroupedCvFprRecovery,
     RecoveryAssessment,
     cluster_assignment_switch_frequencies,
     cluster_evidence_from_grouped_result,
@@ -46,6 +47,7 @@ from datp_core.analysis.mechanisms.clustering import (
     cluster_silhouette_from_grouped_result,
     cluster_stability,
     empty_cluster_evidence_record,
+    grouped_cv_fpr_recovery,
     local_threshold_dispersion,
 )
 from datp_core.analysis.mechanisms.dispersion import (
@@ -168,6 +170,7 @@ type MechanismEvidence = (
     | AssociationResult
     | ClusterEvidenceRecord
     | ClusterFeatureAblationEvidence
+    | GroupedCvFprRecovery
     | ClusterSilhouetteResult
     | ClusterScoreDivergenceResult
     | ClusterAssignmentSwitchSummary
@@ -217,6 +220,7 @@ __all__ = (
     "ClusterEvidenceAvailability",
     "ClusterEvidenceRecord",
     "ClusterFeatureAblationEvidence",
+    "GroupedCvFprRecovery",
     "ClusterSilhouetteObservation",
     "ClusterSilhouetteResult",
     "ClusterScoreDivergenceResult",
@@ -305,6 +309,7 @@ __all__ = (
     "empty_cluster_evidence_record",
     "fedavg_alignment_grid",
     "grouped_dispersion",
+    "grouped_cv_fpr_recovery",
     "heterogeneity_benefit_association",
     "jensen_shannon_divergence",
     "jensen_shannon_from_client_scores",

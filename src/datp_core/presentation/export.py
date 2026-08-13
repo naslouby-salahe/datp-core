@@ -33,6 +33,7 @@ from datp_core.analysis.mechanisms.clustering import (
     ClusterScoreDivergenceResult,
     ClusterSilhouetteResult,
     ClusterStabilityResult,
+    GroupedCvFprRecovery,
 )
 from datp_core.analysis.mechanisms.dispersion import GroupedDispersionResult
 from datp_core.analysis.mechanisms.divergence import DivergenceResult
@@ -1061,6 +1062,7 @@ _MECHANISM_TITLES: dict[type[object], ReportLine] = {
     ClusterAssignmentSwitchSummary: ReportLine("cluster_assignment_switch_frequency"),
     ClusterEvidenceRecord: ReportLine("cluster_evidence"),
     ClusterFeatureAblationEvidence: ReportLine("cluster_feature_ablation"),
+    GroupedCvFprRecovery: ReportLine("grouped_cv_fpr_recovery"),
     ClusterSilhouetteResult: ReportLine("cluster_silhouette"),
     ClusterScoreDivergenceResult: ReportLine("cluster_score_divergence"),
     GroupedDispersionResult: ReportLine("grouped_dispersion"),
@@ -1445,6 +1447,26 @@ def _render_family_explanatory_adequacy(mechanism: FamilyExplanatoryAdequacyResu
                 f"{_format_publication_metric(mechanism.mean_within_family_threshold_sd.value)}",
                 "Between-family threshold SD: "
                 f"{_format_publication_metric(mechanism.between_family_threshold_sd.value)}",
+            ]
+        )
+    return [ReportLine(line) for line in lines]
+
+
+@_render_one_mechanism.register
+def _render_grouped_cv_fpr_recovery(mechanism: GroupedCvFprRecovery) -> list[ReportLine]:
+    lines = [f"Seed: {mechanism.seed.value}", f"Method: `{mechanism.method.value}`"]
+    if mechanism.recovery.fraction is None:
+        lines.append(f"CV(FPR) recovery: unavailable ({mechanism.recovery.reason})")
+    else:
+        assert mechanism.shared_cv_fpr is not None
+        assert mechanism.grouped_cv_fpr is not None
+        assert mechanism.local_cv_fpr is not None
+        lines.extend(
+            [
+                f"Shared CV(FPR): {_format_publication_metric(mechanism.shared_cv_fpr.value)}",
+                f"Grouped CV(FPR): {_format_publication_metric(mechanism.grouped_cv_fpr.value)}",
+                f"Local CV(FPR): {_format_publication_metric(mechanism.local_cv_fpr.value)}",
+                f"CV(FPR) recovery fraction: {_format_publication_metric(mechanism.recovery.fraction.value)}",
             ]
         )
     return [ReportLine(line) for line in lines]

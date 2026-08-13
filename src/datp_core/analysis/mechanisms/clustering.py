@@ -87,6 +87,26 @@ class RecoveryAssessment(StrictModel):
         return self
 
 
+class GroupedCvFprRecovery(StrictModel):
+    seed: Seed
+    method: FederatedThresholdMethod
+    shared_cv_fpr: MetricValue | None
+    grouped_cv_fpr: MetricValue | None
+    local_cv_fpr: MetricValue | None
+    recovery: RecoveryAssessment
+
+    evidence_role: ClassVar[EvidenceRole] = EvidenceRole.MECHANISM
+
+    @model_validator(mode="after")
+    def validate_grouped_method(self) -> "GroupedCvFprRecovery":
+        if self.method not in {FederatedThresholdMethod.FAMILY_THRESHOLD, FederatedThresholdMethod.CLUSTER_THRESHOLD}:
+            raise ValueError("CV(FPR) recovery applies only to family or cluster threshold sharing")
+        values = (self.shared_cv_fpr, self.grouped_cv_fpr, self.local_cv_fpr)
+        if self.recovery.fraction is not None and any(value is None for value in values):
+            raise ValueError("available CV(FPR) recovery requires all policy values")
+        return self
+
+
 class ClusterEvidenceRecord(StrictModel):
     seed: Seed
     method: FederatedThresholdMethod
@@ -584,6 +604,28 @@ def _cv_fpr_equity_recovery(
         )
     recovered = shared_cv_fpr.value - cluster_cv_fpr.value
     return RecoveryAssessment(fraction=MetricValue(recovered / gap), reason=None)
+
+
+def grouped_cv_fpr_recovery(
+    *,
+    seed: Seed,
+    method: FederatedThresholdMethod,
+    shared_cv_fpr: MetricValue | None,
+    grouped_cv_fpr: MetricValue | None,
+    local_cv_fpr: MetricValue | None,
+) -> GroupedCvFprRecovery:
+    return GroupedCvFprRecovery(
+        seed=seed,
+        method=method,
+        shared_cv_fpr=shared_cv_fpr,
+        grouped_cv_fpr=grouped_cv_fpr,
+        local_cv_fpr=local_cv_fpr,
+        recovery=_cv_fpr_equity_recovery(
+            shared_cv_fpr=shared_cv_fpr,
+            local_cv_fpr=local_cv_fpr,
+            cluster_cv_fpr=grouped_cv_fpr,
+        ),
+    )
 
 
 def cluster_stability(
