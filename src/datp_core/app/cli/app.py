@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -11,6 +12,7 @@ from datp_core.app.cli.validation import fail
 from datp_core.app.contracts import OverwriteMode
 from datp_core.app.research import format_status, generate_report, programme_status, run_smoke
 from datp_core.app.validation import validate_programme
+from datp_core.artifacts.release import validate_release_bundle
 from datp_core.core.errors import DatpCoreError
 from datp_core.core.identifiers import DatasetId, ExperimentId
 
@@ -115,6 +117,18 @@ def status_command(
     except (DatpCoreError, ValueError) as error:
         fail(error)
     typer.echo(format_status(report))
+
+
+@app.command("validate-release")
+def validate_release_command(
+    release_root: Annotated[Path, typer.Argument()],
+) -> None:
+    try:
+        release = validate_release_bundle(release_root)
+    except (DatpCoreError, ValueError) as error:
+        fail(error)
+    typer.echo(f"release={release.root}")
+    typer.echo(f"artifacts={len(release.entries)}")
 
 
 def main() -> None:
