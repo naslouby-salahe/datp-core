@@ -6039,12 +6039,12 @@ The implementation must distinguish at least these roadmap-defined scientific st
 
 | ID | Source line | Audit requirement | Implementation disposition | Audit outcome | Evidence / remediation |
 |---|---:|---|---|---|---|
-| `GATE-E-001` | 6050 | Every threshold comparison references one named preprocessing protocol identity. | `NOT_AUDITED` | — | — |
-| `GATE-E-002` | 6051 | `FEDERATED_CLIENT_LOCAL_STANDARD` is fit client-locally on benign training only in the confirmatory protocol. | `NOT_AUDITED` | — | — |
-| `GATE-E-003` | 6052 | `FEDERATED_POOLED_MIN_MAX` is never silently mixed into the confirmatory ladder. | `NOT_AUDITED` | — | — |
+| `GATE-E-001` | 6050 | Every threshold comparison references one named preprocessing protocol identity. | `IMPLEMENTED` | `PASS` | Every experiment declaration carries a typed preprocessing protocol, and training/prepared-data coordinates persist that identity. |
+| `GATE-E-002` | 6051 | `FEDERATED_CLIENT_LOCAL_STANDARD` is fit client-locally on benign training only in the confirmatory protocol. | `IMPLEMENTED` | `PASS` | The locked federated scientific preprocessing method is client-local StandardScaler fitted on the training role; locked split tests establish benign-only training input. |
+| `GATE-E-003` | 6052 | `FEDERATED_POOLED_MIN_MAX` is never silently mixed into the confirmatory ladder. | `IMPLEMENTED` | `PASS` | The confirmatory declaration has one primary local-standard protocol; pooled MinMax is a separately typed supportive method/coordinate. |
 | `GATE-E-004` | 6053 | `CENTRALIZED_POOLED_MIN_MAX` is independently fitted and never reuses federated fitted states. | `NOT_AUDITED` | — | — |
 | `GATE-E-005` | 6054 | Threshold methods cannot fit, select, or alter model-input preprocessing. | `NOT_AUDITED` | — | — |
-| `GATE-E-006` | 6055 | Cluster-fingerprint standardization is kept distinct from model-input preprocessing. | `NOT_AUDITED` | — | — |
+| `GATE-E-006` | 6055 | Cluster-fingerprint standardization is kept distinct from model-input preprocessing. | `IMPLEMENTED` | `PASS` | Cluster protocol separately locks fingerprint StandardScaler/features while model-input preprocessing has its own typed protocol/state identity. |
 | `GATE-E-007` | 6056 | Serialization/reload equivalence uses the `1e-12` engineering tolerance only for reload validation. | `NOT_AUDITED` | — | — |
 | `GATE-E-008` | 6057 | A reload tolerance comparison is never used to establish scientific fixed-score identity. | `NOT_AUDITED` | — | — |
 
@@ -7340,12 +7340,12 @@ README_REPRODUCIBILITY.md
 | `CALIBRATION-219` | IV | 6044 | 6. Gate D — Split, chronology, and eligibility integrity | Calibration-size ablations use `m` independently of the source-pool eligibility decision. | `NOT_AUDITED` | — |
 | `CALIBRATION-220` | IV | 6045 | 6. Gate D — Split, chronology, and eligibility integrity | Temporal experiments use genuine chronology: historical calibration < future recalibration < future evaluation. | `PASS` | Temporal construction requires verified Edge chronology and the chronological protocol. |
 | `CALIBRATION-221` | IV | 6046 | 6. Gate D — Split, chronology, and eligibility integrity | Generated pseudo-time or file ordering is never substituted for real timestamps where chronology is required. | `PASS` | Chronology capability and PCAP validation reject file/source-order substitutes. |
-| `PREPROCESS-045` | IV | 6050 | 7. Gate E — Preprocessing integrity | Every threshold comparison references one named preprocessing protocol identity. | `NOT_AUDITED` | — |
-| `PREPROCESS-046` | IV | 6051 | 7. Gate E — Preprocessing integrity | `FEDERATED_CLIENT_LOCAL_STANDARD` is fit client-locally on benign training only in the confirmatory protocol. | `NOT_AUDITED` | — |
-| `PREPROCESS-047` | IV | 6052 | 7. Gate E — Preprocessing integrity | `FEDERATED_POOLED_MIN_MAX` is never silently mixed into the confirmatory ladder. | `NOT_AUDITED` | — |
+| `PREPROCESS-045` | IV | 6050 | 7. Gate E — Preprocessing integrity | Every threshold comparison references one named preprocessing protocol identity. | `PASS` | Typed declarations/coordinates persist preprocessing identity. |
+| `PREPROCESS-046` | IV | 6051 | 7. Gate E — Preprocessing integrity | `FEDERATED_CLIENT_LOCAL_STANDARD` is fit client-locally on benign training only in the confirmatory protocol. | `PASS` | Locked local training protocol plus benign training split enforce the condition. |
+| `PREPROCESS-047` | IV | 6052 | 7. Gate E — Preprocessing integrity | `FEDERATED_POOLED_MIN_MAX` is never silently mixed into the confirmatory ladder. | `PASS` | Pooled MinMax has a separate typed supportive coordinate. |
 | `PREPROCESS-048` | IV | 6053 | 7. Gate E — Preprocessing integrity | `CENTRALIZED_POOLED_MIN_MAX` is independently fitted and never reuses federated fitted states. | `NOT_AUDITED` | — |
 | `PREPROCESS-049` | IV | 6054 | 7. Gate E — Preprocessing integrity | Threshold methods cannot fit, select, or alter model-input preprocessing. | `NOT_AUDITED` | — |
-| `PREPROCESS-050` | IV | 6055 | 7. Gate E — Preprocessing integrity | Cluster-fingerprint standardization is kept distinct from model-input preprocessing. | `NOT_AUDITED` | — |
+| `PREPROCESS-050` | IV | 6055 | 7. Gate E — Preprocessing integrity | Cluster-fingerprint standardization is kept distinct from model-input preprocessing. | `PASS` | Cluster fingerprint protocol is separate from model-input preprocessing protocol/state. |
 | `PREPROCESS-051` | IV | 6056 | 7. Gate E — Preprocessing integrity | Serialization/reload equivalence uses the `1e-12` engineering tolerance only for reload validation. | `NOT_AUDITED` | — |
 | `PREPROCESS-052` | IV | 6057 | 7. Gate E — Preprocessing integrity | A reload tolerance comparison is never used to establish scientific fixed-score identity. | `NOT_AUDITED` | — |
 | `TRAIN-083` | IV | 6061 | 8. Gate F — Training and terminal-detector integrity | Every **federated training** execution has exactly one scientific terminal detector at round `200`; `FEDAVG_LOCAL_FINE_TUNING` starts from that detector and produces separately identified post-training client-personalized states after exactly ten local epochs. | `NOT_AUDITED` | — |
