@@ -29,6 +29,7 @@ from datp_core.analysis.metrics.protocols import FIXED_SCORE_AUROC_INVARIANCE_TO
 from datp_core.app.planning import PlanReason, expand_experiment_plan
 from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
+from datp_core.artifacts.serializers.json import serialize_json_model
 from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
@@ -42,6 +43,7 @@ from datp_core.core.identifiers import (
     FederatedThresholdMethod,
     FigureLabel,
     FigureTitle,
+    FileContentText,
     MetricId,
     PopulationId,
     RegimeLabel,
@@ -67,6 +69,7 @@ from datp_core.experiments.registry import EXPERIMENTS, ExperimentDeclaration
 from datp_core.presentation.export import export_mechanism_publication
 from datp_core.presentation.figures import FigureSpec, PairedMetricFigureSeries
 from datp_core.runtime.configuration import OUTPUTS_ROOT
+from datp_core.runtime.filesystem import write_text_atomically
 
 
 class MechanismAnalysisDirectory(StrEnum):
@@ -507,6 +510,56 @@ def collect_heterogeneity_support_interaction() -> SupportInteractionAnalysis:
                     )
                 )
     return summarize_support_interaction(tuple(observations))
+
+
+def analyze_heterogeneity_support_interaction(*, overwrite: bool) -> Path:
+    output = (
+        OUTPUTS_ROOT
+        / MechanismAnalysisDirectory.ROOT
+        / ExperimentId.HETEROGENEITY_CALIBRATION_SUPPORT_INTERACTION.value
+        / PopulationId.NBAIOT_DIRICHLET_CLIENTS.value
+        / MechanismAnalysisDirectory.ANALYSIS
+    )
+    if overwrite and output.exists():
+        from shutil import rmtree
+
+        rmtree(output)
+    analysis = collect_heterogeneity_support_interaction()
+    serialize_json_model(analysis, output / "support_interaction_analysis.json")
+    lines = [
+        "# Heterogeneity × calibration-support interaction",
+        "",
+        "Descriptive fixed-grid analysis; nested replicates are averaged within each seed/support cell.",
+        "",
+        "## Seed-level interaction coefficients",
+        "",
+        "| Seed | Intercept | H | log10(m/100) | H × log10(m/100) |",
+        "|---:|---:|---:|---:|---:|",
+        *(
+            f"| {item.seed.value} | {item.intercept.value:.12g} | {item.heterogeneity.value:.12g} | "
+            f"{item.log10_support.value:.12g} | {item.heterogeneity_log10_support.value:.12g} |"
+            for item in analysis.coefficients
+        ),
+        "",
+        "## Raw policy surface",
+        "",
+        "| Seed | Alpha | m | H | Policy | CV(FPR) | P10 Macro-F1 | Worst balanced accuracy | State |",
+        "|---:|---|---|---:|---|---:|---:|---:|---|",
+    ]
+    for cell in analysis.policy_surface:
+        support = "full" if cell.calibration_size is None else str(cell.calibration_size.value)
+        for policy in cell.policies:
+            lines.append(
+                f"| {cell.seed.value} | {cell.alpha_label} | {support} | {cell.heterogeneity.value:.12g} | "
+                f"{policy.policy.value} | {_metric_text(policy.cv_fpr)} | {_metric_text(policy.p10_macro_f1)} | "
+                f"{_metric_text(policy.worst_client_balanced_accuracy)} | {cell.state.value} |"
+            )
+    write_text_atomically(output / "support_interaction_surface.md", FileContentText("\n".join(lines) + "\n"))
+    return output
+
+
+def _metric_text(value: MetricValue | None) -> str:
+    return "unavailable" if value is None else f"{value.value:.12g}"
 
 
 def analyze_per_client_score_geometry(*, overwrite: bool) -> Path:

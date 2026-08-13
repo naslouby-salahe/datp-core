@@ -88,6 +88,7 @@ from datp_core.experiments.heterogeneity import (
     MechanismAnalysisDirectory,
     analyze_controlled_heterogeneity_sweep,
     analyze_heterogeneity_benefit_association,
+    analyze_heterogeneity_support_interaction,
     analyze_per_client_score_geometry,
     analyze_threshold_movement_tradeoff,
     run_controlled_heterogeneity_sweep_seed,
@@ -600,6 +601,8 @@ def _report_heterogeneity(experiment_id: ExperimentId) -> ReportResult:
         path = analyze_per_client_score_geometry(overwrite=True)
     elif experiment_id is ExperimentId.HETEROGENEITY_BENEFIT_ASSOCIATION:
         path = analyze_heterogeneity_benefit_association(overwrite=True)
+    elif experiment_id is ExperimentId.HETEROGENEITY_CALIBRATION_SUPPORT_INTERACTION:
+        path = analyze_heterogeneity_support_interaction(overwrite=True)
     elif experiment_id is ExperimentId.THRESHOLD_MOVEMENT_TRADEOFF:
         path = analyze_threshold_movement_tradeoff(overwrite=True)
     else:
@@ -1062,7 +1065,11 @@ def _temporal_marker(experiment_id: ExperimentId) -> bool:
 def _heterogeneity_marker(experiment_id: ExperimentId) -> bool:
     population = (
         PopulationId.NBAIOT_DIRICHLET_CLIENTS
-        if experiment_id is ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP
+        if experiment_id
+        in {
+            ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP,
+            ExperimentId.HETEROGENEITY_CALIBRATION_SUPPORT_INTERACTION,
+        }
         else PopulationId.NBAIOT_NATURAL_DEVICES
     )
     output = (
@@ -1072,6 +1079,10 @@ def _heterogeneity_marker(experiment_id: ExperimentId) -> bool:
         / population.value
         / MechanismAnalysisDirectory.ANALYSIS
     )
+    if experiment_id is ExperimentId.HETEROGENEITY_CALIBRATION_SUPPORT_INTERACTION:
+        analysis = output / "support_interaction_analysis.json"
+        surface = output / "support_interaction_surface.md"
+        return analysis.is_file() and surface.is_file()
     return (output / PUBLICATION_FILENAME).is_file() and (output / MECHANISM_REPORT_FILENAME).is_file()
 
 
@@ -1373,6 +1384,14 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         anchor_requirement=AnchorRequirement.REQUIRED,
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_dispatch_heterogeneity,
+        report=_report_heterogeneity,
+        analysis_marker=_heterogeneity_marker,
+    ),
+    ExperimentRecipe(
+        experiment=ExperimentId.HETEROGENEITY_CALIBRATION_SUPPORT_INTERACTION,
+        anchor_requirement=AnchorRequirement.REQUIRED,
+        campaign_role=CampaignRole.MANDATORY,
+        dispatch=_declared_recipe(ExperimentId.HETEROGENEITY_CALIBRATION_SUPPORT_INTERACTION),
         report=_report_heterogeneity,
         analysis_marker=_heterogeneity_marker,
     ),
