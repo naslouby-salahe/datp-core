@@ -6134,9 +6134,9 @@ The implementation must distinguish at least these roadmap-defined scientific st
 
 | ID | Source line | Audit requirement | Implementation disposition | Audit outcome | Evidence / remediation |
 |---|---:|---|---|---|---|
-| `GATE-K-001` | 6143 | Every declared factor level was executed or has a recorded pre-specified infeasibility reason. | `NOT_AUDITED` | — | — |
-| `GATE-K-002` | 6144 | Every required comparison method is present. | `NOT_AUDITED` | — | — |
-| `GATE-K-003` | 6145 | Every required seed is present; confirmatory inference requires exactly ten valid paired seed deltas. | `NOT_AUDITED` | — | — |
+| `GATE-K-001` | 6143 | Every declared factor level was executed or has a recorded pre-specified infeasibility reason. | `IMPLEMENTED` | `PASS` | Materialized coordinates are rejected when missing or unauthorized; graph-validated infeasibility has a typed disposition. |
+| `GATE-K-002` | 6144 | Every required comparison method is present. | `IMPLEMENTED` | `PASS` | Coordinate completeness derives the full declaration grid and rejects absent method coordinates. |
+| `GATE-K-003` | 6145 | Every required seed is present; confirmatory inference requires exactly ten valid paired seed deltas. | `IMPLEMENTED` | `PASS` | The pre-registered confirmatory cohort and inference protocol both require exactly ten seeds. |
 | `GATE-K-004` | 6146 | All declared nested replicates are present where required. | `NOT_AUDITED` | — | — |
 | `GATE-K-005` | 6147 | Required outcomes, diagnostics, tables, and figures were produced or explicitly marked unavailable under a roadmap rule. | `NOT_AUDITED` | — | — |
 | `GATE-K-006` | 6148 | Null, reversed, unstable, and unfavorable outcomes remain in the result set. | `NOT_AUDITED` | — | — |
@@ -7405,9 +7405,9 @@ README_REPRODUCIBILITY.md
 | `THRESHOLD-331` | IV | 6135 | 12. Gate J — Comparator and threshold-variant integrity | KLL implementation randomness follows Part II §9.2 and remains nested within training seed. | `PASS` | Each reconstruction persists a distinct deterministic seed derived from its enclosing training seed. |
 | `THRESHOLD-332` | IV | 6136 | 12. Gate J — Comparator and threshold-variant integrity | `MEAN_PLUS_STANDARD_DEVIATION_ESTIMATOR` uses float64, arithmetic mean, sample standard deviation with `ddof=1`, and the locked `{shared, local}` 2×2 scope comparison; it is never presented as a faithful reproduction of Meidan's complete detector. | `PASS` | The typed estimator is restricted to shared/local scope and the report retains both estimator families; prior-art output distinguishes it from Meidan's complete detector. |
 | `CALIBRATION-236` | IV | 6137 | 12. Gate J — Comparator and threshold-variant integrity | LOCAL_CONFORMAL_THRESHOLD reports held-out benign coverage and its limitations; it does not claim arbitrary client-conditional validity. | `PASS` | The report retains held-out benign coverage and serializes an explicit finite-sample, retained-evidence claim boundary. |
-| `GLOBAL-117` | IV | 6143 | 13. Gate K — Experiment completeness | Every declared factor level was executed or has a recorded pre-specified infeasibility reason. | `NOT_AUDITED` | — |
-| `GLOBAL-118` | IV | 6144 | 13. Gate K — Experiment completeness | Every required comparison method is present. | `NOT_AUDITED` | — |
-| `GLOBAL-119` | IV | 6145 | 13. Gate K — Experiment completeness | Every required seed is present; confirmatory inference requires exactly ten valid paired seed deltas. | `NOT_AUDITED` | — |
+| `GLOBAL-117` | IV | 6143 | 13. Gate K — Experiment completeness | Every declared factor level was executed or has a recorded pre-specified infeasibility reason. | `PASS` | Materialized coordinates are rejected when missing or unauthorized; graph-validated infeasibility has a typed disposition. |
+| `GLOBAL-118` | IV | 6144 | 13. Gate K — Experiment completeness | Every required comparison method is present. | `PASS` | Coordinate completeness derives the full declaration grid and rejects absent method coordinates. |
+| `GLOBAL-119` | IV | 6145 | 13. Gate K — Experiment completeness | Every required seed is present; confirmatory inference requires exactly ten valid paired seed deltas. | `PASS` | The pre-registered confirmatory cohort and inference protocol both require exactly ten seeds. |
 | `GLOBAL-120` | IV | 6146 | 13. Gate K — Experiment completeness | All declared nested replicates are present where required. | `NOT_AUDITED` | — |
 | `REPORT-035` | IV | 6147 | 13. Gate K — Experiment completeness | Required outcomes, diagnostics, tables, and figures were produced or explicitly marked unavailable under a roadmap rule. | `NOT_AUDITED` | — |
 | `REPORT-036` | IV | 6148 | 13. Gate K — Experiment completeness | Null, reversed, unstable, and unfavorable outcomes remain in the result set. | `NOT_AUDITED` | — |
