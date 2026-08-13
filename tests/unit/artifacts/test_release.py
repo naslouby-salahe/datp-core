@@ -1,10 +1,17 @@
 import csv
+from datetime import date
 from hashlib import sha256
 from pathlib import Path
 
 import pytest
 
-from datp_core.artifacts.release import validate_release_bundle
+from datp_core.artifacts.release import (
+    ReleaseArtifact,
+    ReleaseBuildRequest,
+    ReleaseState,
+    build_release_bundle,
+    validate_release_bundle,
+)
 from datp_core.core.errors import ArtifactIntegrityError
 
 _DIRECTORIES = (
@@ -96,3 +103,35 @@ def test_release_validation_rejects_an_invalid_manifest_sidecar(tmp_path: Path) 
 
     with pytest.raises(ArtifactIntegrityError, match="sidecar"):
         validate_release_bundle(root)
+
+
+def test_release_builder_packages_explicit_retained_evidence_and_validates_it(tmp_path: Path) -> None:
+    roadmap = tmp_path / "roadmap.md"
+    source = tmp_path / "source.json"
+    roadmap.write_text("authoritative roadmap\n", encoding="utf-8")
+    source.write_text('{"metric": 0.05}\n', encoding="utf-8")
+
+    release = build_release_bundle(
+        ReleaseBuildRequest(
+            root=tmp_path / "release",
+            roadmap=roadmap,
+            code_revision="deadbeef",
+            literature_search_date=date(2026, 8, 13),
+            state=ReleaseState.BLINDED_ARCHIVE,
+            confirmatory_seeds=tuple(range(10)),
+            artifacts=(
+                ReleaseArtifact(
+                    source=source,
+                    relative_path=Path("METRICS/confirmatory.json"),
+                    artifact_type="metric_table",
+                    dataset_id="nbaiot",
+                    population_id="nbaiot_natural_devices",
+                    training_method="fedavg_autoencoder",
+                    experiment_id="shared_vs_local_confirmation",
+                ),
+            ),
+        )
+    )
+
+    assert len(release.entries) == 5
+    assert (release.root / "METRICS" / "confirmatory.json").read_bytes() == source.read_bytes()

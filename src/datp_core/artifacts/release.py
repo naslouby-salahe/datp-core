@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import csv
 from dataclasses import dataclass
+from datetime import date
+from enum import StrEnum
 from hashlib import sha256
 from pathlib import Path
 from re import fullmatch
+from shutil import copy2
+from sys import version
 
 from datp_core.core.errors import ArtifactIntegrityError, ErrorMessage
 
@@ -59,6 +63,36 @@ class ReleaseManifestEntry:
     experiment_id: str
 
 
+class ReleaseState(StrEnum):
+    PUBLIC = "PUBLIC"
+    BLINDED_ARCHIVE = "BLINDED_ARCHIVE"
+    WITHHELD_LICENSE_RESTRICTED = "WITHHELD_LICENSE_RESTRICTED"
+
+
+@dataclass(frozen=True, slots=True)
+class ReleaseArtifact:
+    source: Path
+    relative_path: Path
+    artifact_type: str
+    dataset_id: str = "NA"
+    population_id: str = "NA"
+    training_method: str = "NA"
+    training_seed: str = "NA"
+    threshold_policy: str = "NA"
+    experiment_id: str = "NA"
+
+
+@dataclass(frozen=True, slots=True)
+class ReleaseBuildRequest:
+    root: Path
+    roadmap: Path
+    code_revision: str
+    literature_search_date: date
+    state: ReleaseState
+    confirmatory_seeds: tuple[int, ...]
+    artifacts: tuple[ReleaseArtifact, ...]
+
+
 @dataclass(frozen=True, slots=True)
 class ReleaseValidation:
     root: Path
@@ -76,6 +110,26 @@ def validate_release_bundle(root: Path) -> ReleaseValidation:
     return ReleaseValidation(root=root, entries=entries)
 
 
+def build_release_bundle(request: ReleaseBuildRequest) -> ReleaseValidation:
+    """Build a release only from explicit retained artifacts, then validate its exact byte inventory."""
+
+    if request.root.exists():
+        raise ArtifactIntegrityError(ErrorMessage("release destination must not already exist"))
+    if not request.roadmap.is_file():
+        raise ArtifactIntegrityError(ErrorMessage("release roadmap snapshot is missing"))
+    if len(request.confirmatory_seeds) != 10 or len(set(request.confirmatory_seeds)) != 10:
+        raise ArtifactIntegrityError(ErrorMessage("release requires the exact ten unique confirmatory seeds"))
+    _require_unique_release_artifacts(request.artifacts)
+    request.root.mkdir(parents=True)
+    for directory in _REQUIRED_DIRECTORIES:
+        (request.root / directory).mkdir()
+    _write_release_metadata(request)
+    for artifact in request.artifacts:
+        _copy_release_artifact(request.root, artifact)
+    _write_manifest(request.root, request.artifacts)
+    return validate_release_bundle(request.root)
+
+
 def _require_payload_layout(root: Path) -> None:
     missing = tuple(name for name in _REQUIRED_FILES if not (root / name).is_file())
     missing_directories = tuple(name for name in _REQUIRED_DIRECTORIES if not (root / name).is_dir())
@@ -86,6 +140,112 @@ def _require_payload_layout(root: Path) -> None:
                 f"files={','.join(missing) or 'none'}; directories={','.join(missing_directories) or 'none'}"
             )
         )
+
+
+def _require_unique_release_artifacts(artifacts: tuple[ReleaseArtifact, ...]) -> None:
+    paths = tuple(item.relative_path for item in artifacts)
+    if len(paths) != len(frozenset(paths)):
+        raise ArtifactIntegrityError(ErrorMessage("release artifact destinations must be unique"))
+    for artifact in artifacts:
+        if not artifact.source.is_file():
+            raise ArtifactIntegrityError(ErrorMessage(f"release source artifact is missing: {artifact.source}"))
+        _require_relative_artifact_path(artifact.relative_path)
+
+
+def _write_release_metadata(request: ReleaseBuildRequest) -> None:
+    roadmap_digest = _sha256_file(request.roadmap)
+    (request.root / _ROADMAP_LOCK_FILENAME).write_text(
+        "# DATP-Core roadmap lock\n\n"
+        f"- Roadmap SHA-256: `{roadmap_digest}`\n"
+        f"- Code revision: `{request.code_revision}`\n"
+        f"- Literature search date: `{request.literature_search_date.isoformat()}`\n"
+        f"- Release state: `{request.state.value}`\n\n"
+        "## Exact roadmap snapshot\n\n"
+        + request.roadmap.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (request.root / "SEEDS.csv").write_text(
+        "training_seed,purpose,derivation\n"
+        + "".join(
+            f"{seed},confirmatory_training,declared_confirmatory_seed_cohort\n"
+            for seed in request.confirmatory_seeds
+        ),
+        encoding="utf-8",
+    )
+    (request.root / "ENVIRONMENT" / "runtime.txt").write_text(
+        f"python={version.replace(chr(10), ' ')}\n",
+        encoding="utf-8",
+    )
+    (request.root / "README_REPRODUCIBILITY.md").write_text(
+        "# Reproducibility release\n\n"
+        f"State: `{request.state.value}`. Validate this bundle with `datp-core validate-release <root>`.\n",
+        encoding="utf-8",
+    )
+
+
+def _copy_release_artifact(root: Path, artifact: ReleaseArtifact) -> None:
+    destination = root / artifact.relative_path
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    copy2(artifact.source, destination)
+
+
+def _write_manifest(root: Path, artifacts: tuple[ReleaseArtifact, ...]) -> None:
+    entries = tuple(
+        _entry_from_file(root, relative_path, artifact)
+        for relative_path, artifact in _generated_release_artifacts(root, artifacts)
+    )
+    path = root / _MANIFEST_FILENAME
+    with path.open("w", encoding="utf-8", newline="") as stream:
+        writer = csv.writer(stream)
+        writer.writerow(_MANIFEST_COLUMNS)
+        writer.writerows(
+            (
+                str(entry.relative_path),
+                entry.digest,
+                entry.byte_count,
+                entry.artifact_type,
+                entry.dataset_id,
+                entry.population_id,
+                entry.training_method,
+                entry.training_seed,
+                entry.threshold_policy,
+                entry.experiment_id,
+            )
+            for entry in entries
+        )
+    (root / _SIDECAR_FILENAME).write_text(
+        f"{_sha256_file(path)}  {_MANIFEST_FILENAME}\n",
+        encoding="utf-8",
+    )
+
+
+def _generated_release_artifacts(
+    root: Path,
+    artifacts: tuple[ReleaseArtifact, ...],
+) -> tuple[tuple[Path, ReleaseArtifact], ...]:
+    generated = (
+        ReleaseArtifact(root / _ROADMAP_LOCK_FILENAME, Path(_ROADMAP_LOCK_FILENAME), "roadmap_lock"),
+        ReleaseArtifact(root / "SEEDS.csv", Path("SEEDS.csv"), "seed_registry"),
+        ReleaseArtifact(root / "README_REPRODUCIBILITY.md", Path("README_REPRODUCIBILITY.md"), "readme"),
+        ReleaseArtifact(root / "ENVIRONMENT" / "runtime.txt", Path("ENVIRONMENT/runtime.txt"), "environment"),
+    )
+    return tuple((item.relative_path, item) for item in (*generated, *artifacts))
+
+
+def _entry_from_file(root: Path, relative_path: Path, artifact: ReleaseArtifact) -> ReleaseManifestEntry:
+    path = root / relative_path
+    return ReleaseManifestEntry(
+        relative_path=relative_path,
+        digest=_sha256_file(path),
+        byte_count=path.stat().st_size,
+        artifact_type=artifact.artifact_type,
+        dataset_id=artifact.dataset_id,
+        population_id=artifact.population_id,
+        training_method=artifact.training_method,
+        training_seed=artifact.training_seed,
+        threshold_policy=artifact.threshold_policy,
+        experiment_id=artifact.experiment_id,
+    )
 
 
 def _validate_manifest_sidecar(manifest_path: Path, sidecar_path: Path) -> None:
@@ -114,11 +274,7 @@ def _manifest_entry(row: dict[str, str | None]) -> ReleaseManifestEntry:
     if any(value is None or value == "" for value in values):
         raise ArtifactIntegrityError(ErrorMessage("release manifest fields must use explicit values or NA"))
     relative_path = Path(_required_value(row, "relative_path"))
-    if relative_path.is_absolute() or ".." in relative_path.parts or relative_path.name in {
-        _MANIFEST_FILENAME,
-        _SIDECAR_FILENAME,
-    }:
-        raise ArtifactIntegrityError(ErrorMessage("release manifest contains an invalid artifact path"))
+    _require_relative_artifact_path(relative_path)
     digest = _required_value(row, "sha256")
     if fullmatch(r"[0-9a-f]{64}", digest) is None:
         raise ArtifactIntegrityError(ErrorMessage("release manifest requires lowercase SHA-256 digests"))
@@ -140,6 +296,14 @@ def _manifest_entry(row: dict[str, str | None]) -> ReleaseManifestEntry:
         threshold_policy=_required_value(row, "threshold_policy"),
         experiment_id=_required_value(row, "experiment_id"),
     )
+
+
+def _require_relative_artifact_path(relative_path: Path) -> None:
+    if relative_path.is_absolute() or ".." in relative_path.parts or relative_path.name in {
+        _MANIFEST_FILENAME,
+        _SIDECAR_FILENAME,
+    }:
+        raise ArtifactIntegrityError(ErrorMessage("release manifest contains an invalid artifact path"))
 
 
 def _required_value(row: dict[str, str | None], column: str) -> str:
