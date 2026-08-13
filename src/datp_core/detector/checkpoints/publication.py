@@ -15,6 +15,7 @@ from datp_core.detector.checkpoints.history import (
 from datp_core.detector.checkpoints.identities import FederatedHistoryAssetName
 from datp_core.detector.training.contracts import AutoencoderProtocol
 from datp_core.detector.training.models import (
+    DittoRuntimeEnvironment,
     DittoTrainingOutcome,
     FederatedTrainingCoordinate,
     FederatedTrainingExecution,
@@ -113,10 +114,12 @@ def write_ditto_training(
     personalized_terminal_models: tuple[PersonalizedTerminalModel, ...],
     global_output_directory: Path,
     personalized_output_directory: Path,
+    runtime_environment: DittoRuntimeEnvironment,
 ) -> DittoTrainingOutcome:
     outcome = DittoTrainingOutcome(
         global_training_result=global_result,
         personalized_terminal_models=personalized_terminal_models,
+        runtime_environment=runtime_environment,
     )
     require_separate_directories(global_output_directory, personalized_output_directory)
     require_empty_directory(global_output_directory)

@@ -1,6 +1,7 @@
 from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import StrEnum
+from hashlib import sha256
 
 import polars as pl
 
@@ -26,6 +27,7 @@ from datp_core.data.populations.contracts import (
     OUTCOME_LABEL_COLUMN,
     PARTITION_ROLE_COLUMN,
     STABLE_ROW_ID_COLUMN,
+    OrderedRowIdentitySet,
     PopulationCapabilities,
     PopulationDeclaration,
     PopulationFrameColumn,
@@ -58,6 +60,7 @@ class PopulationIntegrityViolation(StrEnum):
     ASSIGNMENT_ROWS_NOT_CONSERVED = "assignment_rows_not_conserved"
     ASSIGNMENT_DUPLICATE_STABLE_ROW_IDENTITIES = "assignment_duplicate_stable_row_identities"
     ROLE_COUNT_MISMATCH = "role_count_mismatch"
+    ORDERED_ROW_IDENTITY_MISMATCH = "ordered_row_identity_mismatch"
     ATTACK_ROWS_IN_FIT_ROLES = "attack_rows_in_fit_roles"
     FUTURE_PRECEDES_HISTORICAL = "future_precedes_historical"
     OUTCOME_COUNT_MISMATCH = "outcome_count_mismatch"
@@ -118,6 +121,7 @@ def validate_split_manifest(
     document = split_manifest
     _require_assignment_row_contract(assignments, membership, document.assignment_row_count, document.population)
     _require_role_counts(assignments, document)
+    _require_ordered_row_identity_sets(assignments, document)
     _require_benign_only_fit_roles(assignments, document.population)
 
 
@@ -268,6 +272,31 @@ def _require_role_counts(assignments: pl.DataFrame, document: SplitManifestDocum
                 ErrorMessage(f"split role count mismatch for {role.value}"),
                 subject=document.population,
                 reason=PopulationIntegrityViolation.ROLE_COUNT_MISMATCH,
+            )
+
+
+def ordered_row_identity_set(assignments: pl.DataFrame, role: PartitionRole) -> OrderedRowIdentitySet:
+    """Hash row IDs in artifact order with single-byte LF separators and no trailing newline."""
+
+    identifiers = assignments.filter(pl.col(PARTITION_ROLE_COLUMN) == role).get_column(STABLE_ROW_ID_COLUMN).to_list()
+    payload = b"\n".join(str(identifier).encode("utf-8") for identifier in identifiers)
+    return OrderedRowIdentitySet(
+        ordered_row_sha256=sha256(payload).hexdigest(),
+        row_count=RowCount(len(identifiers)),
+    )
+
+
+def _require_ordered_row_identity_sets(assignments: pl.DataFrame, document: SplitManifestDocument) -> None:
+    for role, expected in (
+        (PartitionRole.TRAIN, document.train_ordered_rows),
+        (PartitionRole.CALIBRATION, document.calibration_ordered_rows),
+        (PartitionRole.EVALUATION, document.evaluation_ordered_rows),
+    ):
+        if ordered_row_identity_set(assignments, role) != expected:
+            raise DataIntegrityError(
+                ErrorMessage(f"split ordered row identities mismatch for {role.value}"),
+                subject=document.population,
+                reason=PopulationIntegrityViolation.ORDERED_ROW_IDENTITY_MISMATCH,
             )
 
 

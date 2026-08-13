@@ -20,7 +20,7 @@ from datp_core.core.identifiers import (
     PopulationIdentityKind,
     TrainingModelId,
 )
-from datp_core.core.numeric import ByteCount, LogicalElementCount, MetricValue, RoundNumber, RowCount
+from datp_core.core.numeric import ByteCount, ElapsedSeconds, LogicalElementCount, MetricValue, RoundNumber, RowCount
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.checkpoints.contracts import DiagnosticSnapshotProtocol
 from datp_core.detector.checkpoints.identities import (
@@ -61,6 +61,7 @@ class _ClientRoundRow:
 class _PersonalizedRoundRow:
     client: ClientIdentity
     local_loss: MetricValue
+    personalized_training_wall_time: ElapsedSeconds
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -231,6 +232,7 @@ def persist_federated_training_history(
     p_rounds: list[int] = []
     p_ids: list[str] = []
     p_losses: list[float] = []
+    p_wall_times: list[float] = []
 
     for item in history.rounds:
         r_nums.append(item.round_number.value)
@@ -258,6 +260,7 @@ def persist_federated_training_history(
             p_rounds.append(item.round_number.value)
             p_ids.append(reference.client.client_id.value)
             p_losses.append(reference.local_loss.value)
+            p_wall_times.append(reference.personalized_training_wall_time.value)
 
     directory.mkdir(parents=True, exist_ok=True)
 
@@ -293,6 +296,7 @@ def persist_federated_training_history(
                 FederatedHistoryColumn.ROUND_NUMBER.value: p_rounds,
                 FederatedHistoryColumn.CLIENT_ID.value: p_ids,
                 FederatedHistoryColumn.LOCAL_LOSS.value: p_losses,
+                FederatedHistoryColumn.PERSONALIZED_TRAINING_WALL_TIME_SECONDS.value: p_wall_times,
             },
             schema=schema_pairs(PERSONALIZED_ROUNDS_SCHEMA),
         ).write_parquet(directory / FederatedHistoryAssetName.PERSONALIZED_ROUNDS.value)
@@ -418,13 +422,19 @@ def load_federated_training_history(
 
     personalized_dict_by_round: dict[RoundNumber, list[_PersonalizedRoundRow]] = {}
     if personalized_frame is not None:
-        for round_val, client_val, loss_val in personalized_frame.select(
-            (column.ROUND_NUMBER.value, column.CLIENT_ID.value, column.LOCAL_LOSS.value)
+        for round_val, client_val, loss_val, wall_time in personalized_frame.select(
+            (
+                column.ROUND_NUMBER.value,
+                column.CLIENT_ID.value,
+                column.LOCAL_LOSS.value,
+                column.PERSONALIZED_TRAINING_WALL_TIME_SECONDS.value,
+            )
         ).iter_rows():
             personalized_dict_by_round.setdefault(RoundNumber(int(round_val)), []).append(
                 _PersonalizedRoundRow(
                     client=ClientIdentity(coordinate.population, ClientIdentityToken(str(client_val)), identity_kind),
                     local_loss=MetricValue(float(loss_val)),
+                    personalized_training_wall_time=ElapsedSeconds(float(wall_time)),
                 )
             )
 
@@ -542,6 +552,7 @@ def _personalized_references(
             client=row.client,
             round_number=round_number,
             local_loss=row.local_loss,
+            personalized_training_wall_time=row.personalized_training_wall_time,
             tensor_path=None,
         )
         for row in personalized_data

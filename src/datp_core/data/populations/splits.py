@@ -49,7 +49,7 @@ from .contracts import (
     assignment_column_names,
     membership_column_names,
 )
-from .integrity import validate_no_future_history_leakage
+from .integrity import ordered_row_identity_set, validate_no_future_history_leakage
 
 
 class SplitConstructionViolation(StrEnum):
@@ -518,6 +518,9 @@ def _split_manifest(
         future_recalibration_row_count=count(PartitionRole.FUTURE_RECALIBRATION),
         static_reference_reserve_row_count=count(PartitionRole.STATIC_REFERENCE_RESERVE),
         discarded_row_count=count(PartitionRole.DISCARDED),
+        train_ordered_rows=ordered_row_identity_set(assignments, PartitionRole.TRAIN),
+        calibration_ordered_rows=ordered_row_identity_set(assignments, PartitionRole.CALIBRATION),
+        evaluation_ordered_rows=ordered_row_identity_set(assignments, PartitionRole.EVALUATION),
     )
 
 

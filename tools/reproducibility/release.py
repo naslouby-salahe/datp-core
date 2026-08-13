@@ -22,10 +22,18 @@ from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
 from datp_core.artifacts.repositories.thresholds import FederatedThresholdAssetName
 from datp_core.core.errors import ArtifactIntegrityError, ErrorMessage
+from datp_core.core.identifiers import PartitionRole
+from datp_core.data.populations.contracts import SplitManifestDocument
+from datp_core.data.populations.integrity import ordered_row_identity_set
 from datp_core.data.registry import population_declaration
 from datp_core.detector.checkpoints.identities import FederatedHistoryAssetName
 from datp_core.detector.scoring.models import FederatedScoreAssetName
 from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity
+from datp_core.experiments.common.seeds import (
+    ANCHOR_ANALYSIS_SEED,
+    CONFIRMATORY_ANALYSIS_SEED,
+    CONFIRMATORY_SEED_COHORT,
+)
 from datp_core.experiments.execution.layout import (
     ExecutionArtifactDirectory,
     bounded_evidence_seed_directory,
@@ -53,6 +61,22 @@ _SPLIT_IDENTITY_FILENAMES = frozenset(
         "matched_static_reference_split_manifest.json",
         "matched_static_reference_split_assignments.parquet",
         "split_manifest.parquet",
+    }
+)
+_CAMPAIGN_POPULATION_FILENAMES = frozenset(
+    {
+        "population_manifest.json",
+        "membership.parquet",
+        "matched_static_reference_manifest.json",
+        "matched_static_reference_membership.parquet",
+    }
+)
+_CAMPAIGN_SPLIT_FILENAMES = frozenset(
+    {
+        "split_manifest.json",
+        "split_assignments.parquet",
+        "matched_static_reference_split_manifest.json",
+        "matched_static_reference_split_assignments.parquet",
     }
 )
 _REQUIRED_DIRECTORIES = (
@@ -110,16 +134,39 @@ _MANIFEST_COLUMNS = (
 )
 _SCIENTIFIC_METADATA_COLUMNS = _MANIFEST_COLUMNS[3:]
 _SEED_REGISTRY_COLUMNS = ("training_seed", "purpose", "derivation")
-_REQUIRED_SEED_PURPOSES = frozenset(
-    {
-        "confirmatory_bootstrap",
-        "anchor_analysis",
-        "cluster_initialization",
+_SEED_REGISTRY_RECORDS = (
+    ("confirmatory_bootstrap", str(CONFIRMATORY_ANALYSIS_SEED.value), "locked paired-inference analysis seed"),
+    ("anchor_analysis", str(ANCHOR_ANALYSIS_SEED.value), "locked anchor-analysis seed"),
+    ("cluster_initialization", "42", "locked cluster random_state"),
+    (
         "calibration_subsample_replicate",
+        "NA",
+        "PCG64(sha256('DATP-Core|CALIBRATION_SUBSAMPLE|dataset|population|training_seed|client|replicate_index')[:8]"
+        " mod 2^32); sorted stable_row_id pool; prefix sample",
+    ),
+    (
         "federated_client_round_stream",
+        "NA",
+        "derive_worker_seed(training_seed;round_number;population|client_id|identity_kind;training_stream), "
+        "then derive_worker_seed(...;local_epoch)",
+    ),
+    (
         "fedavg_local_fine_tuning",
+        "NA",
+        "derive_worker_seed(training_seed;dataset text component;population text component;"
+        "population|client_id|identity_kind;fedavg_local_fine_tuning)",
+    ),
+    (
         "kll_sketch_reconstruction",
-    }
+        "NA",
+        "derive_worker_seed(derive_worker_seed(training_seed;60000+k);70000+replicate_index); "
+        "NumPy PCG64 permutation per client",
+    ),
+    (
+        "detector_initialization",
+        "NA",
+        "training_seed passed to deterministic runtime configuration and autoencoder initialization",
+    ),
 )
 _DIRECT_DEPENDENCIES = (
     "pydantic",
@@ -364,6 +411,25 @@ def campaign_analysis_release_artifacts(output_root: Path) -> tuple[ReleaseArtif
     return tuple(artifacts)
 
 
+def campaign_population_split_release_artifacts(output_root: Path) -> tuple[ReleaseArtifact, ...]:
+    """Retain every persisted population, membership, and split identity produced by execution."""
+
+    artifacts: list[ReleaseArtifact] = []
+    for source in sorted(path for path in output_root.rglob("*") if _is_regular_file(path)):
+        relative = source.relative_to(output_root)
+        if source.name in _CAMPAIGN_POPULATION_FILENAMES:
+            artifacts.append(
+                ReleaseArtifact(source, Path("SPLIT_IDENTITY") / relative, "population_construction_identity")
+            )
+        elif source.name in _CAMPAIGN_SPLIT_FILENAMES:
+            artifacts.append(ReleaseArtifact(source, Path("SPLIT_IDENTITY") / relative, "split_identity"))
+    if not artifacts:
+        raise ArtifactIntegrityError(
+            ErrorMessage("campaign release requires persisted population and split identity evidence")
+        )
+    return tuple(artifacts)
+
+
 def campaign_release_artifacts(output_root: Path, data_root: Path) -> tuple[ReleaseArtifact, ...]:
     """Assemble every required campaign evidence category before release bundle construction."""
 
@@ -375,6 +441,7 @@ def campaign_release_artifacts(output_root: Path, data_root: Path) -> tuple[Rele
             campaign_threshold_release_artifacts(output_root),
             campaign_standard_training_release_artifacts(output_root),
             campaign_bounded_training_release_artifacts(output_root),
+            campaign_population_split_release_artifacts(output_root),
             campaign_analysis_release_artifacts(output_root),
             campaign_publication_release_artifacts(output_root),
         )
@@ -657,6 +724,7 @@ def validate_release_bundle(root: Path) -> ReleaseValidation:
     _validate_manifest_sidecar(manifest_path, root / _SIDECAR_FILENAME)
     entries = _read_manifest(manifest_path)
     _validate_manifest_files(root, entries)
+    _validate_released_split_identity_evidence(root, entries)
     return ReleaseValidation(root=root, entries=entries)
 
 
@@ -671,6 +739,47 @@ def _validate_retained_audit_reports(root: Path) -> None:
                     )
 
 
+def _validate_released_split_identity_evidence(root: Path, entries: tuple[ReleaseManifestEntry, ...]) -> None:
+    """Verify released split manifests prove the ordered identities of each reportable partition."""
+
+    for entry in entries:
+        if entry.artifact_type != "split_identity" or entry.relative_path.name not in {
+            "split_manifest.json",
+            "matched_static_reference_split_manifest.json",
+        }:
+            continue
+        suffix = (
+            "split_assignments.parquet"
+            if entry.relative_path.name == "split_manifest.json"
+            else "matched_static_reference_split_assignments.parquet"
+        )
+        assignments_path = root / entry.relative_path.with_name(suffix)
+        if not _is_regular_file(assignments_path):
+            raise ArtifactIntegrityError(
+                ErrorMessage(f"released split manifest has no assignment artifact: {entry.relative_path}")
+            )
+        try:
+            import polars as pl
+
+            manifest = SplitManifestDocument.model_validate_json(
+                (root / entry.relative_path).read_text(encoding="utf-8")
+            )
+            assignments = pl.read_parquet(assignments_path)
+        except (OSError, ValueError, pl.exceptions.PolarsError) as error:
+            raise ArtifactIntegrityError(
+                ErrorMessage(f"released split identity evidence is unreadable: {entry.relative_path}")
+            ) from error
+        expected = (
+            (PartitionRole.TRAIN, manifest.train_ordered_rows),
+            (PartitionRole.CALIBRATION, manifest.calibration_ordered_rows),
+            (PartitionRole.EVALUATION, manifest.evaluation_ordered_rows),
+        )
+        if any(ordered_row_identity_set(assignments, role) != row_set for role, row_set in expected):
+            raise ArtifactIntegrityError(
+                ErrorMessage(f"released split ordered-row identity proof does not match: {entry.relative_path}")
+            )
+
+
 def _validate_seed_registry(path: Path) -> None:
     with path.open(encoding="utf-8", newline="") as stream:
         reader = csv.DictReader(stream)
@@ -680,21 +789,25 @@ def _validate_seed_registry(path: Path) -> None:
     if any(any(row.get(column) in {None, ""} for column in _SEED_REGISTRY_COLUMNS) for row in rows):
         raise ArtifactIntegrityError(ErrorMessage("release seed registry fields must be explicit"))
     training_rows = tuple(row for row in rows if row["purpose"] == "confirmatory_training")
-    if len(training_rows) != 10:
+    expected_training_seeds = tuple(str(seed.value) for seed in CONFIRMATORY_SEED_COHORT.values)
+    if len(training_rows) != len(expected_training_seeds):
         raise ArtifactIntegrityError(
             ErrorMessage("release seed registry requires exactly ten confirmatory training seeds")
         )
-    try:
-        seeds = tuple(int(row["training_seed"]) for row in training_rows)
-    except ValueError as error:
-        raise ArtifactIntegrityError(ErrorMessage("confirmatory training seeds must be integers")) from error
-    if len(seeds) != len(frozenset(seeds)):
-        raise ArtifactIntegrityError(ErrorMessage("confirmatory training seeds must be unique"))
-    purposes = frozenset(row["purpose"] for row in rows)
-    missing_purposes = tuple(sorted(_REQUIRED_SEED_PURPOSES - purposes))
-    if missing_purposes:
+    if tuple(row["training_seed"] for row in training_rows) != expected_training_seeds or any(
+        row["derivation"] != "declared_confirmatory_seed_cohort" for row in training_rows
+    ):
         raise ArtifactIntegrityError(
-            ErrorMessage(f"release seed registry is missing required purposes: {','.join(missing_purposes)}")
+            ErrorMessage("release seed registry confirmatory cohort does not match the locked seed declaration")
+        )
+    nested_rows = tuple(row for row in rows if row["purpose"] != "confirmatory_training")
+    expected_nested_rows = tuple(
+        {"training_seed": seed, "purpose": purpose, "derivation": derivation}
+        for purpose, seed, derivation in _SEED_REGISTRY_RECORDS
+    )
+    if nested_rows != expected_nested_rows:
+        raise ArtifactIntegrityError(
+            ErrorMessage("release seed registry does not declare the complete locked nested-seed derivations")
         )
 
 
@@ -717,7 +830,7 @@ def _read_roadmap_lock(path: Path) -> RoadmapLock:
         raise ArtifactIntegrityError(ErrorMessage("release roadmap lock requires a lowercase roadmap SHA-256 digest"))
     if digest != sha256(snapshot).hexdigest():
         raise ArtifactIntegrityError(ErrorMessage("release roadmap snapshot does not match its locked SHA-256 digest"))
-    if not revision:
+    if not revision or any(character.isspace() for character in revision):
         raise ArtifactIntegrityError(ErrorMessage("release roadmap lock requires a code revision"))
     try:
         parsed_search_date = date.fromisoformat(search_date)
@@ -827,8 +940,8 @@ def build_release_bundle(request: ReleaseBuildRequest) -> ReleaseValidation:
             raise ArtifactIntegrityError(
                 ErrorMessage("submission-time literature search must be dated 0 through 14 days before submission")
             )
-    if len(request.confirmatory_seeds) != 10 or len(set(request.confirmatory_seeds)) != 10:
-        raise ArtifactIntegrityError(ErrorMessage("release requires the exact ten unique confirmatory seeds"))
+    if request.confirmatory_seeds != tuple(seed.value for seed in CONFIRMATORY_SEED_COHORT.values):
+        raise ArtifactIntegrityError(ErrorMessage("release requires the locked ordered ten-seed confirmatory cohort"))
     _require_unique_release_artifacts(request.artifacts)
     _validate_withheld_artifacts(request)
     request.root.mkdir(parents=True)
@@ -909,21 +1022,7 @@ def _write_release_metadata(request: ReleaseBuildRequest) -> None:
         ).encode()
         + request.roadmap.read_bytes()
     )
-    (request.root / _SEED_REGISTRY_FILENAME).write_text(
-        "training_seed,purpose,derivation\n"
-        + "".join(
-            f"{seed},confirmatory_training,declared_confirmatory_seed_cohort\n" for seed in request.confirmatory_seeds
-        )
-        + "31,confirmatory_bootstrap,locked_analysis_seed\n"
-        + "29,anchor_analysis,locked_analysis_seed\n"
-        + "42,cluster_initialization,locked_cluster_random_state\n"
-        + "NA,calibration_subsample_replicate,sha256-derived training_seed|population|client|replicate\n"
-        + "NA,federated_client_round_stream,derive_worker_seed(training_seed;round;client;stream)\n"
-        + "NA,fedavg_local_fine_tuning,derive_worker_seed(training_seed;dataset;population;client;purpose)\n"
-        + "NA,kll_sketch_reconstruction,library RNG is not controllable; "
-        "rebuild every client sketch ten times per training_seed|k\n",
-        encoding="utf-8",
-    )
+    _write_seed_registry(request.root / _SEED_REGISTRY_FILENAME, request.confirmatory_seeds)
     (request.root / "ENVIRONMENT" / "runtime.txt").write_text("\n".join(_environment_lines()) + "\n", encoding="utf-8")
     if request.withheld_artifacts:
         _write_withheld_artifact_records(request.root, request.withheld_artifacts)
@@ -933,6 +1032,16 @@ def _write_release_metadata(request: ReleaseBuildRequest) -> None:
         "`python -m tools.reproducibility.release <root>`.\n",
         encoding="utf-8",
     )
+
+
+def _write_seed_registry(path: Path, confirmatory_seeds: tuple[int, ...]) -> None:
+    with path.open("w", encoding="utf-8", newline="") as stream:
+        writer = csv.writer(stream)
+        writer.writerow(_SEED_REGISTRY_COLUMNS)
+        writer.writerows(
+            (seed, "confirmatory_training", "declared_confirmatory_seed_cohort") for seed in confirmatory_seeds
+        )
+        writer.writerows((seed, purpose, derivation) for purpose, seed, derivation in _SEED_REGISTRY_RECORDS)
 
 
 def _copy_release_artifact(root: Path, artifact: ReleaseArtifact) -> None:
@@ -1187,8 +1296,7 @@ def _require_descriptive_scientific_metadata(values: tuple[str, ...]) -> None:
 def _require_relative_artifact_path(relative_path: Path) -> None:
     if (
         relative_path == Path(".")
-        or
-        relative_path.is_absolute()
+        or relative_path.is_absolute()
         or ".." in relative_path.parts
         or relative_path.name
         in {

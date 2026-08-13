@@ -8,6 +8,7 @@ from datp_core.analysis.operational.communication import (
     ThresholdPayloadKind,
     ThresholdStageCommunicationDiagnostic,
 )
+from datp_core.analysis.operational.ditto import DittoIncrementalStateAndCompute
 from datp_core.core.errors import ErrorMessage, ScientificContractError
 from datp_core.core.identifiers import FederatedThresholdMethod, FileContentText
 from datp_core.runtime.filesystem import write_text_atomically
@@ -67,6 +68,59 @@ def export_threshold_stage_accounting(documents: tuple[FederatedEvaluationDocume
         )
     )
     return write_text_atomically(destination, FileContentText("\n".join(lines) + "\n"))
+
+
+def export_ditto_incremental_state_and_compute(
+    cost: DittoIncrementalStateAndCompute,
+    destination: Path,
+) -> Path:
+    """Publish measured host-relative Ditto costs without presenting them as an IoT benchmark."""
+    environment = cost.runtime_environment
+    lines = (
+        "# Ditto incremental state and compute",
+        "",
+        "This is a relative cost characterization on the recorded experiment host, not an IoT-device "
+        "deployment benchmark.",
+        "",
+        f"Global coordinate: `{cost.global_coordinate.model.value}`  ",
+        f"Personalized coordinate: `{cost.personalized_coordinate.model.value}`  ",
+        f"Host: `{environment.host}`  ",
+        f"Operating system: `{environment.operating_system}`  ",
+        f"Python: `{environment.python_runtime}`  ",
+        f"PyTorch: `{environment.torch_runtime}`; CUDA runtime: `{environment.cuda_runtime}`",
+        "",
+        f"Serialized global-model bytes: `{cost.serialized_global_model_bytes.value}`  ",
+        "Global-update communication bytes (all training rounds, upload + download): "
+        f"`{cost.global_update_communication_bytes.value}`  ",
+        "Measured personalized-training wall time (sum of client-round measurements): "
+        f"`{cost.total_personalized_training_wall_time.value:.9g}` seconds",
+        "",
+        "| Client | Serialized persistent personalized-model bytes | Extra persistent state vs FedAvg bytes |",
+        "| --- | ---: | ---: |",
+        *(
+            f"| `{item.client.client_id.value}` | {item.serialized_persistent_model_bytes.value} | "
+            f"{item.extra_persistent_state_bytes_relative_to_fedavg.value} |"
+            for item in cost.persistent_state_by_client
+        ),
+        "",
+        "| Client | Round | Measured personalized-training wall time (seconds) |",
+        "| --- | ---: | ---: |",
+        *(
+            f"| `{item.client.client_id.value}` | {item.round_number.value} | {item.wall_time.value:.9g} |"
+            for item in cost.personalized_training_measurements
+        ),
+        "",
+        "| Threshold method | Threshold-stage serialized communication bytes | Post-training rounds | "
+        "Broadcast accounting |",
+        "| --- | ---: | ---: | --- |",
+        *(
+            f"| `{item.method.value}` | {item.communication.total_serialized_bytes.value} | "
+            f"{item.communication.communication_round_count.value} | {item.communication.broadcast_accounting.value} |"
+            for item in cost.threshold_stage_costs
+        ),
+        "",
+    )
+    return write_text_atomically(destination, FileContentText("\n".join(lines)))
 
 
 def _require_one_threshold_accounting_cohort(documents: tuple[FederatedEvaluationDocument, ...]) -> None:

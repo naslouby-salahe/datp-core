@@ -26,6 +26,7 @@ class FederatedHistoryColumn(StrEnum):
     L2_DRIFT = "l2_drift"
     RMS_DRIFT = "rms_drift"
     TERMINAL_PROX_PENALTY = "terminal_prox_penalty"
+    PERSONALIZED_TRAINING_WALL_TIME_SECONDS = "personalized_training_wall_time_seconds"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -56,4 +57,5 @@ PERSONALIZED_ROUNDS_SCHEMA = (
     ParquetColumnSpec(identity=FederatedHistoryColumn.ROUND_NUMBER, dtype=pl.Int64),
     ParquetColumnSpec(identity=FederatedHistoryColumn.CLIENT_ID, dtype=pl.String),
     ParquetColumnSpec(identity=FederatedHistoryColumn.LOCAL_LOSS, dtype=pl.Float64),
+    ParquetColumnSpec(identity=FederatedHistoryColumn.PERSONALIZED_TRAINING_WALL_TIME_SECONDS, dtype=pl.Float64),
 )

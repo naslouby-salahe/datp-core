@@ -6,6 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
 
+import polars as pl
 import pytest
 from tools.reproducibility import release
 from tools.reproducibility.audit import AUDIT_REPORT_FILENAME, AuditRecord, AuditReport, AuditStatus, write_audit_report
@@ -30,13 +31,18 @@ from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.core.errors import ArtifactIntegrityError
 from datp_core.core.identifiers import (
     CoordinateStableKey,
+    DatasetId,
     EvidenceRole,
     ExperimentId,
     FederatedThresholdMethod,
+    PartitionRole,
     PopulationId,
+    SplitProtocolId,
     TrainingModelId,
 )
-from datp_core.core.numeric import Seed
+from datp_core.core.numeric import RowCount, Seed
+from datp_core.data.populations.contracts import SplitManifestDocument
+from datp_core.data.populations.integrity import ordered_row_identity_set
 
 _DIRECTORIES = (
     "DATA_PROVENANCE",
@@ -65,7 +71,7 @@ _COLUMNS = (
 )
 _RECONSTRUCTION_EVIDENCE = {
     "DATA_PROVENANCE/dataset_manifest.json": b"{}\n",
-    "SPLIT_IDENTITY/split_manifest.json": b"{}\n",
+    "SPLIT_IDENTITY/identity.txt": b"split identity evidence\n",
     "PREPROCESSING/preprocessing_manifest.json": b"{}\n",
     "MODELS/terminal_model.safetensors": b"model\n",
     "SCORES/calibration.parquet": b"score\n",
@@ -128,17 +134,8 @@ def _release(root: Path) -> Path:
     for directory in _DIRECTORIES:
         (root / directory).mkdir(parents=True)
     roadmap_snapshot = b"roadmap snapshot\n"
-    seed_registry = (
-        b"training_seed,purpose,derivation\n"
-        + b"".join(f"{seed},confirmatory_training,test\n".encode() for seed in range(10))
-        + b"31,confirmatory_bootstrap,test\n"
-        + b"29,anchor_analysis,test\n"
-        + b"42,cluster_initialization,test\n"
-        + b"NA,calibration_subsample_replicate,test\n"
-        + b"NA,federated_client_round_stream,test\n"
-        + b"NA,fedavg_local_fine_tuning,test\n"
-        + b"NA,kll_sketch_reconstruction,test\n"
-    )
+    seed_registry_path = root / "SEEDS.csv"
+    release._write_seed_registry(seed_registry_path, tuple(range(10)))
     artifacts = {
         "ROADMAP_LOCK.md": (
             b"# DATP-Core roadmap lock\n\n"
@@ -150,10 +147,42 @@ def _release(root: Path) -> Path:
             + b"## Exact roadmap snapshot\n\n"
             + roadmap_snapshot
         ),
-        "SEEDS.csv": seed_registry,
+        "SEEDS.csv": seed_registry_path.read_bytes(),
         "README_REPRODUCIBILITY.md": b"reproduce\n",
         **_RECONSTRUCTION_EVIDENCE,
     }
+    assignments = pl.DataFrame(
+        {
+            "stable_row_id": ["train-row", "calibration-row", "evaluation-row"],
+            "partition_role": [
+                PartitionRole.TRAIN.value,
+                PartitionRole.CALIBRATION.value,
+                PartitionRole.EVALUATION.value,
+            ],
+        }
+    )
+    assignments_path = root / "SPLIT_IDENTITY" / "split_assignments.parquet"
+    assignments.write_parquet(assignments_path)
+    split_manifest = SplitManifestDocument(
+        population=PopulationId.NBAIOT_NATURAL_DEVICES,
+        dataset=DatasetId.NBAIOT,
+        partition_seed=Seed(0),
+        split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
+        assignment_row_count=RowCount(3),
+        train_row_count=RowCount(1),
+        calibration_row_count=RowCount(1),
+        evaluation_row_count=RowCount(1),
+        future_recalibration_row_count=RowCount(0),
+        static_reference_reserve_row_count=RowCount(0),
+        discarded_row_count=RowCount(0),
+        train_ordered_rows=ordered_row_identity_set(assignments, PartitionRole.TRAIN),
+        calibration_ordered_rows=ordered_row_identity_set(assignments, PartitionRole.CALIBRATION),
+        evaluation_ordered_rows=ordered_row_identity_set(assignments, PartitionRole.EVALUATION),
+    )
+    manifest_path = root / "SPLIT_IDENTITY" / "split_manifest.json"
+    manifest_path.write_text(split_manifest.model_dump_json(), encoding="utf-8")
+    artifacts[str(assignments_path.relative_to(root))] = assignments_path.read_bytes()
+    artifacts[str(manifest_path.relative_to(root))] = manifest_path.read_bytes()
     for relative_path, content in artifacts.items():
         (root / relative_path).write_bytes(content)
     manifest = root / "MANIFEST_SHA256.csv"
@@ -195,7 +224,7 @@ def _release(root: Path) -> Path:
 def test_release_validation_accepts_complete_exact_inventory(tmp_path: Path) -> None:
     release = validate_release_bundle(_release(tmp_path))
 
-    assert len(release.entries) == 15
+    assert len(release.entries) == 17
 
 
 def test_release_validation_rejects_a_symbolic_link_in_the_payload(tmp_path: Path) -> None:
@@ -353,8 +382,55 @@ def test_release_validation_requires_every_nested_seed_purpose(tmp_path: Path) -
         encoding="utf-8",
     )
 
-    with pytest.raises(ArtifactIntegrityError, match="missing required purposes"):
+    with pytest.raises(ArtifactIntegrityError, match="complete locked nested-seed derivations"):
         validate_release_bundle(root)
+
+
+def test_release_validation_rejects_a_noncanonical_confirmatory_seed_cohort(tmp_path: Path) -> None:
+    root = _release(tmp_path)
+    registry = root / "SEEDS.csv"
+    registry.write_text(
+        registry.read_text(encoding="utf-8").replace(
+            "9,confirmatory_training,declared_confirmatory_seed_cohort",
+            "10,confirmatory_training,declared_confirmatory_seed_cohort",
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ArtifactIntegrityError, match="confirmatory cohort does not match"):
+        validate_release_bundle(root)
+
+
+def test_release_validation_rejects_an_underspecified_nested_seed_derivation(tmp_path: Path) -> None:
+    root = _release(tmp_path)
+    registry = root / "SEEDS.csv"
+    registry.write_text(
+        registry.read_text(encoding="utf-8").replace("PCG64", "unknown RNG", 1),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ArtifactIntegrityError, match="complete locked nested-seed derivations"):
+        validate_release_bundle(root)
+
+
+def test_release_builder_rejects_a_noncanonical_confirmatory_seed_cohort(tmp_path: Path) -> None:
+    roadmap = tmp_path / "roadmap.md"
+    source = tmp_path / "source.json"
+    roadmap.write_text("authoritative roadmap\n", encoding="utf-8")
+    source.write_text('{"metric": 0.05}\n', encoding="utf-8")
+
+    with pytest.raises(ArtifactIntegrityError, match="locked ordered ten-seed"):
+        build_release_bundle(
+            ReleaseBuildRequest(
+                root=tmp_path / "release",
+                roadmap=roadmap,
+                code_revision="deadbeef",
+                literature_search_date=date(2026, 8, 13),
+                state=ReleaseState.PUBLIC,
+                confirmatory_seeds=tuple(range(1, 11)),
+                artifacts=_required_release_artifacts(source),
+            )
+        )
 
 
 def test_release_validation_rejects_retired_opaque_manifest_metadata(tmp_path: Path) -> None:
@@ -790,6 +866,7 @@ def test_campaign_release_assembly_requires_unique_destinations(
         "campaign_threshold_release_artifacts",
         "campaign_standard_training_release_artifacts",
         "campaign_bounded_training_release_artifacts",
+        "campaign_population_split_release_artifacts",
         "campaign_analysis_release_artifacts",
         "campaign_publication_release_artifacts",
     ):

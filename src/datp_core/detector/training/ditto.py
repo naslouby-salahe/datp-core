@@ -1,6 +1,9 @@
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from platform import platform
+from sys import version
+from time import monotonic
 
 import torch
 
@@ -8,8 +11,8 @@ from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
 )
-from datp_core.core.identifiers import ContractSubject, CudaDeviceName, TrainingModelId
-from datp_core.core.numeric import BatchSize, ClientCount, LearningRate, RoundNumber, Seed
+from datp_core.core.identifiers import ContractSubject, CudaDeviceName, NonEmptyString, TrainingModelId
+from datp_core.core.numeric import BatchSize, ClientCount, ElapsedSeconds, LearningRate, RoundNumber, Seed
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.autoencoder import (
     AutoencoderModelState,
@@ -36,6 +39,7 @@ from datp_core.detector.training.models import (
     ClientTrainingInput,
     ClientTrainingResult,
     ClientUpdate,
+    DittoRuntimeEnvironment,
     DittoTrainingCoordinates,
     DittoTrainingOutcome,
     FederatedRoundResult,
@@ -104,10 +108,28 @@ def _validate_request(request: DittoTrainingRequest) -> None:
     )
 
 
+def _ditto_runtime_environment() -> DittoRuntimeEnvironment:
+    cuda_runtime = torch.version.cuda
+    if cuda_runtime is None:
+        raise ScientificContractError(
+            ErrorMessage("Ditto cost characterization requires a reported CUDA runtime"),
+            subject=ContractSubject.RUNTIME,
+        )
+    hostname = __import__("socket").gethostname().strip()
+    return DittoRuntimeEnvironment(
+        host=NonEmptyString(hostname),
+        operating_system=NonEmptyString(platform()),
+        python_runtime=NonEmptyString(version.replace("\n", " ")),
+        torch_runtime=NonEmptyString(torch.__version__),
+        cuda_runtime=NonEmptyString(cuda_runtime),
+    )
+
+
 def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
     _validate_request(request)
     configure_deterministic_execution(request.training_seed)
     device = resolve_cuda_device()
+    runtime_environment = _ditto_runtime_environment()
 
     ordered_inputs = tuple(sorted(request.clients, key=lambda item: item.client))
     prepared = tuple(prepare_federated_client_data(item, request.autoencoder) for item in ordered_inputs)
@@ -152,6 +174,7 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
                 device=device,
             )
 
+            personalized_started = monotonic()
             personalized_update = train_client_update(
                 client_data=client_data,
                 initial_model_state=personalized_model_state,
@@ -172,6 +195,7 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
                     coefficient=request.training_protocol.regularization,
                 ),
             )
+            personalized_wall_time = ElapsedSeconds(monotonic() - personalized_started)
 
             if personalized_update.sample_count != global_update.sample_count:
                 raise ScientificContractError(
@@ -188,6 +212,7 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
                     client=client_id,
                     round_number=round_number,
                     local_loss=personalized_update.local_loss,
+                    personalized_training_wall_time=personalized_wall_time,
                     tensor_path=None,
                 )
             )
@@ -271,4 +296,5 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
         ),
         global_output_directory=request.global_output_directory,
         personalized_output_directory=request.personalized_output_directory,
+        runtime_environment=runtime_environment,
     )

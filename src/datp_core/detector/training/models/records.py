@@ -11,9 +11,10 @@ from datp_core.core.identifiers import (
     CommunicationEstimationMethod,
     ContractSubject,
     FeatureNameSequence,
+    NonEmptyString,
     TrainingModelId,
 )
-from datp_core.core.numeric import ByteCount, LogicalElementCount, MetricValue, RoundNumber, RowCount
+from datp_core.core.numeric import ByteCount, ElapsedSeconds, LogicalElementCount, MetricValue, RoundNumber, RowCount
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.data.preprocessing.models import FederatedFittedPreprocessingState
 from datp_core.detector.autoencoder import AutoencoderModelState
@@ -153,6 +154,7 @@ class PersonalizedModelStateReference:
     client: ClientIdentity
     round_number: RoundNumber
     local_loss: MetricValue
+    personalized_training_wall_time: ElapsedSeconds
     tensor_path: Path | None
 
     def __post_init__(self) -> None:
@@ -166,6 +168,17 @@ class PersonalizedModelStateReference:
                 ErrorMessage("personalized state client population must match its coordinate"),
                 subject=ContractSubject.CLIENT_IDENTITY,
             )
+
+
+@dataclass(frozen=True, slots=True)
+class DittoRuntimeEnvironment:
+    """Host/runtime identity for a measured relative Ditto cost characterization."""
+
+    host: NonEmptyString
+    operating_system: NonEmptyString
+    python_runtime: NonEmptyString
+    torch_runtime: NonEmptyString
+    cuda_runtime: NonEmptyString
 
 
 def _validate_personalized_references(

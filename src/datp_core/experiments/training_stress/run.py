@@ -32,6 +32,12 @@ from datp_core.analysis.metrics.cohort_evidence import client_partition_counts_f
 from datp_core.analysis.metrics.cohorts import EvaluationCohortManifest
 from datp_core.analysis.metrics.models import ClientMetricResult, MetricStatus, PopulationMetricResult, metric_by_id
 from datp_core.analysis.metrics.population import calculate_population_metrics
+from datp_core.analysis.operational.ditto import (
+    DittoIncrementalStateAndCompute,
+    DittoThresholdStageCost,
+    ditto_incremental_state_and_compute,
+    shared_or_local_threshold_stage_communication,
+)
 from datp_core.app.planning import PlanDisposition, PlanningEvidence, PlanReason, expand_experiment_plan
 from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
@@ -147,6 +153,7 @@ from datp_core.experiments.execution.models import (
 from datp_core.experiments.personalized_scoring import client_metric, client_scoring_input, score_record_for_client
 from datp_core.experiments.registry import EXPERIMENTS
 from datp_core.presentation.export import export_mechanism_publication
+from datp_core.presentation.operational_accounting import export_ditto_incremental_state_and_compute
 from datp_core.runtime.configuration import DATA_ROOT, OUTPUTS_ROOT
 from datp_core.runtime.filesystem import write_text_atomically
 from datp_core.thresholds.dispatch import ThresholdConstructionRequest
@@ -183,6 +190,7 @@ class FineTuningArtifactBranch(StrEnum):
 @dataclass(frozen=True, slots=True, kw_only=True)
 class DittoStressTestResult:
     personalized_coordinate: FederatedTrainingCoordinate
+    operational_cost: DittoIncrementalStateAndCompute
     alignment: ModelAlignmentResult
     reference_alignment: ModelAlignmentResult
     alignment_reductions: tuple[AlignmentReductionOutcome, ...]
@@ -196,6 +204,7 @@ class DittoStressTestResult:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class DittoStressTestEvidence:
     personalized_coordinate: FederatedTrainingCoordinate
+    operational_cost: DittoIncrementalStateAndCompute
     alignment: ModelAlignmentResult
     reference_alignment: ModelAlignmentResult
     alignment_reductions: tuple[AlignmentReductionOutcome, ...]
@@ -249,6 +258,10 @@ def _persist_ditto_evidence(
     write_text_atomically(
         directory / SeedEvidenceAssetName.DOCUMENT,
         FileContentText(canonical_json_text(evidence)),
+    )
+    export_ditto_incremental_state_and_compute(
+        evidence.operational_cost,
+        directory / "ditto_incremental_state_and_compute.md",
     )
 
 
@@ -574,6 +587,26 @@ def run_ditto_stress_test_seed(
             ErrorMessage("Ditto local-threshold construction must produce a local result"),
             subject=personalized_coordinate.model,
         )
+    threshold_stage_costs = tuple(
+        DittoThresholdStageCost(
+            method=method,
+            communication=shared_or_local_threshold_stage_communication(
+                personalized_coordinate,
+                method,
+                tuple(assignment.client for assignment in threshold.assignments),
+            ),
+        )
+        for method, threshold in (
+            (FederatedThresholdMethod.SHARED_THRESHOLD, shared),
+            (FederatedThresholdMethod.LOCAL_THRESHOLD, local),
+        )
+    )
+    operational_cost = ditto_incremental_state_and_compute(
+        global_training=training.global_training,
+        personalized_terminal_models=tuple(owned.value for owned in training.personalized_terminal_models.items),
+        runtime_environment=training.runtime_environment,
+        threshold_stage_costs=threshold_stage_costs,
+    )
     reference_manifest = scores.manifests.require(shared.assignments[0].client)
     evaluation_cohort = assert_cohort_invariant_to_threshold_methods(
         population=population,
@@ -610,6 +643,7 @@ def run_ditto_stress_test_seed(
     )
     result = DittoStressTestResult(
         personalized_coordinate=personalized_coordinate,
+        operational_cost=operational_cost,
         alignment=alignment,
         reference_alignment=reference_alignment,
         alignment_reductions=alignment_reductions(reference_alignment, alignment),
@@ -640,6 +674,7 @@ def run_ditto_stress_test_seed(
     _persist_ditto_evidence(
         DittoStressTestEvidence(
             personalized_coordinate=result.personalized_coordinate,
+            operational_cost=result.operational_cost,
             alignment=result.alignment,
             reference_alignment=result.reference_alignment,
             alignment_reductions=result.alignment_reductions,

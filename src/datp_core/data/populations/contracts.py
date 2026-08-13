@@ -306,6 +306,21 @@ class PopulationManifestDocument(StrictModel):
         return self
 
 
+class OrderedRowIdentitySet(StrictModel):
+    """Released identity proof for one ordered split artifact, without row contents."""
+
+    ordered_row_sha256: str
+    row_count: RowCount
+
+    @model_validator(mode="after")
+    def validate_identity_set(self) -> "OrderedRowIdentitySet":
+        if len(self.ordered_row_sha256) != 64 or any(
+            character not in "0123456789abcdef" for character in self.ordered_row_sha256
+        ):
+            raise ValueError("ordered row identity digest must be a lowercase SHA-256 value")
+        return self
+
+
 class SplitManifestDocument(StrictModel):
     population: PopulationId
     dataset: DatasetId
@@ -318,6 +333,9 @@ class SplitManifestDocument(StrictModel):
     future_recalibration_row_count: RowCount
     static_reference_reserve_row_count: RowCount
     discarded_row_count: RowCount
+    train_ordered_rows: OrderedRowIdentitySet
+    calibration_ordered_rows: OrderedRowIdentitySet
+    evaluation_ordered_rows: OrderedRowIdentitySet
 
     @model_validator(mode="after")
     def validate_manifest(self) -> "SplitManifestDocument":
@@ -331,6 +349,13 @@ class SplitManifestDocument(StrictModel):
         )
         if reduce(RowCount.plus, counts) != self.assignment_row_count:
             raise ValueError("partition role counts must sum to assignment rows")
+        for row_set, count, role in (
+            (self.train_ordered_rows, self.train_row_count, "train"),
+            (self.calibration_ordered_rows, self.calibration_row_count, "calibration"),
+            (self.evaluation_ordered_rows, self.evaluation_row_count, "evaluation"),
+        ):
+            if row_set.row_count != count:
+                raise ValueError(f"{role} ordered-row identity count must match the partition count")
         return self
 
 

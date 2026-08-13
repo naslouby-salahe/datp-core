@@ -8,7 +8,7 @@ from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.autoencoder import AutoencoderModelState
 from datp_core.detector.checkpoints.contracts import DiagnosticSnapshotProtocol
 from datp_core.detector.training.contracts import AutoencoderProtocol, FederatedTrainingCoordinate
-from datp_core.detector.training.models.records import FederatedTrainingHistory
+from datp_core.detector.training.models.records import DittoRuntimeEnvironment, FederatedTrainingHistory
 
 
 class TrainingTerminationReason(StrEnum):
@@ -87,6 +87,7 @@ class PersonalizedTerminalModel:
 class DittoTrainingOutcome:
     global_training_result: FederatedTrainingResult
     personalized_terminal_models: tuple[PersonalizedTerminalModel, ...]
+    runtime_environment: DittoRuntimeEnvironment
 
     def __post_init__(self) -> None:
         if self.global_training_result.coordinate.model is not TrainingModelId.DITTO_GLOBAL_AUTOENCODER:
