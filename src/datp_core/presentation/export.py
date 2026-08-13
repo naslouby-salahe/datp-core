@@ -668,13 +668,7 @@ def export_mechanism_publication(
                 population=population,
                 evidence_role=evidence_role,
             ),
-            claims=(
-                ClaimDecision(
-                    status=ClaimStatus.NARROWED,
-                    wording=ClaimWording("Mechanism evidence is associative and non-confirmatory."),
-                    reason=ClaimReason("mechanism claim tier"),
-                ),
-            ),
+            claims=(_descriptive_evidence_claim(evidence_role),),
             tables=tables
             if tables
             else (
@@ -693,6 +687,21 @@ def export_mechanism_publication(
             figures=figures,
         ),
         output_directory / PUBLICATION_FILENAME,
+    )
+
+
+def _descriptive_evidence_claim(evidence_role: EvidenceRole) -> ClaimDecision:
+    match evidence_role:
+        case EvidenceRole.MECHANISM:
+            wording = ClaimWording("Mechanism evidence is associative and non-confirmatory.")
+        case EvidenceRole.SUPPORTIVE:
+            wording = ClaimWording("Supportive evidence is non-confirmatory and does not promote a causal claim.")
+        case _:
+            raise ValueError("mechanism publication requires mechanism or supportive evidence")
+    return ClaimDecision(
+        status=ClaimStatus.NARROWED,
+        wording=wording,
+        reason=ClaimReason(f"{evidence_role.value} evidence tier"),
     )
 
 

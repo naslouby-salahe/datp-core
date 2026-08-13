@@ -14,7 +14,7 @@ from datp_core.experiments.common.seeds import SeedCohort
 from datp_core.experiments.registry import EXPERIMENTS
 
 
-def test_controlled_heterogeneity_is_mechanism_evidence_not_a_second_confirmation() -> None:
+def test_controlled_heterogeneity_is_supportive_evidence_not_a_second_confirmation() -> None:
     declaration = next(item for item in EXPERIMENTS if item.id is ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP)
     plan = expand_experiment_plan(
         declarations=(declaration,),
@@ -28,7 +28,7 @@ def test_controlled_heterogeneity_is_mechanism_evidence_not_a_second_confirmatio
         ),
     )
 
-    assert declaration.role is EvidenceRole.MECHANISM
+    assert declaration.role is EvidenceRole.SUPPORTIVE
     assert declaration.population is PopulationId.NBAIOT_DIRICHLET_CLIENTS
     assert declaration.training_model is TrainingModelId.FEDAVG_AUTOENCODER
     assert frozenset(declaration.federated_thresholds) == frozenset(

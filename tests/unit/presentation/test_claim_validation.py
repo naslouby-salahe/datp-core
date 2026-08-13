@@ -1,5 +1,6 @@
 from datp_core.core.identifiers import AvailabilityStatus, ClaimWording, EvidenceRole, MetricId, PopulationId
 from datp_core.experiments.anchor.contracts import VerifiedAnchorGateArtifact
+from datp_core.presentation.export import _descriptive_evidence_claim
 from datp_core.presentation.validation import (
     ClaimKind,
     ClaimRequest,
@@ -14,6 +15,15 @@ def test_claim_status_member_set_is_exact_and_unique() -> None:
     values = tuple(member.value for member in ClaimStatus)
     assert len(values) == len(set(values))
     assert all(value.islower() for value in values)
+
+
+def test_supportive_descriptive_publication_claim_retains_its_evidence_tier() -> None:
+    claim = _descriptive_evidence_claim(EvidenceRole.SUPPORTIVE)
+
+    assert claim.status is ClaimStatus.NARROWED
+    assert claim.wording is not None
+    assert "Supportive evidence" in claim.wording
+    assert claim.reason == "supportive evidence tier"
 
 
 def claim_request(
