@@ -32,6 +32,7 @@ from datp_core.analysis.mechanisms import (
     ClientImpactCampaignSummary,
     ClientScoreVector,
     EquityUtilityParetoView,
+    FamilyRecallPolicyCampaignSummary,
     FamilyRecallPolicyComparison,
     GroupDispersionObservation,
     GroupedDispersionResult,
@@ -128,6 +129,7 @@ class ConfirmatoryAssetDirectory(StrEnum):
     ANALYSIS = "analysis"
     SCORE_GEOMETRY = "score_geometry"
     MECHANISMS = "mechanisms"
+    SUPPORTIVE = "supportive"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -279,15 +281,33 @@ def analyze_confirmatory_campaign() -> Path:
         _confirmatory_threshold_stage_documents(), output / "threshold_stage_accounting.md"
     )
     _export_client_impact_synthesis_tables(all_mechanisms, output)
-    if all_mechanisms:
+    mechanism_evidence, supportive_evidence = _partition_confirmatory_descriptive_evidence(all_mechanisms)
+    if mechanism_evidence:
         export_mechanism_publication(
-            all_mechanisms,
+            mechanism_evidence,
             experiment=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,
             population=PopulationId.NBAIOT_NATURAL_DEVICES,
             output_directory=output / ConfirmatoryAssetDirectory.MECHANISMS,
             evidence_role=EvidenceRole.MECHANISM,
         )
+    if supportive_evidence:
+        export_mechanism_publication(
+            supportive_evidence,
+            experiment=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,
+            population=PopulationId.NBAIOT_NATURAL_DEVICES,
+            output_directory=output / ConfirmatoryAssetDirectory.SUPPORTIVE,
+            evidence_role=EvidenceRole.SUPPORTIVE,
+        )
     return output
+
+
+def _partition_confirmatory_descriptive_evidence(
+    mechanisms: tuple[MechanismEvidence, ...],
+) -> tuple[tuple[MechanismEvidence, ...], tuple[MechanismEvidence, ...]]:
+    supportive_types = (FamilyRecallPolicyComparison, FamilyRecallPolicyCampaignSummary, EquityUtilityParetoView)
+    supportive = tuple(item for item in mechanisms if isinstance(item, supportive_types))
+    mechanism = tuple(item for item in mechanisms if not isinstance(item, supportive_types))
+    return mechanism, supportive
 
 
 def _confirmatory_descriptive_effects() -> ConfirmatoryDescriptiveEffects:
