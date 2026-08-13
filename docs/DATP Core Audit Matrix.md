@@ -6435,16 +6435,16 @@ README_REPRODUCIBILITY.md
 | `TRAIN-005` | I | 344 | 3.3A Federation regime, client persistence, and deployment identity | Ditto personalized state; | `PASS` | Ditto personalized states retain their client owner. |
 | `GLOBAL-014` | I | 345 | 3.3A Federation regime, client persistence, and deployment identity | post-FedAvg locally fine-tuned state; | `PASS` | Fine-tuning derives terminal state per immutable client. |
 | `METRIC-003` | I | 346 | 3.3A Federation regime, client persistence, and deployment identity | all client-disaggregated metrics. | `PASS` | Client-disaggregated metric records retain client identity. |
-| `GLOBAL-015` | I | 364 | 3.4 Meaning of “fairness” | demographic fairness; | `NOT_AUDITED` | — |
-| `GLOBAL-016` | I | 365 | 3.4 Meaning of “fairness” | protected-attribute fairness; | `NOT_AUDITED` | — |
-| `GLOBAL-017` | I | 366 | 3.4 Meaning of “fairness” | individual human fairness; | `NOT_AUDITED` | — |
-| `GLOBAL-018` | I | 367 | 3.4 Meaning of “fairness” | equalized odds over human groups; | `NOT_AUDITED` | — |
-| `GLOBAL-019` | I | 368 | 3.4 Meaning of “fairness” | social or legal nondiscrimination. | `NOT_AUDITED` | — |
-| `METRIC-004` | I | 372 | 3.4 Meaning of “fairness” | operational FPR equity; | `NOT_AUDITED` | — |
-| `GLOBAL-020` | I | 373 | 3.4 Meaning of “fairness” | false-alarm equity; | `NOT_AUDITED` | — |
-| `METRIC-005` | I | 374 | 3.4 Meaning of “fairness” | cross-client FPR dispersion; | `NOT_AUDITED` | — |
-| `GLOBAL-021` | I | 375 | 3.4 Meaning of “fairness” | service-level operating-point equity; | `NOT_AUDITED` | — |
-| `GLOBAL-022` | I | 376 | 3.4 Meaning of “fairness” | distribution of false-alarm burden. | `NOT_AUDITED` | — |
+| `GLOBAL-015` | I | 364 | 3.4 Meaning of “fairness” | demographic fairness; | `PASS` | Claim validation suppresses demographic-fairness wording. |
+| `GLOBAL-016` | I | 365 | 3.4 Meaning of “fairness” | protected-attribute fairness; | `PASS` | Claim validation suppresses protected-attribute wording. |
+| `GLOBAL-017` | I | 366 | 3.4 Meaning of “fairness” | individual human fairness; | `PASS` | The vocabulary is limited to operational FPR equity. |
+| `GLOBAL-018` | I | 367 | 3.4 Meaning of “fairness” | equalized odds over human groups; | `PASS` | The vocabulary is limited to operational FPR equity. |
+| `GLOBAL-019` | I | 368 | 3.4 Meaning of “fairness” | social or legal nondiscrimination. | `PASS` | The vocabulary is limited to operational FPR equity. |
+| `METRIC-004` | I | 372 | 3.4 Meaning of “fairness” | operational FPR equity; | `PASS` | FPR-CV is the typed primary endpoint. |
+| `GLOBAL-020` | I | 373 | 3.4 Meaning of “fairness” | false-alarm equity; | `PASS` | Publication language binds equity to false alarms. |
+| `METRIC-005` | I | 374 | 3.4 Meaning of “fairness” | cross-client FPR dispersion; | `PASS` | Cross-client FPR dispersion is computed by typed population metrics. |
+| `GLOBAL-021` | I | 375 | 3.4 Meaning of “fairness” | service-level operating-point equity; | `PASS` | Claim guard and publication terminology retain the operational scope. |
+| `GLOBAL-022` | I | 376 | 3.4 Meaning of “fairness” | distribution of false-alarm burden. | `PASS` | Client-disaggregated FPR metrics retain burden distribution. |
 | `SCORE-003` | I | 396 | 3.6 Model-quality controls | AUROC; | `NOT_AUDITED` | — |
 | `REPORT-001` | I | 397 | 3.6 Model-quality controls | average precision (`AP`, reported as the PR-curve summary / AUPRC control); | `NOT_AUDITED` | — |
 | `METRIC-006` | I | 398 | 3.6 Model-quality controls | Macro-F1; | `NOT_AUDITED` | — |
