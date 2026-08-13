@@ -2064,7 +2064,7 @@ TargetFPR=1-q.
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `held_out_operating_point_diagnostics` | `PASS` | Uses `1 − q` as the target FPR. | `test_operating_point.py` |
 
 ### FORMULA-136 — III / source lines 4952–4954
 
@@ -2076,7 +2076,7 @@ SignedTestFPRTargetError_k=FPR_k-(1-q),
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `held_out_operating_point_diagnostics` | `PASS` | Held-out FPR minus target FPR. | `test_operating_point.py` |
 
 ### FORMULA-137 — III / source lines 4956–4958
 
@@ -2088,7 +2088,7 @@ AbsoluteTestFPRTargetError_k=|FPR_k-(1-q)|.
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `held_out_operating_point_diagnostics` | `PASS` | Absolute value of held-out signed target error. | `test_operating_point.py` |
 
 ### FORMULA-138 — III / source lines 4962–4965
 
@@ -2101,7 +2101,7 @@ MeanAbsoluteTargetError
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `summarize_operating_point_diagnostics` | `PASS` | Arithmetic mean across eligible-client absolute target errors. | `test_operating_point.py` |
 
 ### FORMULA-139 — III / source lines 4969–4971
 
@@ -2113,7 +2113,7 @@ WorstAbsoluteTargetError=\max_k AbsoluteTestFPRTargetError_k.
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `summarize_operating_point_diagnostics` | `PASS` | Maximum across eligible-client absolute target errors. | `test_operating_point.py` |
 
 ### FORMULA-140 — III / source lines 4979–4984
 
@@ -2128,7 +2128,7 @@ CalibrationExceedance_k
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `held_out_operating_point_diagnostics` | `PASS` | Calibration exceedance is the strict-exceedance fraction over used calibration scores. | `test_operating_point.py` |
 
 ### FORMULA-141 — III / source lines 4990–4993
 
@@ -2141,7 +2141,7 @@ CalibrationGeneralizationGap_k
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `held_out_operating_point_diagnostics` | `PASS` | Held-out FPR minus calibration exceedance. | `test_operating_point.py` |
 
 ### FORMULA-142 — III / source lines 4997–5000
 
@@ -2154,7 +2154,7 @@ AbsoluteCalibrationGeneralizationGap_k
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `held_out_operating_point_diagnostics` | `PASS` | Absolute calibration-to-held-out FPR gap. | `test_operating_point.py` |
 
 ### FORMULA-143 — III / source lines 5004–5007
 
@@ -2167,7 +2167,7 @@ MeanAbsoluteCalibrationGeneralizationGap
 
 | Expected implementation | Disposition | Audit | Tests/evidence |
 |---|---|---|---|
-| map to the single owning scientific function/value object; preserve denominator, inequality, ddof, clipping/unavailability semantics and nesting exactly | `NOT_AUDITED` | — | — |
+| `summarize_operating_point_diagnostics` | `PASS` | Arithmetic mean across eligible-client absolute calibration generalization gaps. | `test_operating_point.py` |
 
 ### FORMULA-144 — III / source lines 5029–5033
 
