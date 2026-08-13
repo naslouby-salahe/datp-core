@@ -6024,16 +6024,16 @@ The implementation must distinguish at least these roadmap-defined scientific st
 
 | ID | Source line | Audit requirement | Implementation disposition | Audit outcome | Evidence / remediation |
 |---|---:|---|---|---|---|
-| `GATE-D-001` | 6037 | Train, calibration, and evaluation partitions are disjoint by immutable row identity. | `NOT_AUDITED` | — | — |
-| `GATE-D-002` | 6038 | Benign training fit uses training rows only. | `NOT_AUDITED` | — | — |
-| `GATE-D-003` | 6039 | Calibration rows never enter reported held-out test metrics. | `NOT_AUDITED` | — | — |
+| `GATE-D-001` | 6037 | Train, calibration, and evaluation partitions are disjoint by immutable row identity. | `IMPLEMENTED` | `PASS` | Split construction and preprocessing validation reject any stable-row overlap across partition roles; split tests verify row conservation and uniqueness. |
+| `GATE-D-002` | 6038 | Benign training fit uses training rows only. | `IMPLEMENTED` | `PASS` | The locked non-temporal split assigns no attack rows to training or calibration, and training extraction is role-scoped. |
+| `GATE-D-003` | 6039 | Calibration rows never enter reported held-out test metrics. | `IMPLEMENTED` | `PASS` | Calibration loading rejects evaluation partition artifacts and calibration/evaluation stable-row overlap before threshold construction. |
 | `GATE-D-004` | 6040 | Test outcomes never influence split construction, eligibility, threshold tuning, model selection, or comparator tuning. | `NOT_AUDITED` | — | — |
 | `GATE-D-005` | 6041 | `n_k_source` is computed before experimental subsampling. | `NOT_AUDITED` | — | — |
 | `GATE-D-006` | 6042 | Primary eligibility is exactly `n_k_source >= 100`. | `NOT_AUDITED` | — | — |
 | `GATE-D-007` | 6043 | Eligibility is fixed before test evaluation and identical across compared threshold policies. | `NOT_AUDITED` | — | — |
 | `GATE-D-008` | 6044 | Calibration-size ablations use `m` independently of the source-pool eligibility decision. | `NOT_AUDITED` | — | — |
-| `GATE-D-009` | 6045 | Temporal experiments use genuine chronology: historical calibration < future recalibration < future evaluation. | `NOT_AUDITED` | — | — |
-| `GATE-D-010` | 6046 | Generated pseudo-time or file ordering is never substituted for real timestamps where chronology is required. | `NOT_AUDITED` | — | — |
+| `GATE-D-009` | 6045 | Temporal experiments use genuine chronology: historical calibration < future recalibration < future evaluation. | `IMPLEMENTED` | `PASS` | Temporal population construction requires verified Edge chronology and the locked chronological split protocol; invalid chronology produces explicit exclusion evidence. |
+| `GATE-D-010` | 6046 | Generated pseudo-time or file ordering is never substituted for real timestamps where chronology is required. | `IMPLEMENTED` | `PASS` | N-BaIoT/CICIoT capabilities explicitly reject source/file order as chronology; Edge temporal eligibility requires paired PCAP timestamp evidence. |
 
 ### Gate E
 
@@ -7330,16 +7330,16 @@ README_REPRODUCIBILITY.md
 | `DATASET-096` | IV | 6030 | 5. Gate C — Population and client integrity | Client counts in tables equal the audited population manifest. | `PASS` | Manifest validation rejects client-count or membership-set disagreement. |
 | `CALIBRATION-210` | IV | 6032 | 5. Gate C — Population and client integrity | For every persistent-client result, the same immutable `client_id` binds training, calibration, evaluation, local threshold state, and any personalized model state exactly as Part I §3.3A requires. | `NOT_AUDITED` | — |
 | `CALIBRATION-211` | IV | 6033 | 5. Gate C — Population and client integrity | No unseen-client or intermittent-client interpretation is inferred from the calibration cold-start experiment. | `NOT_AUDITED` | — |
-| `CALIBRATION-212` | IV | 6037 | 6. Gate D — Split, chronology, and eligibility integrity | Train, calibration, and evaluation partitions are disjoint by immutable row identity. | `NOT_AUDITED` | — |
-| `CALIBRATION-213` | IV | 6038 | 6. Gate D — Split, chronology, and eligibility integrity | Benign training fit uses training rows only. | `NOT_AUDITED` | — |
-| `CALIBRATION-214` | IV | 6039 | 6. Gate D — Split, chronology, and eligibility integrity | Calibration rows never enter reported held-out test metrics. | `NOT_AUDITED` | — |
+| `CALIBRATION-212` | IV | 6037 | 6. Gate D — Split, chronology, and eligibility integrity | Train, calibration, and evaluation partitions are disjoint by immutable row identity. | `PASS` | Stable-row partition overlap is rejected before preprocessing/evaluation. |
+| `CALIBRATION-213` | IV | 6038 | 6. Gate D — Split, chronology, and eligibility integrity | Benign training fit uses training rows only. | `PASS` | Locked partitioning/training extraction is role-scoped and benign-only. |
+| `CALIBRATION-214` | IV | 6039 | 6. Gate D — Split, chronology, and eligibility integrity | Calibration rows never enter reported held-out test metrics. | `PASS` | Calibration/evaluation artifact role and row-set overlap are rejected. |
 | `CALIBRATION-215` | IV | 6040 | 6. Gate D — Split, chronology, and eligibility integrity | Test outcomes never influence split construction, eligibility, threshold tuning, model selection, or comparator tuning. | `NOT_AUDITED` | — |
 | `CALIBRATION-216` | IV | 6041 | 6. Gate D — Split, chronology, and eligibility integrity | `n_k_source` is computed before experimental subsampling. | `NOT_AUDITED` | — |
 | `CALIBRATION-217` | IV | 6042 | 6. Gate D — Split, chronology, and eligibility integrity | Primary eligibility is exactly `n_k_source >= 100`. | `NOT_AUDITED` | — |
 | `CALIBRATION-218` | IV | 6043 | 6. Gate D — Split, chronology, and eligibility integrity | Eligibility is fixed before test evaluation and identical across compared threshold policies. | `NOT_AUDITED` | — |
 | `CALIBRATION-219` | IV | 6044 | 6. Gate D — Split, chronology, and eligibility integrity | Calibration-size ablations use `m` independently of the source-pool eligibility decision. | `NOT_AUDITED` | — |
-| `CALIBRATION-220` | IV | 6045 | 6. Gate D — Split, chronology, and eligibility integrity | Temporal experiments use genuine chronology: historical calibration < future recalibration < future evaluation. | `NOT_AUDITED` | — |
-| `CALIBRATION-221` | IV | 6046 | 6. Gate D — Split, chronology, and eligibility integrity | Generated pseudo-time or file ordering is never substituted for real timestamps where chronology is required. | `NOT_AUDITED` | — |
+| `CALIBRATION-220` | IV | 6045 | 6. Gate D — Split, chronology, and eligibility integrity | Temporal experiments use genuine chronology: historical calibration < future recalibration < future evaluation. | `PASS` | Temporal construction requires verified Edge chronology and the chronological protocol. |
+| `CALIBRATION-221` | IV | 6046 | 6. Gate D — Split, chronology, and eligibility integrity | Generated pseudo-time or file ordering is never substituted for real timestamps where chronology is required. | `PASS` | Chronology capability and PCAP validation reject file/source-order substitutes. |
 | `PREPROCESS-045` | IV | 6050 | 7. Gate E — Preprocessing integrity | Every threshold comparison references one named preprocessing protocol identity. | `NOT_AUDITED` | — |
 | `PREPROCESS-046` | IV | 6051 | 7. Gate E — Preprocessing integrity | `FEDERATED_CLIENT_LOCAL_STANDARD` is fit client-locally on benign training only in the confirmatory protocol. | `NOT_AUDITED` | — |
 | `PREPROCESS-047` | IV | 6052 | 7. Gate E — Preprocessing integrity | `FEDERATED_POOLED_MIN_MAX` is never silently mixed into the confirmatory ladder. | `NOT_AUDITED` | — |
