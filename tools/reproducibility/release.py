@@ -33,6 +33,7 @@ from datp_core.experiments.execution.layout import (
 _MANIFEST_FILENAME = "MANIFEST_SHA256.csv"
 _SIDECAR_FILENAME = "MANIFEST_SHA256.sha256"
 _ROADMAP_LOCK_FILENAME = "ROADMAP_LOCK.md"
+_WITHHELD_RECORD_FILENAME = "withheld_artifacts.csv"
 _PUBLICATION_MANIFEST_FILENAME = "publication_source_manifest.json"
 _CANONICAL_PROVENANCE_FILENAMES = frozenset({"dataset_manifest.json", "schema.json"})
 _PREPROCESSING_FILENAMES = frozenset({"preprocessing_manifest.json", "state.skops", "validation_report.json"})
@@ -142,6 +143,14 @@ class ReleaseArtifact:
 
 
 @dataclass(frozen=True, slots=True)
+class WithheldReleaseArtifact:
+    source: Path
+    original_relative_path: Path
+    license_reason: str
+    reconstruction_instructions: str
+
+
+@dataclass(frozen=True, slots=True)
 class ReleaseBuildRequest:
     root: Path
     roadmap: Path
@@ -150,6 +159,7 @@ class ReleaseBuildRequest:
     state: ReleaseState
     confirmatory_seeds: tuple[int, ...]
     artifacts: tuple[ReleaseArtifact, ...]
+    withheld_artifacts: tuple[WithheldReleaseArtifact, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -534,6 +544,7 @@ def build_release_bundle(request: ReleaseBuildRequest) -> ReleaseValidation:
     if len(request.confirmatory_seeds) != 10 or len(set(request.confirmatory_seeds)) != 10:
         raise ArtifactIntegrityError(ErrorMessage("release requires the exact ten unique confirmatory seeds"))
     _require_unique_release_artifacts(request.artifacts)
+    _validate_withheld_artifacts(request)
     request.root.mkdir(parents=True)
     for directory in _REQUIRED_DIRECTORIES:
         (request.root / directory).mkdir()
@@ -566,6 +577,23 @@ def _require_unique_release_artifacts(artifacts: tuple[ReleaseArtifact, ...]) ->
         _require_relative_artifact_path(artifact.relative_path)
 
 
+def _validate_withheld_artifacts(request: ReleaseBuildRequest) -> None:
+    withheld = request.withheld_artifacts
+    if request.state is ReleaseState.WITHHELD_LICENSE_RESTRICTED and not withheld:
+        raise ArtifactIntegrityError(ErrorMessage("license-restricted releases require withheld artifact records"))
+    if request.state is not ReleaseState.WITHHELD_LICENSE_RESTRICTED and withheld:
+        raise ArtifactIntegrityError(
+            ErrorMessage("withheld artifact records require the license-restricted release state")
+        )
+    paths = tuple(item.original_relative_path for item in withheld)
+    if len(paths) != len(frozenset(paths)):
+        raise ArtifactIntegrityError(ErrorMessage("withheld artifact records must have unique original paths"))
+    for artifact in withheld:
+        if not artifact.source.is_file() or not artifact.license_reason or not artifact.reconstruction_instructions:
+            raise ArtifactIntegrityError(ErrorMessage("withheld artifact record is incomplete"))
+        _require_relative_artifact_path(artifact.original_relative_path)
+
+
 def _write_release_metadata(request: ReleaseBuildRequest) -> None:
     roadmap_digest = _sha256_file(request.roadmap)
     (request.root / _ROADMAP_LOCK_FILENAME).write_text(
@@ -591,6 +619,8 @@ def _write_release_metadata(request: ReleaseBuildRequest) -> None:
         encoding="utf-8",
     )
     (request.root / "ENVIRONMENT" / "runtime.txt").write_text("\n".join(_environment_lines()) + "\n", encoding="utf-8")
+    if request.withheld_artifacts:
+        _write_withheld_artifact_records(request.root, request.withheld_artifacts)
     (request.root / "README_REPRODUCIBILITY.md").write_text(
         "# Reproducibility release\n\n"
         f"State: `{request.state.value}`. Validate this bundle with `datp-core validate-release <root>`.\n",
@@ -602,6 +632,23 @@ def _copy_release_artifact(root: Path, artifact: ReleaseArtifact) -> None:
     destination = root / artifact.relative_path
     destination.parent.mkdir(parents=True, exist_ok=True)
     copy2(artifact.source, destination)
+
+
+def _write_withheld_artifact_records(root: Path, artifacts: tuple[WithheldReleaseArtifact, ...]) -> None:
+    path = root / "DATA_PROVENANCE" / _WITHHELD_RECORD_FILENAME
+    with path.open("w", encoding="utf-8", newline="") as stream:
+        writer = csv.writer(stream)
+        writer.writerow(("original_relative_path", "sha256", "bytes", "license_reason", "reconstruction_instructions"))
+        writer.writerows(
+            (
+                str(artifact.original_relative_path),
+                _sha256_file(artifact.source),
+                artifact.source.stat().st_size,
+                artifact.license_reason,
+                artifact.reconstruction_instructions,
+            )
+            for artifact in artifacts
+        )
 
 
 def _installed_version(distribution: str) -> str:
@@ -708,6 +755,17 @@ def _generated_release_artifacts(
         ReleaseArtifact(root / "SEEDS.csv", Path("SEEDS.csv"), "seed_registry"),
         ReleaseArtifact(root / "README_REPRODUCIBILITY.md", Path("README_REPRODUCIBILITY.md"), "readme"),
         ReleaseArtifact(root / "ENVIRONMENT" / "runtime.txt", Path("ENVIRONMENT/runtime.txt"), "environment"),
+        *(
+            (
+                ReleaseArtifact(
+                    root / "DATA_PROVENANCE" / _WITHHELD_RECORD_FILENAME,
+                    Path("DATA_PROVENANCE") / _WITHHELD_RECORD_FILENAME,
+                    "withheld_artifact_provenance",
+                ),
+            )
+            if (root / "DATA_PROVENANCE" / _WITHHELD_RECORD_FILENAME).is_file()
+            else ()
+        ),
     )
     return tuple((item.relative_path, item) for item in (*generated, *artifacts))
 

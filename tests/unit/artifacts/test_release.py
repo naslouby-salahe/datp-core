@@ -11,6 +11,7 @@ from tools.reproducibility.release import (
     ReleaseArtifact,
     ReleaseBuildRequest,
     ReleaseState,
+    WithheldReleaseArtifact,
     build_release_bundle,
     campaign_analysis_release_artifacts,
     campaign_bounded_training_release_artifacts,
@@ -172,6 +173,37 @@ def test_release_builder_packages_explicit_retained_evidence_and_validates_it(tm
         "dependency.flwr=",
     ):
         assert key in environment
+
+
+def test_license_restricted_release_requires_and_records_withheld_artifacts(tmp_path: Path) -> None:
+    roadmap = tmp_path / "roadmap.md"
+    withheld_source = tmp_path / "licensed_scores.parquet"
+    roadmap.write_text("roadmap\n", encoding="utf-8")
+    withheld_source.write_text("restricted", encoding="utf-8")
+    request = ReleaseBuildRequest(
+        root=tmp_path / "release",
+        roadmap=roadmap,
+        code_revision="deadbeef",
+        literature_search_date=date(2026, 8, 13),
+        state=ReleaseState.WITHHELD_LICENSE_RESTRICTED,
+        confirmatory_seeds=tuple(range(10)),
+        artifacts=(),
+        withheld_artifacts=(
+            WithheldReleaseArtifact(
+                source=withheld_source,
+                original_relative_path=Path("SCORES/nbaiot/licensed_scores.parquet"),
+                license_reason="third-party dataset license",
+                reconstruction_instructions="obtain the licensed source data and rerun the locked coordinate",
+            ),
+        ),
+    )
+
+    release = build_release_bundle(request)
+
+    record = (release.root / "DATA_PROVENANCE" / "withheld_artifacts.csv").read_text(encoding="utf-8")
+    assert "licensed_scores.parquet" in record
+    assert sha256(b"restricted").hexdigest() in record
+    assert not (release.root / "SCORES" / "nbaiot" / "licensed_scores.parquet").exists()
 
 
 def test_release_evaluation_metadata_is_derived_from_the_persisted_coordinate(tmp_path: Path) -> None:
