@@ -1328,13 +1328,21 @@ def _render_association_result(mechanism: AssociationResult) -> list[ReportLine]
                 f"Slope CI: [{_format_publication_metric(interval.lower_bound.value)}, "
                 f"{_format_publication_metric(interval.upper_bound.value)}]",
                 f"R²: {_format_publication_metric(stats.r_squared.value)}",
-                f"Leverage: {', '.join(_format_publication_metric(value.value) for value in stats.leverage)}",
-                "Influence: "
-                + ", ".join(
-                    _format_publication_metric(value.value) for value in stats.leave_one_out_diagnostics.influences
-                ),
                 f"Evidentiary sufficient: {stats.evidentiary_sufficient}",
             ]
+        )
+        diagnostics = stats.leave_one_out_diagnostics
+        lines.extend(
+            "Observation "
+            f"{index + 1}: seed={observation.seed.value}; experiment={observation.experiment.value}; "
+            f"population={observation.population.value}; regime={observation.regime_label}; "
+            f"heterogeneity={_format_publication_metric(observation.heterogeneity.value)}; "
+            f"benefit={_format_publication_metric(observation.benefit.value)}; "
+            f"leverage={_format_publication_metric(stats.leverage[index].value)}; "
+            f"leave-one-out slope={_format_publication_metric(diagnostics.slopes[index].value)}; "
+            f"leave-one-out R²={_format_publication_metric(diagnostics.r_squared[index].value)}; "
+            f"slope influence={_format_publication_metric(diagnostics.influences[index].value)}"
+            for index, observation in enumerate(mechanism.observations)
         )
     if mechanism.reason:
         lines.append(f"Reason: {mechanism.reason}")
