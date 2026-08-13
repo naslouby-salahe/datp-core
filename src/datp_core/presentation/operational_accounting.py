@@ -22,16 +22,18 @@ def export_threshold_stage_accounting(documents: tuple[FederatedEvaluationDocume
         "All rows describe threshold construction after score arrays are materialized; detector scoring and disk I/O "
         "are excluded. Serialized byte counts are taken from persisted serializer-bound diagnostics.",
         "",
-        "| Policy | Seeds | Logical fields | Raw-field bytes by seed | Serialized bytes by seed | Coordinator observes "
+        "| Policy | Seeds | Logical fields | Raw-field bytes by seed | Serialized bytes by seed | "
+        "Runtime ms by seed (median/IQR/p95) | Coordinator observes "
         "threshold / moments / fingerprint / sketch / family / cluster assignment | Raw calibration records |",
-        "| --- | ---: | --- | --- | --- | --- | --- |",
+        "| --- | ---: | --- | --- | --- | --- | --- | --- |",
     ]
     for method, method_documents in sorted(by_method.items(), key=lambda item: item[0].value):
         ordered = tuple(sorted(method_documents, key=lambda item: item.score_coordinate.training_seed))
         diagnostics = tuple(item.diagnostics.threshold_stage_communication for item in ordered)
         if any(item is None for item in diagnostics):
             lines.append(
-                f"| `{method.value}` | {len(ordered)} | UNAVAILABLE | UNAVAILABLE | UNAVAILABLE | UNAVAILABLE | no |"
+                f"| `{method.value}` | {len(ordered)} | UNAVAILABLE | UNAVAILABLE | UNAVAILABLE | "
+                "UNAVAILABLE | UNAVAILABLE | no |"
             )
             continue
         available = tuple(item for item in diagnostics if item is not None)
@@ -44,8 +46,10 @@ def export_threshold_stage_accounting(documents: tuple[FederatedEvaluationDocume
             f"{diagnostic.training_seed.value}:{diagnostic.total_serialized_bytes.value}" for diagnostic in available
         )
         raw_bytes_by_seed = _raw_bytes_by_seed(available)
+        runtime_by_seed = _runtime_by_seed(ordered)
         lines.append(
-            f"| `{method.value}` | {len(ordered)} | {logical or '0'} | {raw_bytes_by_seed} | {bytes_by_seed or '0'} | "
+            f"| `{method.value}` | {len(ordered)} | {logical or '0'} | {raw_bytes_by_seed} | "
+            f"{bytes_by_seed or '0'} | {runtime_by_seed} | "
             f"{_disclosures(kinds)} | no |"
         )
     lines.extend(
@@ -98,3 +102,19 @@ def _raw_message_bytes(message: CommunicationMessageDiagnostic) -> int | None:
         ThresholdPayloadKind.GROUPED_THRESHOLD_ASSIGNMENT: 12,
         ThresholdPayloadKind.BENIGN_SUMMARY_STATISTICS: message.payload.serialized_byte_count.value,
     }.get(message.payload_kind)
+
+
+def _runtime_by_seed(documents: tuple[FederatedEvaluationDocument, ...]) -> str:
+    rendered: list[str] = []
+    for document in documents:
+        timing = document.diagnostics.threshold_construction_runtime
+        if timing is None:
+            rendered.append(f"{document.score_coordinate.training_seed.value}:UNAVAILABLE")
+            continue
+        rendered.append(
+            f"{document.score_coordinate.training_seed.value}:"
+            f"{timing.median_milliseconds.value:.6g}/"
+            f"{timing.interquartile_range_milliseconds.value:.6g}/"
+            f"{timing.p95_milliseconds.value:.6g}"
+        )
+    return ", ".join(rendered)

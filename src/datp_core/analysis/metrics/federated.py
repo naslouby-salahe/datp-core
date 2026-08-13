@@ -24,6 +24,7 @@ from datp_core.analysis.operational.communication import (
     CommunicationMessageDiagnostic,
     ThresholdStageCommunicationDiagnostic,
 )
+from datp_core.analysis.operational.runtime_benchmark import ThresholdConstructionRuntimeBenchmark
 from datp_core.analysis.operational.traffic_rates import ValidatedTrafficRateEvidence
 from datp_core.analysis.temporal import TemporalDeploymentProvenance
 from datp_core.core.contracts import StrictModel
@@ -184,6 +185,7 @@ class EvaluationDiagnostics:
     contributor_omission: tuple[SharedContributorOmissionCell, ...] = field(default_factory=tuple)
     sample_efficiency: tuple[SampleEfficiencyPoint, ...] = field(default_factory=tuple)
     threshold_stage_communication: ThresholdStageCommunicationDiagnostic | None = None
+    threshold_construction_runtime: ThresholdConstructionRuntimeBenchmark | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -208,6 +210,7 @@ class FederatedEvaluationRequest:
     onboarding_calibration: tuple[OnboardingCalibrationCell, ...] = ()
     contributor_omission: tuple[SharedContributorOmissionCell, ...] = ()
     threshold_stage_communication: ThresholdStageCommunicationDiagnostic | None = None
+    threshold_construction_runtime: ThresholdConstructionRuntimeBenchmark | None = None
 
 
 class FederatedEvaluationDocument(StrictModel):

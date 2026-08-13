@@ -29,6 +29,10 @@ from datp_core.analysis.operational.communication import (
     ThresholdPayloadKind,
     ThresholdStageCommunicationDiagnostic,
 )
+from datp_core.analysis.operational.runtime_benchmark import (
+    ThresholdConstructionRuntimeBenchmark,
+    benchmark_threshold_construction,
+)
 from datp_core.analysis.operational.traffic_rates import traffic_rate_evidence_for_population
 from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.repositories.thresholds import (
@@ -101,7 +105,11 @@ from datp_core.thresholds.calibration.construction import (
 )
 from datp_core.thresholds.calibration.service import eligible_calibration_scores
 from datp_core.thresholds.contracts import ThresholdUnavailableResult
-from datp_core.thresholds.dispatch import ThresholdConstructionRequest, ThresholdConstructionResult
+from datp_core.thresholds.dispatch import (
+    ThresholdConstructionRequest,
+    ThresholdConstructionResult,
+    dispatch_federated_threshold,
+)
 from datp_core.thresholds.policies.cluster import GroupedThresholdResult
 from datp_core.thresholds.protocols import (
     CANONICAL_QUANTILE,
@@ -282,19 +290,7 @@ class ExperimentWorkspace:
     def threshold(self) -> ThresholdConstructionResult:
         result = construct_and_publish_federated_thresholds(
             FederatedThresholdConstructionRequest(
-                request=ThresholdConstructionRequest(
-                    method=self.coordinate.threshold_method,
-                    coordinate=self.scores.coordinate,
-                    quantile=self.threshold_quantile,
-                    capabilities=population_capabilities(self.coordinate.population),
-                    eligible=self.eligible_calibration_scores(),
-                    family_by_client=self.context.family_by_client,
-                    support_rule=CalibrationSupportRule.CANONICAL_MINIMUM_SUPPORT,
-                    cluster_threshold_aggregation=self._cluster_aggregation(),
-                    kll_sketch_size=self.coordinate.kll_sketch_size,
-                    estimator=self.coordinate.threshold_estimator,
-                    cluster_fingerprint_omission=self.coordinate.cluster_fingerprint_omission,
-                ),
+                request=self._threshold_request(),
                 output_directory=self.run_directory() / EvaluationRunAssetDirectory.THRESHOLD,
                 overwrite=False,
             )
@@ -305,6 +301,26 @@ class ExperimentWorkspace:
                 subject=self.coordinate.threshold_method,
             )
         return result
+
+    def _threshold_request(self) -> ThresholdConstructionRequest:
+        return ThresholdConstructionRequest(
+            method=self.coordinate.threshold_method,
+            coordinate=self.scores.coordinate,
+            quantile=self.threshold_quantile,
+            capabilities=population_capabilities(self.coordinate.population),
+            eligible=self.eligible_calibration_scores(),
+            family_by_client=self.context.family_by_client,
+            support_rule=CalibrationSupportRule.CANONICAL_MINIMUM_SUPPORT,
+            cluster_threshold_aggregation=self._cluster_aggregation(),
+            kll_sketch_size=self.coordinate.kll_sketch_size,
+            estimator=self.coordinate.threshold_estimator,
+            cluster_fingerprint_omission=self.coordinate.cluster_fingerprint_omission,
+        )
+
+    @cached_property
+    def threshold_construction_runtime(self) -> ThresholdConstructionRuntimeBenchmark:
+        request = self._threshold_request()
+        return benchmark_threshold_construction(lambda: dispatch_federated_threshold(request))
 
     @cached_property
     def calibration_size_ablation(self) -> tuple[CalibrationSizeAblationCell, ...]:
@@ -663,6 +679,7 @@ class ExperimentWorkspace:
                 threshold_estimation_inputs=self._threshold_estimation_inputs(),
                 communication_messages=self._communication_messages(),
                 threshold_stage_communication=self._threshold_stage_communication(),
+                threshold_construction_runtime=self.threshold_construction_runtime,
                 traffic_rate_evidence=traffic_rate_evidence_for_population(self.coordinate.population),
                 execution_identity=self.context.execution_identity,
                 output_directory=self.run_directory() / EvaluationRunAssetDirectory.EVALUATION,
