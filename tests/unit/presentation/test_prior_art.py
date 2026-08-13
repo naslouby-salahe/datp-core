@@ -1,10 +1,17 @@
-from datp_core.presentation.prior_art import PriorArtCategory, render_prior_art_distinction_table
+from datp_core.presentation.prior_art import render_prior_art_collision_table, render_prior_art_distinction_table
 
 
-def test_prior_art_table_uses_only_locked_categories_and_all_required_rows() -> None:
-    rendered = render_prior_art_distinction_table()
+def test_prior_art_collision_table_retains_every_roadmap_collision_and_unexecuted_gate() -> None:
+    table = render_prior_art_collision_table()
 
-    assert "FedIoT/FedDetect 2021" in rendered
-    assert "DATP-Core" in rendered
-    assert "NOT_REPORTED" in rendered
-    assert PriorArtCategory.PARTIAL.value in rendered
+    assert table.count("\n| ") == 21
+    assert "Meidan et al. 2018" in table
+    assert "Shahid 2026" in table
+    assert "Submission-time novelty gate: `NOT_EXECUTED`" in table
+
+
+def test_prior_art_distinction_table_preserves_not_reported_source_boundary() -> None:
+    table = render_prior_art_distinction_table()
+
+    assert "NOT_REPORTED" in table
+    assert "DATP-Core" in table
