@@ -26,7 +26,16 @@ from datp_core.analysis.inference.bootstrap.validation import (
     validate_supplementary_contrasts,
 )
 from datp_core.analysis.inference.contracts import PairedInferenceProtocol
-from datp_core.analysis.inference.multiplicity import MultiplicityPlan, MultiplicityResult, holm_adjust
+from datp_core.analysis.inference.multiplicity import (
+    FamilyName,
+    FamilySize,
+    HypothesisComparisonLabel,
+    HypothesisIdentifier,
+    MultiplicityHypothesis,
+    MultiplicityPlan,
+    MultiplicityResult,
+    holm_adjust,
+)
 from datp_core.analysis.inference.precision import ConfirmatoryPrecisionDiagnostics, confirmatory_precision_diagnostics
 from datp_core.analysis.inference.sign_test import ExactPairedSignTestResult, exact_paired_sign_test
 from datp_core.analysis.inference.wilcoxon import (
@@ -60,12 +69,15 @@ from datp_core.core.identifiers import (
     EvidenceRole,
     ExperimentId,
     FederatedThresholdMethod,
+    MetricId,
     PopulationId,
     TemporalState,
 )
-from datp_core.core.numeric import PairedObservationCount, Seed
+from datp_core.core.numeric import PairedObservationCount, Ratio, Seed
 from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity, require_execution_identity
 from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT
+
+CONFIRMATORY_SECONDARY_MULTIPLICITY_ALPHA = Ratio(0.05)
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,7 +86,6 @@ class ConfirmatoryAnalysisRequest:
     descriptive_effects: ConfirmatoryDescriptiveEffects
     inference_protocol: PairedInferenceProtocol
     analysis_seed: Seed
-    multiplicity_plan: MultiplicityPlan | None = None
     mechanisms: tuple[MechanismEvidence, ...] = ()
     leave_one_device_out: LeaveOneDeviceOutDiagnostics | None = None
     unavailable_reason: AnalysisReasonText | None = None
@@ -235,7 +246,13 @@ def prepare_confirmatory_analysis(request: ConfirmatoryAnalysisRequest) -> Analy
             unavailable_reason=reason_text,
         )
     deltas = contrasts.deltas
-    multiplicity = None if request.multiplicity_plan is None else holm_adjust(request.multiplicity_plan, protocol)
+    sign_test = exact_paired_sign_test(contrasts)
+    wilcoxon = paired_wilcoxon(contrasts, protocol)
+    multiplicity_plan, multiplicity = _confirmatory_secondary_multiplicity(
+        protocol=protocol,
+        wilcoxon=wilcoxon,
+        sign_test=sign_test,
+    )
     return AnalysisDocument(
         contrasts=contrasts,
         descriptive_effects=request.descriptive_effects,
@@ -249,12 +266,12 @@ def prepare_confirmatory_analysis(request: ConfirmatoryAnalysisRequest) -> Analy
             quantiles=_quantile_range(protocol),
         ),
         sign_consistency=count_paired_differences(deltas),
-        exact_sign_test=exact_paired_sign_test(contrasts),
-        wilcoxon=paired_wilcoxon(contrasts, protocol),
+        exact_sign_test=sign_test,
+        wilcoxon=wilcoxon,
         rank_biserial=matched_pairs_rank_biserial(contrasts, protocol),
         precision_diagnostics=confirmatory_precision_diagnostics(contrasts, interval),
         leave_one_device_out=request.leave_one_device_out,
-        multiplicity_plan=request.multiplicity_plan,
+        multiplicity_plan=multiplicity_plan,
         multiplicity_result=multiplicity,
         mechanisms=request.mechanisms,
         unavailable_reason=None,
@@ -460,6 +477,44 @@ def _blocked_external_document(
         mechanisms=request.mechanisms,
         unavailable_reason=unavailable_reason,
     )
+
+
+def _confirmatory_secondary_multiplicity(
+    *,
+    protocol: PairedInferenceProtocol,
+    wilcoxon: WilcoxonResult,
+    sign_test: ExactPairedSignTestResult,
+) -> tuple[MultiplicityPlan | None, MultiplicityResult | None]:
+    if wilcoxon.p_value is None or sign_test.two_sided_p_value is None:
+        return None, None
+    plan = MultiplicityPlan(
+        family_name=FamilyName("confirmatory_secondary_robustness"),
+        declared_family_size=FamilySize(2),
+        hypotheses=(
+            MultiplicityHypothesis(
+                hypothesis_id=HypothesisIdentifier("wilcoxon_signed_rank"),
+                experiment=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,
+                metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
+                comparison=HypothesisComparisonLabel("shared versus local paired seed deltas"),
+                left_method=FederatedThresholdMethod.SHARED_THRESHOLD,
+                right_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
+                evidence_role=EvidenceRole.CONFIRMATORY,
+                raw_p_value=wilcoxon.p_value,
+            ),
+            MultiplicityHypothesis(
+                hypothesis_id=HypothesisIdentifier("exact_paired_sign_test"),
+                experiment=ExperimentId.SHARED_VS_LOCAL_CONFIRMATION,
+                metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
+                comparison=HypothesisComparisonLabel("shared versus local paired seed deltas"),
+                left_method=FederatedThresholdMethod.SHARED_THRESHOLD,
+                right_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
+                evidence_role=EvidenceRole.CONFIRMATORY,
+                raw_p_value=sign_test.two_sided_p_value,
+            ),
+        ),
+        alpha=CONFIRMATORY_SECONDARY_MULTIPLICITY_ALPHA,
+    )
+    return plan, holm_adjust(plan, protocol)
 
 
 def _quantile_range(protocol: PairedInferenceProtocol) -> QuantileRange:

@@ -11,7 +11,6 @@ from datp_core.analysis.contrasts import (
     SupplementaryPairedAnalysisPlan,
 )
 from datp_core.analysis.inference.contracts import PairedInferenceProtocol
-from datp_core.analysis.inference.multiplicity import MultiplicityPlan
 from datp_core.analysis.influence import LeaveOneDeviceOutDiagnostics
 from datp_core.analysis.preparation import (
     AnalysisDocument,
@@ -57,7 +56,6 @@ class AnalyzeConfirmatoryEvidenceRequest:
     inference_protocol: PairedInferenceProtocol
     analysis_seed: Seed
     output_directory: Path
-    multiplicity_plan: MultiplicityPlan | None = None
     mechanisms: tuple[MechanismEvidence, ...] = ()
     leave_one_device_out: LeaveOneDeviceOutDiagnostics | None = None
 
@@ -110,7 +108,6 @@ def analyze_confirmatory_evidence(
             descriptive_effects=request.descriptive_effects,
             inference_protocol=request.inference_protocol,
             analysis_seed=request.analysis_seed,
-            multiplicity_plan=request.multiplicity_plan,
             mechanisms=request.mechanisms,
             leave_one_device_out=request.leave_one_device_out,
         )

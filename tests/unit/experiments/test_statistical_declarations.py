@@ -1,6 +1,8 @@
 from dataclasses import fields
 
-from datp_core.analysis.preparation import ConfirmatoryAnalysisRequest
+from datp_core.analysis.inference.sign_test import ExactPairedSignTestResult
+from datp_core.analysis.inference.wilcoxon import PValue, WilcoxonResult
+from datp_core.analysis.preparation import ConfirmatoryAnalysisRequest, _confirmatory_secondary_multiplicity
 from datp_core.analysis.scientific_decision import ScientificDecision
 from datp_core.core.identifiers import EffectSizeId, IntervalMethod, MultiplicityCorrectionId, StatisticalTestId
 from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT
@@ -28,3 +30,17 @@ def test_confirmatory_analysis_contract_has_no_seed_exclusion_path() -> None:
 
 def test_confirmatory_inference_unavailability_has_a_dedicated_state() -> None:
     assert ScientificDecision.CONFIRMATORY_INFERENCE_UNAVAILABLE.value == "confirmatory_inference_unavailable"
+
+
+def test_confirmatory_secondary_p_values_are_a_predeclared_holm_family() -> None:
+    plan, result = _confirmatory_secondary_multiplicity(
+        protocol=CONFIRMATORY_INFERENCE_PROTOCOL,
+        wilcoxon=WilcoxonResult.model_construct(p_value=PValue(0.01)),
+        sign_test=ExactPairedSignTestResult.model_construct(two_sided_p_value=PValue(0.02)),
+    )
+
+    assert plan is not None
+    assert result is not None
+    assert plan.family_name == "confirmatory_secondary_robustness"
+    assert result.correction is MultiplicityCorrectionId.HOLM
+    assert tuple(item.adjusted_p_value.value for item in result.decisions) == (0.02, 0.02)
