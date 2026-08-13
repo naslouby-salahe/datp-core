@@ -7,6 +7,7 @@ from pydantic import model_validator
 from sklearn.metrics import adjusted_rand_score
 
 from datp_core.analysis.inference.wilcoxon import CorrelationCoefficient
+from datp_core.analysis.mechanisms.divergence import DivergenceResult
 from datp_core.core.contracts import ClientOwned, StrictModel
 from datp_core.core.identifiers import AnalysisReasonText, AvailabilityStatus, EvidenceRole, FederatedThresholdMethod
 from datp_core.core.numeric import (
@@ -156,6 +157,26 @@ class ClusterSilhouetteResult(StrictModel):
     @property
     def availability(self) -> AvailabilityStatus:
         return AvailabilityStatus.AVAILABLE if self.mean_silhouette is not None else AvailabilityStatus.UNAVAILABLE
+
+
+class ClusterScoreDivergenceResult(StrictModel):
+    seed: Seed
+    within_cluster_mean: MetricValue | None
+    between_cluster_mean: MetricValue | None
+    within_cluster_pair_count: PairedObservationCount
+    between_cluster_pair_count: PairedObservationCount
+    unavailable_reason: AnalysisReasonText | None
+
+    evidence_role: ClassVar[EvidenceRole] = EvidenceRole.MECHANISM
+
+    @model_validator(mode="after")
+    def validate_result(self) -> "ClusterScoreDivergenceResult":
+        available = self.unavailable_reason is None
+        if available != (self.within_cluster_mean is not None and self.between_cluster_mean is not None):
+            raise ValueError("cluster score divergence requires both means or one unavailable reason")
+        if available and (self.within_cluster_pair_count.value == 0 or self.between_cluster_pair_count.value == 0):
+            raise ValueError("available cluster score divergence requires within and between pairs")
+        return self
 
 
 class ClusterContingencyRow(StrictModel):
@@ -384,6 +405,53 @@ def cluster_silhouette_from_grouped_result(result: GroupedThresholdResult) -> Cl
         seed=result.coordinate.training_seed,
         observations=ordered,
         mean_silhouette=MetricValue(sum(item.value.value for item in ordered if item.value is not None) / len(ordered)),
+        unavailable_reason=None,
+    )
+
+
+def cluster_score_divergence(
+    record: ClusterEvidenceRecord,
+    divergence: DivergenceResult,
+) -> ClusterScoreDivergenceResult:
+    assignments = _assignment_by_client(record.memberships)
+    if tuple(sorted(assignments, key=lambda client: client.client_id.value)) != divergence.clients:
+        raise ValueError("cluster score divergence requires the exact clustered score-vector clients")
+    if divergence.blocker is not None:
+        return ClusterScoreDivergenceResult(
+            seed=record.seed,
+            within_cluster_mean=None,
+            between_cluster_mean=None,
+            within_cluster_pair_count=PairedObservationCount(0),
+            between_cluster_pair_count=PairedObservationCount(0),
+            unavailable_reason=divergence.reason,
+        )
+    within = tuple(
+        item.value.value
+        for item in divergence.pairwise_distances
+        if assignments[item.left_client] == assignments[item.right_client]
+    )
+    between = tuple(
+        item.value.value
+        for item in divergence.pairwise_distances
+        if assignments[item.left_client] != assignments[item.right_client]
+    )
+    if not within or not between:
+        return ClusterScoreDivergenceResult(
+            seed=record.seed,
+            within_cluster_mean=None,
+            between_cluster_mean=None,
+            within_cluster_pair_count=PairedObservationCount(len(within)),
+            between_cluster_pair_count=PairedObservationCount(len(between)),
+            unavailable_reason=AnalysisReasonText(
+                "within-versus-between cluster score divergence requires at least one pair of each kind"
+            ),
+        )
+    return ClusterScoreDivergenceResult(
+        seed=record.seed,
+        within_cluster_mean=MetricValue(sum(within) / len(within)),
+        between_cluster_mean=MetricValue(sum(between) / len(between)),
+        within_cluster_pair_count=PairedObservationCount(len(within)),
+        between_cluster_pair_count=PairedObservationCount(len(between)),
         unavailable_reason=None,
     )
 

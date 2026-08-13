@@ -29,6 +29,7 @@ from datp_core.analysis.mechanisms.client_impact import (
 from datp_core.analysis.mechanisms.clustering import (
     ClusterAssignmentSwitchSummary,
     ClusterEvidenceRecord,
+    ClusterScoreDivergenceResult,
     ClusterSilhouetteResult,
     ClusterStabilityResult,
 )
@@ -1057,6 +1058,7 @@ _MECHANISM_TITLES: dict[type[object], ReportLine] = {
     ClusterAssignmentSwitchSummary: ReportLine("cluster_assignment_switch_frequency"),
     ClusterEvidenceRecord: ReportLine("cluster_evidence"),
     ClusterSilhouetteResult: ReportLine("cluster_silhouette"),
+    ClusterScoreDivergenceResult: ReportLine("cluster_score_divergence"),
     GroupedDispersionResult: ReportLine("grouped_dispersion"),
     ThresholdMovement: ReportLine("threshold_movement"),
     ThresholdMovementCohort: ReportLine("threshold_movement_cohort"),
@@ -1470,6 +1472,28 @@ def _render_cluster_silhouette_result(mechanism: ClusterSilhouetteResult) -> lis
                 )
                 for item in mechanism.observations
             ),
+        ]
+    ]
+
+
+@_render_one_mechanism.register
+def _render_cluster_score_divergence_result(mechanism: ClusterScoreDivergenceResult) -> list[ReportLine]:
+    within = (
+        _format_publication_metric(mechanism.within_cluster_mean.value)
+        if mechanism.within_cluster_mean is not None
+        else f"unavailable ({mechanism.unavailable_reason})"
+    )
+    between = (
+        _format_publication_metric(mechanism.between_cluster_mean.value)
+        if mechanism.between_cluster_mean is not None
+        else f"unavailable ({mechanism.unavailable_reason})"
+    )
+    return [
+        ReportLine(line)
+        for line in [
+            f"Seed: {mechanism.seed.value}",
+            f"Within-cluster JS mean: {within}; pairs={mechanism.within_cluster_pair_count.value}",
+            f"Between-cluster JS mean: {between}; pairs={mechanism.between_cluster_pair_count.value}",
         ]
     ]
 

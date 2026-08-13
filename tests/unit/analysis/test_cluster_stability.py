@@ -7,15 +7,18 @@ from datp_core.analysis.mechanisms.clustering import (
     ClusterEvidenceRecord,
     ClusterPartitionSummary,
     cluster_assignment_switch_frequencies,
+    cluster_score_divergence,
     cluster_silhouette_from_grouped_result,
     cluster_stability,
 )
+from datp_core.analysis.mechanisms.divergence import ClientScoreVector, jensen_shannon_divergence
 from datp_core.core.identifiers import AvailabilityStatus
 from datp_core.core.numeric import (
     ClusterIndex,
     DistributionSkewness,
     GroupCount,
     MetricValue,
+    PairedObservationCount,
     Quantile,
     RowCount,
     ScoreMoment,
@@ -156,6 +159,42 @@ def test_cluster_silhouette_is_unavailable_with_one_nonempty_cluster() -> None:
     assert silhouette.mean_silhouette is None
     assert silhouette.unavailable_reason is not None
     assert silhouette.observations[0].value is None
+
+
+def test_cluster_score_divergence_separates_within_and_between_pairs() -> None:
+    client_a, client_b, client_c = (identity(name) for name in ("client_a", "client_b", "client_c"))
+    memberships = (
+        ClusterMembership(
+            cluster_index=ClusterIndex(0),
+            members=(client_a, client_b),
+            contributing_local_quantiles=(_local_quantile(client_a, 0.1), _local_quantile(client_b, 0.2)),
+            cluster_threshold=ThresholdValue(0.15000000000000002),
+        ),
+        ClusterMembership(
+            cluster_index=ClusterIndex(1),
+            members=(client_c,),
+            contributing_local_quantiles=(_local_quantile(client_c, 0.9),),
+            cluster_threshold=ThresholdValue(0.9),
+        ),
+    )
+    record = ClusterEvidenceRecord.model_construct(
+        seed=Seed(2),
+        memberships=memberships,
+    )
+    divergence = jensen_shannon_divergence(
+        (
+            ClientScoreVector(client=client_a, scores=(MetricValue(0.0), MetricValue(0.1))),
+            ClientScoreVector(client=client_b, scores=(MetricValue(0.0), MetricValue(0.1))),
+            ClientScoreVector(client=client_c, scores=(MetricValue(5.0), MetricValue(6.0))),
+        )
+    )
+
+    result = cluster_score_divergence(record, divergence)
+
+    assert result.within_cluster_pair_count == PairedObservationCount(1)
+    assert result.between_cluster_pair_count == PairedObservationCount(2)
+    assert result.within_cluster_mean == MetricValue(0.0)
+    assert result.between_cluster_mean is not None and result.between_cluster_mean.value > 0.9
 
 
 def _local_quantile(client, value: float) -> LocalQuantile:
