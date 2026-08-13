@@ -209,6 +209,10 @@ class ScoreGeometryThresholdOverlay(StrictModel):
     method: FederatedThresholdMethod
     threshold: MetricValue
     client: ClientIdentity | None = None
+    benign_exceedance: MetricValue | None = None
+    attack_acceptance: MetricValue | None = None
+    balanced_accuracy: MetricValue | None = None
+    macro_f1: MetricValue | None = None
 
 
 class ScoreGeometryResult(StrictModel):

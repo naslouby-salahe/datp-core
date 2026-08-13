@@ -9,9 +9,13 @@ from datp_core.core.identifiers import (
     SplitProtocolId,
     TrainingModelId,
 )
-from datp_core.core.numeric import MetricValue, Seed
+from datp_core.core.numeric import MetricValue, Seed, ThresholdValue
 from datp_core.detector.training.contracts import FederatedTrainingCoordinate
-from datp_core.presentation.figures import confirmatory_paired_effect_figure
+from datp_core.presentation.figures import (
+    ThresholdOverlay,
+    _render_threshold_overlay,
+    confirmatory_paired_effect_figure,
+)
 
 
 def test_confirmatory_paired_effect_figure_has_an_explicit_zero_reference_series() -> None:
@@ -29,6 +33,25 @@ def test_confirmatory_paired_effect_figure_has_an_explicit_zero_reference_series
     )
 
     assert tuple(value.value for value in zero_reference.y_values) == (0.0,)
+
+
+def test_score_geometry_overlay_renders_threshold_regions_and_operating_metrics() -> None:
+    rendered = _render_threshold_overlay(
+        ThresholdOverlay(
+            method=FederatedThresholdMethod.LOCAL_THRESHOLD,
+            value=ThresholdValue(0.25),
+            benign_exceedance=MetricValue(0.1),
+            attack_acceptance=MetricValue(0.2),
+            balanced_accuracy=MetricValue(0.85),
+            macro_f1=MetricValue(0.8),
+        )
+    )
+
+    assert rendered == (
+        "local_threshold=0.25 (benign_exceedance=0.10000000000000001,"
+        "attack_acceptance=0.20000000000000001,balanced_accuracy=0.84999999999999998,"
+        "macro_f1=0.80000000000000004)"
+    )
 
 
 def _contrast() -> PairedContrast:

@@ -59,7 +59,7 @@ from datp_core.analysis.mechanisms import (
     threshold_movements_from_evaluations,
 )
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
-from datp_core.analysis.metrics.models import MetricStatus, metric_by_id
+from datp_core.analysis.metrics.models import ClientMetricResult, MetricStatus, metric_by_id
 from datp_core.app.planning import PlanReason, expand_experiment_plan
 from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
@@ -545,6 +545,10 @@ def _score_geometry_threshold_overlays(
                     method=method,
                     threshold=MetricValue(client_result.threshold.value),
                     client=client_result.client,
+                    benign_exceedance=_client_metric_value(client_result, MetricId.FALSE_POSITIVE_RATE),
+                    attack_acceptance=_attack_acceptance(client_result),
+                    balanced_accuracy=_client_metric_value(client_result, MetricId.BALANCED_ACCURACY),
+                    macro_f1=_client_metric_value(client_result, MetricId.BINARY_MACRO_F1),
                 )
             )
     required = frozenset(
@@ -566,6 +570,16 @@ def _score_geometry_threshold_overlays(
             ErrorMessage(f"score geometry threshold overlays are incomplete missing={missing} extra={extra}")
         )
     return tuple(overlays)
+
+
+def _client_metric_value(client_result: ClientMetricResult, metric_id: MetricId) -> MetricValue | None:
+    metric = metric_by_id(client_result.metrics, metric_id)
+    return metric.value
+
+
+def _attack_acceptance(client_result: ClientMetricResult) -> MetricValue | None:
+    true_positive_rate = _client_metric_value(client_result, MetricId.TRUE_POSITIVE_RATE)
+    return None if true_positive_rate is None else MetricValue(1.0 - true_positive_rate.value)
 
 
 def _client_evaluation_scores(

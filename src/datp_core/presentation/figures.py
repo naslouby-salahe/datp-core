@@ -23,6 +23,10 @@ from datp_core.core.numeric import MetricValue, Seed, ThresholdValue
 class ThresholdOverlay:
     method: FederatedThresholdMethod
     value: ThresholdValue
+    benign_exceedance: MetricValue | None = None
+    attack_acceptance: MetricValue | None = None
+    balanced_accuracy: MetricValue | None = None
+    macro_f1: MetricValue | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -344,7 +348,14 @@ def score_geometry_figure(
             f"seed{geometry.seed.value}:{client_geometry.client.client_id.value}:{client_geometry.score_role.value}"
         )
         overlays = tuple(
-            ThresholdOverlay(method=item.method, value=ThresholdValue(item.threshold.value))
+            ThresholdOverlay(
+                method=item.method,
+                value=ThresholdValue(item.threshold.value),
+                benign_exceedance=item.benign_exceedance,
+                attack_acceptance=item.attack_acceptance,
+                balanced_accuracy=item.balanced_accuracy,
+                macro_f1=item.macro_f1,
+            )
             for item in geometry.threshold_overlays
             if item.client is None or item.client == client_geometry.client
         )
@@ -430,7 +441,7 @@ def _render_empirical_series(series: EmpiricalCdfFigureSeries) -> ReportLine:
     y_values = ", ".join(format(value.value, ".17g") for value in series.y_values) if series.y_values else "—"
     overlays = (
         ", ".join(
-            f"{overlay.method.value}={format(overlay.value.value, '.17g')}" for overlay in series.threshold_overlays
+            _render_threshold_overlay(overlay) for overlay in series.threshold_overlays
         )
         if series.threshold_overlays
         else "—"
@@ -444,6 +455,20 @@ def _render_empirical_series(series: EmpiricalCdfFigureSeries) -> ReportLine:
         f"`{series.availability.value}` | {client} | {seed} | {role} | {x_values} | {y_values} | "
         f"{overlays} | {reason} |"
     )
+
+
+def _render_threshold_overlay(overlay: ThresholdOverlay) -> str:
+    metrics = (
+        ("benign_exceedance", overlay.benign_exceedance),
+        ("attack_acceptance", overlay.attack_acceptance),
+        ("balanced_accuracy", overlay.balanced_accuracy),
+        ("macro_f1", overlay.macro_f1),
+    )
+    rendered_metrics = ",".join(
+        f"{name}={format(value.value, '.17g')}" if value is not None else f"{name}=unavailable"
+        for name, value in metrics
+    )
+    return f"{overlay.method.value}={format(overlay.value.value, '.17g')} ({rendered_metrics})"
 
 
 def _render_paired_metric_series(series: PairedMetricFigureSeries) -> ReportLine:
