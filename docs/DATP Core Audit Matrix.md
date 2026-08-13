@@ -6404,14 +6404,14 @@ README_REPRODUCIBILITY.md
 | `BOUNDARY-002` | I | 239 | 2.4 Prohibited causal contamination | removing clients that weaken the expected ordering; | `PASS` | Complete cohort validation rejects dropped comparison clients. |
 | `THRESHOLD-005` | I | 240 | 2.4 Prohibited causal contamination | treating FedProx or model personalization as another threshold-scope condition; | `NOT_AUDITED` | — |
 | `CALIBRATION-005` | I | 241 | 2.4 Prohibited causal contamination | replacing a failed shared-versus-local result with a more favorable CLUSTER_THRESHOLD, shrinkage, or conformal result. | `NOT_AUDITED` | — |
-| `CALIBRATION-006` | I | 253 | 3.1 Benign-only calibration | threshold values; | `NOT_AUDITED` | — |
-| `CALIBRATION-007` | I | 254 | 3.1 Benign-only calibration | quantile selection; | `NOT_AUDITED` | — |
-| `CALIBRATION-008` | I | 255 | 3.1 Benign-only calibration | client eligibility; | `NOT_AUDITED` | — |
+| `CALIBRATION-006` | I | 253 | 3.1 Benign-only calibration | threshold values; | `PASS` | Calibration construction rejects attack-labelled score rows. |
+| `CALIBRATION-007` | I | 254 | 3.1 Benign-only calibration | quantile selection; | `PASS` | Quantile targets are declarative protocol constants. |
+| `CALIBRATION-008` | I | 255 | 3.1 Benign-only calibration | client eligibility; | `PASS` | Shared eligibility helper is required by threshold construction. |
 | `CALIBRATION-009` | I | 256 | 3.1 Benign-only calibration | terminal-detector identity; | `NOT_AUDITED` | — |
 | `CALIBRATION-010` | I | 257 | 3.1 Benign-only calibration | comparator tuning; | `NOT_AUDITED` | — |
-| `CALIBRATION-011` | I | 258 | 3.1 Benign-only calibration | shrinkage strength; | `NOT_AUDITED` | — |
-| `CALIBRATION-012` | I | 259 | 3.1 Benign-only calibration | conformal significance level; | `NOT_AUDITED` | — |
-| `CALIBRATION-013` | I | 260 | 3.1 Benign-only calibration | cluster count; | `NOT_AUDITED` | — |
+| `CALIBRATION-011` | I | 258 | 3.1 Benign-only calibration | shrinkage strength; | `PASS` | Fixed and size-aware shrinkage weights are locked formulas. |
+| `CALIBRATION-012` | I | 259 | 3.1 Benign-only calibration | conformal significance level; | `PASS` | Conformal significance derives from the declared coverage target. |
+| `CALIBRATION-013` | I | 260 | 3.1 Benign-only calibration | cluster count; | `PASS` | Cluster contract requires the declared group count. |
 | `CALIBRATION-014` | I | 261 | 3.1 Benign-only calibration | cluster-feature selection; | `NOT_AUDITED` | — |
 | `CALIBRATION-015` | I | 262 | 3.1 Benign-only calibration | external-dataset client construction. | `NOT_AUDITED` | — |
 | `CALIBRATION-016` | I | 272 | 3.2 Separation of calibration and evaluation | historical calibration must precede future recalibration; | `NOT_AUDITED` | — |
