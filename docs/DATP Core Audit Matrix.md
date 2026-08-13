@@ -6486,10 +6486,10 @@ README_REPRODUCIBILITY.md
 | `THRESHOLD-022` | I | 710 | 6.1 `FEDERATED_BENIGN_SUMMARY_THRESHOLD` | lock its protocol before result inspection; | `PASS` | Method identity and protocol are declared coordinates. |
 | `THRESHOLD-023` | I | 711 | 6.1 `FEDERATED_BENIGN_SUMMARY_THRESHOLD` | disclose every statistic communicated by a client; | `PASS` | Threshold message diagnostics retain client summary fields. |
 | `THRESHOLD-024` | I | 712 | 6.1 `FEDERATED_BENIGN_SUMMARY_THRESHOLD` | remain a shared-threshold comparator. | `PASS` | Dispatch classifies it as a federated shared construction control. |
-| `THRESHOLD-025` | I | 766 | 6.2 Relationship to Laridi et al. | `FEDERATED_BENIGN_SUMMARY_THRESHOLD` is not a faithful Laridi reproduction; | `NOT_AUDITED` | — |
-| `GLOBAL-024` | I | 767 | 6.2 Relationship to Laridi et al. | it must not be called `LARIDI_ANOMALY_INFORMED_REFERENCE`; | `NOT_AUDITED` | — |
-| `REPORT-002` | I | 768 | 6.2 Relationship to Laridi et al. | its results cannot be used to claim reproduction of Laridi et al.; | `NOT_AUDITED` | — |
-| `CALIBRATION-040` | I | 769 | 6.2 Relationship to Laridi et al. | the difference in calibration contracts must be disclosed in related work and limitations. | `NOT_AUDITED` | — |
+| `THRESHOLD-025` | I | 766 | 6.2 Relationship to Laridi et al. | `FEDERATED_BENIGN_SUMMARY_THRESHOLD` is not a faithful Laridi reproduction; | `PASS` | Comparator reporting explicitly disclaims faithful Laridi reproduction. |
+| `GLOBAL-024` | I | 767 | 6.2 Relationship to Laridi et al. | it must not be called `LARIDI_ANOMALY_INFORMED_REFERENCE`; | `PASS` | Active method identifiers retain benign-summary terminology only. |
+| `REPORT-002` | I | 768 | 6.2 Relationship to Laridi et al. | its results cannot be used to claim reproduction of Laridi et al.; | `PASS` | Comparator report disclaims a Laridi reproduction claim. |
+| `CALIBRATION-040` | I | 769 | 6.2 Relationship to Laridi et al. | the difference in calibration contracts must be disclosed in related work and limitations. | `PASS` | Prior-art distinction and comparator report disclose the benign-only boundary. |
 | `TRAIN-008` | I | 886 | 7.2 Ditto | a distinct global model; | `NOT_AUDITED` | — |
 | `TRAIN-009` | I | 887 | 7.2 Ditto | persistent client-personalized states; | `NOT_AUDITED` | — |
 | `TRAIN-010` | I | 888 | 7.2 Ditto | the correct proximal personalized objective; | `NOT_AUDITED` | — |
