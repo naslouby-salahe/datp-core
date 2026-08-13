@@ -35,6 +35,8 @@ from datp_core.experiments.execution.layout import (
 _MANIFEST_FILENAME = "MANIFEST_SHA256.csv"
 _SIDECAR_FILENAME = "MANIFEST_SHA256.sha256"
 _ROADMAP_LOCK_FILENAME = "ROADMAP_LOCK.md"
+_ROADMAP_LOCK_TITLE = "# DATP-Core roadmap lock"
+_ROADMAP_SNAPSHOT_HEADING = "## Exact roadmap snapshot"
 _WITHHELD_RECORD_FILENAME = "withheld_artifacts.csv"
 _PUBLICATION_MANIFEST_FILENAME = "publication_source_manifest.json"
 _CANONICAL_PROVENANCE_FILENAMES = frozenset({"dataset_manifest.json", "schema.json"})
@@ -169,6 +171,11 @@ class ReleaseBuildRequest:
 class ReleaseValidation:
     root: Path
     entries: tuple[ReleaseManifestEntry, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class RoadmapLock:
+    state: ReleaseState
 
 
 def release_artifact_from_evaluation(source: Path, relative_path: Path) -> ReleaseArtifact:
@@ -531,7 +538,8 @@ def validate_release_bundle(root: Path) -> ReleaseValidation:
     """Validate the complete released-byte inventory required for reconstruction."""
 
     _require_payload_layout(root)
-    _validate_release_state_and_withheld_records(root)
+    roadmap_lock = _read_roadmap_lock(root / _ROADMAP_LOCK_FILENAME)
+    _validate_release_state_and_withheld_records(root, roadmap_lock)
     _validate_retained_audit_reports(root)
     manifest_path = root / _MANIFEST_FILENAME
     _validate_manifest_sidecar(manifest_path, root / _SIDECAR_FILENAME)
@@ -551,13 +559,51 @@ def _validate_retained_audit_reports(root: Path) -> None:
                     )
 
 
-def _validate_release_state_and_withheld_records(root: Path) -> None:
-    roadmap_lock = (root / _ROADMAP_LOCK_FILENAME).read_text(encoding="utf-8")
-    states = tuple(state for state in ReleaseState if f"- Release state: `{state.value}`" in roadmap_lock)
-    if len(states) != 1:
-        raise ArtifactIntegrityError(ErrorMessage("release roadmap lock must contain exactly one valid release state"))
+def _read_roadmap_lock(path: Path) -> RoadmapLock:
+    contents = path.read_bytes()
+    marker = f"{_ROADMAP_SNAPSHOT_HEADING}\n\n".encode()
+    header, separator, snapshot = contents.partition(marker)
+    if not separator or not snapshot:
+        raise ArtifactIntegrityError(ErrorMessage("release roadmap lock must contain an exact roadmap snapshot"))
+    try:
+        lines = tuple(header.decode("utf-8").splitlines())
+    except UnicodeDecodeError as error:
+        raise ArtifactIntegrityError(ErrorMessage("release roadmap lock header must be UTF-8")) from error
+    if len(lines) != 7 or lines[0] != _ROADMAP_LOCK_TITLE or lines[1] != "" or lines[-1] != "":
+        raise ArtifactIntegrityError(ErrorMessage("release roadmap lock header does not match the locked schema"))
+    digest = _roadmap_lock_value(lines[2], "Roadmap SHA-256")
+    revision = _roadmap_lock_value(lines[3], "Code revision")
+    search_date = _roadmap_lock_value(lines[4], "Literature search date")
+    state_value = _roadmap_lock_value(lines[5], "Release state")
+    if fullmatch(r"[0-9a-f]{64}", digest) is None:
+        raise ArtifactIntegrityError(ErrorMessage("release roadmap lock requires a lowercase roadmap SHA-256 digest"))
+    if digest != sha256(snapshot).hexdigest():
+        raise ArtifactIntegrityError(ErrorMessage("release roadmap snapshot does not match its locked SHA-256 digest"))
+    if not revision:
+        raise ArtifactIntegrityError(ErrorMessage("release roadmap lock requires a code revision"))
+    try:
+        date.fromisoformat(search_date)
+    except ValueError as error:
+        raise ArtifactIntegrityError(
+            ErrorMessage("release roadmap lock requires an ISO literature search date")
+        ) from error
+    try:
+        state = ReleaseState(state_value)
+    except ValueError as error:
+        raise ArtifactIntegrityError(ErrorMessage("release roadmap lock contains an unknown release state")) from error
+    return RoadmapLock(state=state)
+
+
+def _roadmap_lock_value(line: str, label: str) -> str:
+    prefix = f"- {label}: `"
+    if not line.startswith(prefix) or not line.endswith("`"):
+        raise ArtifactIntegrityError(ErrorMessage(f"release roadmap lock field is malformed: {label}"))
+    return line.removeprefix(prefix).removesuffix("`")
+
+
+def _validate_release_state_and_withheld_records(root: Path, roadmap_lock: RoadmapLock) -> None:
     record = root / "DATA_PROVENANCE" / _WITHHELD_RECORD_FILENAME
-    if states[0] is ReleaseState.WITHHELD_LICENSE_RESTRICTED:
+    if roadmap_lock.state is ReleaseState.WITHHELD_LICENSE_RESTRICTED:
         if not record.is_file():
             raise ArtifactIntegrityError(
                 ErrorMessage("license-restricted release is missing withheld artifact records")
@@ -612,6 +658,8 @@ def build_release_bundle(request: ReleaseBuildRequest) -> ReleaseValidation:
         raise ArtifactIntegrityError(ErrorMessage("release destination must not already exist"))
     if not request.roadmap.is_file():
         raise ArtifactIntegrityError(ErrorMessage("release roadmap snapshot is missing"))
+    if not request.code_revision:
+        raise ArtifactIntegrityError(ErrorMessage("release requires a code revision"))
     if len(request.confirmatory_seeds) != 10 or len(set(request.confirmatory_seeds)) != 10:
         raise ArtifactIntegrityError(ErrorMessage("release requires the exact ten unique confirmatory seeds"))
     _require_unique_release_artifacts(request.artifacts)
@@ -678,14 +726,18 @@ def _validate_withheld_artifacts(request: ReleaseBuildRequest) -> None:
 
 def _write_release_metadata(request: ReleaseBuildRequest) -> None:
     roadmap_digest = _sha256_file(request.roadmap)
-    (request.root / _ROADMAP_LOCK_FILENAME).write_text(
-        "# DATP-Core roadmap lock\n\n"
+    (request.root / _ROADMAP_LOCK_FILENAME).write_bytes(
+        (
+            _ROADMAP_LOCK_TITLE
+            + "\n\n"
         f"- Roadmap SHA-256: `{roadmap_digest}`\n"
         f"- Code revision: `{request.code_revision}`\n"
         f"- Literature search date: `{request.literature_search_date.isoformat()}`\n"
         f"- Release state: `{request.state.value}`\n\n"
-        "## Exact roadmap snapshot\n\n" + request.roadmap.read_text(encoding="utf-8"),
-        encoding="utf-8",
+            + _ROADMAP_SNAPSHOT_HEADING
+            + "\n\n"
+        ).encode()
+        + request.roadmap.read_bytes()
     )
     (request.root / "SEEDS.csv").write_text(
         "training_seed,purpose,derivation\n"

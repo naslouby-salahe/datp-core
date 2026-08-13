@@ -67,8 +67,17 @@ _COLUMNS = (
 def _release(root: Path) -> Path:
     for directory in _DIRECTORIES:
         (root / directory).mkdir(parents=True)
+    roadmap_snapshot = b"roadmap snapshot\n"
     artifacts = {
-        "ROADMAP_LOCK.md": b"roadmap snapshot\n\n- Release state: `PUBLIC`\n",
+        "ROADMAP_LOCK.md": (
+            b"# DATP-Core roadmap lock\n\n"
+            + f"- Roadmap SHA-256: `{sha256(roadmap_snapshot).hexdigest()}`\n".encode()
+            + b"- Code revision: `test-revision`\n"
+            + b"- Literature search date: `2026-08-13`\n"
+            + b"- Release state: `PUBLIC`\n\n"
+            + b"## Exact roadmap snapshot\n\n"
+            + roadmap_snapshot
+        ),
         "SEEDS.csv": b"seed,purpose\n0,training\n",
         "README_REPRODUCIBILITY.md": b"reproduce\n",
         "METRICS/metrics.csv": b"metric,value\nfpr,0.05\n",
@@ -125,6 +134,16 @@ def test_release_validation_rejects_an_invalid_manifest_sidecar(tmp_path: Path) 
     (root / "MANIFEST_SHA256.sha256").write_text("invalid\n", encoding="utf-8")
 
     with pytest.raises(ArtifactIntegrityError, match="sidecar"):
+        validate_release_bundle(root)
+
+
+def test_release_validation_rejects_a_mismatched_roadmap_snapshot_digest(tmp_path: Path) -> None:
+    root = _release(tmp_path)
+    path = root / "ROADMAP_LOCK.md"
+    original_digest = sha256(b"roadmap snapshot\n").hexdigest().encode()
+    path.write_bytes(path.read_bytes().replace(original_digest, b"0" * 64, 1))
+
+    with pytest.raises(ArtifactIntegrityError, match="snapshot does not match"):
         validate_release_bundle(root)
 
 
