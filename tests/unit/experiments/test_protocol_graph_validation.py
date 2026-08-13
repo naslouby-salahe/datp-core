@@ -1,4 +1,5 @@
 from dataclasses import replace
+from types import SimpleNamespace
 
 import pytest
 
@@ -32,6 +33,19 @@ def test_canonical_graph_is_fully_resolved() -> None:
     assert graph.confirmatory_endpoint == CONFIRMATORY_ENDPOINT
     assert graph.confirmatory_inference.paired_seed_count == SeedCount(10)
     assert all(experiment.readiness is not ExperimentReadiness.EXECUTABLE for experiment in graph.experiments)
+
+
+def test_graph_rejects_opaque_active_protocol_aliases(monkeypatch: pytest.MonkeyPatch) -> None:
+    import datp_core.experiments.graph as protocol_graph
+
+    monkeypatch.setattr(protocol_graph, "FederatedThresholdMethod", (SimpleNamespace(value="B1"),))
+    with pytest.raises(ProtocolValidationError, match="opaque B-number"):
+        protocol_graph._validate_active_protocol_identities()
+
+    monkeypatch.setattr(protocol_graph, "FederatedThresholdMethod", FederatedThresholdMethod)
+    monkeypatch.setattr(protocol_graph, "PopulationId", (SimpleNamespace(value="A"),))
+    with pytest.raises(ProtocolValidationError, match="lettered alias"):
+        protocol_graph._validate_active_protocol_identities()
 
 
 def test_confirmatory_endpoint_is_structurally_locked() -> None:
