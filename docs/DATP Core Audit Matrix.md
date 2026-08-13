@@ -6045,8 +6045,8 @@ The implementation must distinguish at least these roadmap-defined scientific st
 | `GATE-E-004` | 6053 | `CENTRALIZED_POOLED_MIN_MAX` is independently fitted and never reuses federated fitted states. | `NOT_AUDITED` | — | — |
 | `GATE-E-005` | 6054 | Threshold methods cannot fit, select, or alter model-input preprocessing. | `NOT_AUDITED` | — | — |
 | `GATE-E-006` | 6055 | Cluster-fingerprint standardization is kept distinct from model-input preprocessing. | `IMPLEMENTED` | `PASS` | Cluster protocol separately locks fingerprint StandardScaler/features while model-input preprocessing has its own typed protocol/state identity. |
-| `GATE-E-007` | 6056 | Serialization/reload equivalence uses the `1e-12` engineering tolerance only for reload validation. | `NOT_AUDITED` | — | — |
-| `GATE-E-008` | 6057 | A reload tolerance comparison is never used to establish scientific fixed-score identity. | `NOT_AUDITED` | — | — |
+| `GATE-E-007` | 6056 | Serialization/reload equivalence uses the `1e-12` engineering tolerance only for reload validation. | `IMPLEMENTED` | `PASS` | Preprocessing reload validation uses the typed absolute tolerance in `reload_and_compare_transform`; preprocessing state tests exercise the locked `1e-12` check. |
+| `GATE-E-008` | 6057 | A reload tolerance comparison is never used to establish scientific fixed-score identity. | `IMPLEMENTED` | `PASS` | Fixed-score validation compares immutable manifest identity and exact persisted score content, independently of preprocessing reload checks. |
 
 ### Gate F
 
@@ -7346,8 +7346,8 @@ README_REPRODUCIBILITY.md
 | `PREPROCESS-048` | IV | 6053 | 7. Gate E — Preprocessing integrity | `CENTRALIZED_POOLED_MIN_MAX` is independently fitted and never reuses federated fitted states. | `NOT_AUDITED` | — |
 | `PREPROCESS-049` | IV | 6054 | 7. Gate E — Preprocessing integrity | Threshold methods cannot fit, select, or alter model-input preprocessing. | `NOT_AUDITED` | — |
 | `PREPROCESS-050` | IV | 6055 | 7. Gate E — Preprocessing integrity | Cluster-fingerprint standardization is kept distinct from model-input preprocessing. | `PASS` | Cluster fingerprint protocol is separate from model-input preprocessing protocol/state. |
-| `PREPROCESS-051` | IV | 6056 | 7. Gate E — Preprocessing integrity | Serialization/reload equivalence uses the `1e-12` engineering tolerance only for reload validation. | `NOT_AUDITED` | — |
-| `PREPROCESS-052` | IV | 6057 | 7. Gate E — Preprocessing integrity | A reload tolerance comparison is never used to establish scientific fixed-score identity. | `NOT_AUDITED` | — |
+| `PREPROCESS-051` | IV | 6056 | 7. Gate E — Preprocessing integrity | Serialization/reload equivalence uses the `1e-12` engineering tolerance only for reload validation. | `PASS` | Typed reload comparison uses the locked engineering tolerance. |
+| `PREPROCESS-052` | IV | 6057 | 7. Gate E — Preprocessing integrity | A reload tolerance comparison is never used to establish scientific fixed-score identity. | `PASS` | Fixed-score identity validates exact manifest/content evidence instead. |
 | `TRAIN-083` | IV | 6061 | 8. Gate F — Training and terminal-detector integrity | Every **federated training** execution has exactly one scientific terminal detector at round `200`; `FEDAVG_LOCAL_FINE_TUNING` starts from that detector and produces separately identified post-training client-personalized states after exactly ten local epochs. | `NOT_AUDITED` | — |
 | `TRAIN-084` | IV | 6062 | 8. Gate F — Training and terminal-detector integrity | Recovery checkpoints are used only to resume interrupted execution. | `NOT_AUDITED` | — |
 | `TRAIN-085` | IV | 6063 | 8. Gate F — Training and terminal-detector integrity | Diagnostic checkpoints are observational and never become score sources. | `NOT_AUDITED` | — |
