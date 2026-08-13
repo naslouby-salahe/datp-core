@@ -6100,19 +6100,19 @@ The implementation must distinguish at least these roadmap-defined scientific st
 
 | ID | Source line | Audit requirement | Implementation disposition | Audit outcome | Evidence / remediation |
 |---|---:|---|---|---|---|
-| `GATE-I-001` | 6105 | Computes each eligible client's local q-quantile and takes the arithmetic mean of eligible local quantiles. | `NOT_AUDITED` | — | — |
-| `GATE-I-002` | 6106 | Is never mislabeled as the exact pooled quantile. | `NOT_AUDITED` | — | — |
-| `GATE-I-003` | 6107 | Applies one threshold to every eligible client. | `NOT_AUDITED` | — | — |
-| `GATE-I-004` | 6110 | Uses each eligible client's own benign q-quantile. | `NOT_AUDITED` | — | — |
-| `GATE-I-005` | 6111 | Uses the same q and score evidence as SHARED_THRESHOLD in the confirmatory comparison. | `NOT_AUDITED` | — | — |
-| `GATE-I-006` | 6114 | Uses only the locked physical-family taxonomy. | `NOT_AUDITED` | — | — |
-| `GATE-I-007` | 6115 | Forms family thresholds exactly from eligible family-member local thresholds. | `NOT_AUDITED` | — | — |
-| `GATE-I-008` | 6116 | Is unavailable where no defensible taxonomy exists. | `NOT_AUDITED` | — | — |
-| `GATE-I-009` | 6119 | Fingerprint is exactly `[mean(error), std(error), skewness(error), p95(error)]`. | `NOT_AUDITED` | — | — |
-| `GATE-I-010` | 6120 | Canonical clustering uses the separate score-side fingerprint-standardization contract, canonical `K=3`, and the locked initialization/seed handling required by Part II §7.1. | `NOT_AUDITED` | — | — |
-| `GATE-I-011` | 6121 | Cluster threshold is the mean of member local thresholds. | `NOT_AUDITED` | — | — |
+| `GATE-I-001` | 6105 | Computes each eligible client's local q-quantile and takes the arithmetic mean of eligible local quantiles. | `IMPLEMENTED` | `PASS` | Shared construction requires eligible local quantiles and validates their unweighted arithmetic mean. |
+| `GATE-I-002` | 6106 | Is never mislabeled as the exact pooled quantile. | `IMPLEMENTED` | `PASS` | Shared and exact-pooled constructions have separate typed methods/contracts, with tests confirming they differ. |
+| `GATE-I-003` | 6107 | Applies one threshold to every eligible client. | `IMPLEMENTED` | `PASS` | Shared assignment validation requires every eligible client to carry the identical shared threshold. |
+| `GATE-I-004` | 6110 | Uses each eligible client's own benign q-quantile. | `IMPLEMENTED` | `PASS` | Local construction validates that each assignment equals the client’s local benign quantile. |
+| `GATE-I-005` | 6111 | Uses the same q and score evidence as SHARED_THRESHOLD in the confirmatory comparison. | `IMPLEMENTED` | `PASS` | Common eligible-cohort/fixed-score controls bind confirmatory shared and local comparisons to the same calibration/score evidence. |
+| `GATE-I-006` | 6114 | Uses only the locked physical-family taxonomy. | `IMPLEMENTED` | `PASS` | Family construction requires declared family memberships and population capabilities expose the taxonomy only for natural N-BaIoT devices. |
+| `GATE-I-007` | 6115 | Forms family thresholds exactly from eligible family-member local thresholds. | `IMPLEMENTED` | `PASS` | Family group validation requires exact member/local-quantile equality and the unweighted group mean. |
+| `GATE-I-008` | 6116 | Is unavailable where no defensible taxonomy exists. | `IMPLEMENTED` | `PASS` | Dispatch emits typed `FAMILY_TAXONOMY_UNAVAILABLE` when no family mapping is supplied. |
+| `GATE-I-009` | 6119 | Fingerprint is exactly `[mean(error), std(error), skewness(error), p95(error)]`. | `IMPLEMENTED` | `PASS` | Cluster protocol validates the exact locked feature tuple/order. |
+| `GATE-I-010` | 6120 | Canonical clustering uses the separate score-side fingerprint-standardization contract, canonical `K=3`, and the locked initialization/seed handling required by Part II §7.1. | `IMPLEMENTED` | `PASS` | Cluster protocol validates StandardScaler fingerprint standardization, K=3, k-means++, locked n_init/max_iter/random state. |
+| `GATE-I-011` | 6121 | Cluster threshold is the mean of member local thresholds. | `IMPLEMENTED` | `PASS` | Cluster membership validation checks the declared local-threshold aggregation; canonical protocol locks arithmetic mean. |
 | `GATE-I-012` | 6122 | CLUSTER_THRESHOLD never changes the detector, performs model clustering, or acquires a privacy claim. | `NOT_AUDITED` | — | — |
-| `GATE-I-013` | 6123 | Cluster identities are aligned before across-seed switch-frequency reporting. | `NOT_AUDITED` | — | — |
+| `GATE-I-013` | 6123 | Cluster identities are aligned before across-seed switch-frequency reporting. | `IMPLEMENTED` | `PASS` | Cluster switch-frequency analysis aligns target labels to the smallest-seed reference before computing switches. |
 
 ### Gate J
 
@@ -7381,19 +7381,19 @@ README_REPRODUCIBILITY.md
 | `CALIBRATION-232` | IV | 6098 | 10. Gate H — Calibration integrity | Every threshold-stage artifact is generated under the Part I §3.2A protocol-compliant participant assumption; no experiment silently injects fabricated thresholds, support counts, summaries, fingerprints, sketches, scores, or client identities. | `NOT_AUDITED` | — |
 | `CALIBRATION-233` | IV | 6099 | 10. Gate H — Calibration integrity | Contributor-availability sensitivity is labeled non-adversarial; it is never called Byzantine robustness, poisoning resistance, malicious-dropout robustness, or message-integrity validation. | `NOT_AUDITED` | — |
 | `CALIBRATION-234` | IV | 6100 | 10. Gate H — Calibration integrity | Any threshold-stage provenance/checksum/identity mismatch invalidates the artifact/coordinate and is not counted as an attack-defense success. | `NOT_AUDITED` | — |
-| `THRESHOLD-311` | IV | 6105 | 11. Gate I — Threshold-policy integrity | Computes each eligible client's local q-quantile and takes the arithmetic mean of eligible local quantiles. | `NOT_AUDITED` | — |
-| `THRESHOLD-312` | IV | 6106 | 11. Gate I — Threshold-policy integrity | Is never mislabeled as the exact pooled quantile. | `NOT_AUDITED` | — |
-| `THRESHOLD-313` | IV | 6107 | 11. Gate I — Threshold-policy integrity | Applies one threshold to every eligible client. | `NOT_AUDITED` | — |
-| `THRESHOLD-314` | IV | 6110 | 11. Gate I — Threshold-policy integrity | Uses each eligible client's own benign q-quantile. | `NOT_AUDITED` | — |
-| `THRESHOLD-315` | IV | 6111 | 11. Gate I — Threshold-policy integrity | Uses the same q and score evidence as SHARED_THRESHOLD in the confirmatory comparison. | `NOT_AUDITED` | — |
-| `THRESHOLD-316` | IV | 6114 | 11. Gate I — Threshold-policy integrity | Uses only the locked physical-family taxonomy. | `NOT_AUDITED` | — |
-| `THRESHOLD-317` | IV | 6115 | 11. Gate I — Threshold-policy integrity | Forms family thresholds exactly from eligible family-member local thresholds. | `NOT_AUDITED` | — |
-| `THRESHOLD-318` | IV | 6116 | 11. Gate I — Threshold-policy integrity | Is unavailable where no defensible taxonomy exists. | `NOT_AUDITED` | — |
-| `THRESHOLD-319` | IV | 6119 | 11. Gate I — Threshold-policy integrity | Fingerprint is exactly `[mean(error), std(error), skewness(error), p95(error)]`. | `NOT_AUDITED` | — |
-| `THRESHOLD-320` | IV | 6120 | 11. Gate I — Threshold-policy integrity | Canonical clustering uses the separate score-side fingerprint-standardization contract, canonical `K=3`, and the locked initialization/seed handling required by Part II §7.1. | `NOT_AUDITED` | — |
-| `THRESHOLD-321` | IV | 6121 | 11. Gate I — Threshold-policy integrity | Cluster threshold is the mean of member local thresholds. | `NOT_AUDITED` | — |
+| `THRESHOLD-311` | IV | 6105 | 11. Gate I — Threshold-policy integrity | Computes each eligible client's local q-quantile and takes the arithmetic mean of eligible local quantiles. | `PASS` | Shared construction validates arithmetic mean of local quantiles. |
+| `THRESHOLD-312` | IV | 6106 | 11. Gate I — Threshold-policy integrity | Is never mislabeled as the exact pooled quantile. | `PASS` | Separate typed shared and exact-pooled constructions. |
+| `THRESHOLD-313` | IV | 6107 | 11. Gate I — Threshold-policy integrity | Applies one threshold to every eligible client. | `PASS` | Shared assignments require one identical threshold. |
+| `THRESHOLD-314` | IV | 6110 | 11. Gate I — Threshold-policy integrity | Uses each eligible client's own benign q-quantile. | `PASS` | Local assignments validate own local quantile. |
+| `THRESHOLD-315` | IV | 6111 | 11. Gate I — Threshold-policy integrity | Uses the same q and score evidence as SHARED_THRESHOLD in the confirmatory comparison. | `PASS` | Common cohort and fixed-score controls bind comparison evidence. |
+| `THRESHOLD-316` | IV | 6114 | 11. Gate I — Threshold-policy integrity | Uses only the locked physical-family taxonomy. | `PASS` | Family mapping must be declared and capability-authorized. |
+| `THRESHOLD-317` | IV | 6115 | 11. Gate I — Threshold-policy integrity | Forms family thresholds exactly from eligible family-member local thresholds. | `PASS` | Family membership/local-quantile equality is validated. |
+| `THRESHOLD-318` | IV | 6116 | 11. Gate I — Threshold-policy integrity | Is unavailable where no defensible taxonomy exists. | `PASS` | Typed family-taxonomy unavailable result. |
+| `THRESHOLD-319` | IV | 6119 | 11. Gate I — Threshold-policy integrity | Fingerprint is exactly `[mean(error), std(error), skewness(error), p95(error)]`. | `PASS` | Cluster protocol validates exact fingerprint fields/order. |
+| `THRESHOLD-320` | IV | 6120 | 11. Gate I — Threshold-policy integrity | Canonical clustering uses the separate score-side fingerprint-standardization contract, canonical `K=3`, and the locked initialization/seed handling required by Part II §7.1. | `PASS` | Cluster protocol locks standardization/grouping/init details. |
+| `THRESHOLD-321` | IV | 6121 | 11. Gate I — Threshold-policy integrity | Cluster threshold is the mean of member local thresholds. | `PASS` | Canonical cluster aggregation is arithmetic mean. |
 | `THRESHOLD-322` | IV | 6122 | 11. Gate I — Threshold-policy integrity | CLUSTER_THRESHOLD never changes the detector, performs model clustering, or acquires a privacy claim. | `NOT_AUDITED` | — |
-| `THRESHOLD-323` | IV | 6123 | 11. Gate I — Threshold-policy integrity | Cluster identities are aligned before across-seed switch-frequency reporting. | `NOT_AUDITED` | — |
+| `THRESHOLD-323` | IV | 6123 | 11. Gate I — Threshold-policy integrity | Cluster identities are aligned before across-seed switch-frequency reporting. | `PASS` | Cross-seed switch analysis aligns labels to the reference seed. |
 | `THRESHOLD-324` | IV | 6127 | 12. Gate J — Comparator and threshold-variant integrity | Exact pooled benign quantile uses the type-7 pooled oracle. | `NOT_AUDITED` | — |
 | `CALIBRATION-235` | IV | 6128 | 12. Gate J — Comparator and threshold-variant integrity | Sample-weighted shared construction uses the declared eligible calibration weights. | `NOT_AUDITED` | — |
 | `THRESHOLD-325` | IV | 6129 | 12. Gate J — Comparator and threshold-variant integrity | Fixed shrinkage executes the full λ curve and never selects a winner post hoc. | `NOT_AUDITED` | — |
