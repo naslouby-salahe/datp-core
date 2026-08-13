@@ -1,16 +1,40 @@
+from types import SimpleNamespace
+from typing import cast
+
 from tests.unit.thresholding.helpers import COORDINATE, identity
 
 from datp_core.analysis.mechanisms.clustering import (
     ClusterEvidenceRecord,
     ClusterPartitionSummary,
     cluster_assignment_switch_frequencies,
+    cluster_silhouette_from_grouped_result,
     cluster_stability,
 )
 from datp_core.core.identifiers import AvailabilityStatus
-from datp_core.core.numeric import ClusterIndex, GroupCount, Quantile, RowCount, Seed, ThresholdValue
-from datp_core.presentation.export import _render_cluster_assignment_switch_summary, _render_cluster_stability_result
+from datp_core.core.numeric import (
+    ClusterIndex,
+    DistributionSkewness,
+    GroupCount,
+    MetricValue,
+    Quantile,
+    RowCount,
+    ScoreMoment,
+    Seed,
+    ThresholdValue,
+)
+from datp_core.data.populations.contracts import ClientIdentity
+from datp_core.presentation.export import (
+    _render_cluster_assignment_switch_summary,
+    _render_cluster_silhouette_result,
+    _render_cluster_stability_result,
+)
 from datp_core.thresholds.contracts import LocalQuantile, ThresholdDiagnostic
-from datp_core.thresholds.policies.cluster import ClusterMembership
+from datp_core.thresholds.policies.cluster import (
+    ClusterFingerprint,
+    ClusterMembership,
+    FingerprintFeatures,
+    GroupedThresholdResult,
+)
 
 
 def _membership(index: int, client_name: str, threshold: float) -> ClusterMembership:
@@ -90,4 +114,90 @@ def test_cluster_switch_frequency_aligns_labels_to_the_smallest_seed() -> None:
         "Compared seeds: 7, 9",
         "Client client_a: switches=0/2; frequency=0.000",
         "Client client_b: switches=1/2; frequency=0.500",
+    )
+
+
+def test_cluster_silhouette_uses_standardized_fingerprints_and_singleton_zero() -> None:
+    client_a, client_b, client_c = (identity(name) for name in ("client_a", "client_b", "client_c"))
+    clusters = (
+        ClusterMembership(
+            cluster_index=ClusterIndex(0),
+            members=(client_a, client_b),
+            contributing_local_quantiles=(_local_quantile(client_a, 0.1), _local_quantile(client_b, 0.2)),
+            cluster_threshold=ThresholdValue(0.15000000000000002),
+        ),
+        ClusterMembership(
+            cluster_index=ClusterIndex(1),
+            members=(client_c,),
+            contributing_local_quantiles=(_local_quantile(client_c, 0.9),),
+            cluster_threshold=ThresholdValue(0.9),
+        ),
+    )
+    result = _cluster_result(
+        clusters,
+        ((client_a, 0.0), (client_b, 1.0), (client_c, 10.0)),
+    )
+
+    silhouette = cluster_silhouette_from_grouped_result(result)
+
+    assert silhouette.mean_silhouette is not None
+    by_client = {item.client.client_id.value: item.value for item in silhouette.observations}
+    assert by_client["client_c"] == MetricValue(0.0)
+    assert by_client["client_a"] is not None and by_client["client_a"].value > 0.8
+    assert "Mean silhouette:" in str(_render_cluster_silhouette_result(silhouette)[1])
+
+
+def test_cluster_silhouette_is_unavailable_with_one_nonempty_cluster() -> None:
+    membership = _membership(0, "client_a", 0.1)
+    result = _cluster_result((membership,), ((membership.members[0], 0.0),))
+
+    silhouette = cluster_silhouette_from_grouped_result(result)
+
+    assert silhouette.mean_silhouette is None
+    assert silhouette.unavailable_reason is not None
+    assert silhouette.observations[0].value is None
+
+
+def _local_quantile(client, value: float) -> LocalQuantile:
+    return LocalQuantile(
+        client=client,
+        coordinate=COORDINATE,
+        quantile=Quantile(0.95),
+        value=ThresholdValue(value),
+        calibration_count=RowCount(10),
+        diagnostic=ThresholdDiagnostic(
+            quantile_interpolation=None,
+            tie_count=RowCount(0),
+            availability=AvailabilityStatus.AVAILABLE,
+        ),
+    )
+
+
+def _cluster_result(
+    clusters: tuple[ClusterMembership, ...],
+    standardized_means: tuple[tuple[ClientIdentity, float], ...],
+) -> GroupedThresholdResult:
+    return cast(
+        GroupedThresholdResult,
+        SimpleNamespace(
+            coordinate=COORDINATE,
+            clusters=clusters,
+            fingerprints=tuple(
+                ClusterFingerprint(
+                    client=client,
+                    raw=_features(0.0),
+                    standardized=_features(value),
+                )
+                for client, value in standardized_means
+            ),
+        ),
+    )
+
+
+def _features(value: float) -> FingerprintFeatures:
+    return FingerprintFeatures(
+        mean=ScoreMoment(value),
+        standard_deviation=ScoreMoment(0.0),
+        skewness=DistributionSkewness(0.0),
+        p95=ThresholdValue(0.0),
     )

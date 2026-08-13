@@ -29,6 +29,7 @@ from datp_core.analysis.mechanisms.client_impact import (
 from datp_core.analysis.mechanisms.clustering import (
     ClusterAssignmentSwitchSummary,
     ClusterEvidenceRecord,
+    ClusterSilhouetteResult,
     ClusterStabilityResult,
 )
 from datp_core.analysis.mechanisms.dispersion import GroupedDispersionResult
@@ -1055,6 +1056,7 @@ _MECHANISM_TITLES: dict[type[object], ReportLine] = {
     ClusterStabilityResult: ReportLine("cluster_stability"),
     ClusterAssignmentSwitchSummary: ReportLine("cluster_assignment_switch_frequency"),
     ClusterEvidenceRecord: ReportLine("cluster_evidence"),
+    ClusterSilhouetteResult: ReportLine("cluster_silhouette"),
     GroupedDispersionResult: ReportLine("grouped_dispersion"),
     ThresholdMovement: ReportLine("threshold_movement"),
     ThresholdMovementCohort: ReportLine("threshold_movement_cohort"),
@@ -1442,6 +1444,31 @@ def _render_cluster_assignment_switch_summary(mechanism: ClusterAssignmentSwitch
                 f"Client {item.client.client_id.value}: switches={item.switched_seed_count.value}/"
                 f"{item.comparison_seed_count.value}; frequency={_format_publication_metric(item.frequency.value)}"
                 for item in mechanism.client_frequencies
+            ),
+        ]
+    ]
+
+
+@_render_one_mechanism.register
+def _render_cluster_silhouette_result(mechanism: ClusterSilhouetteResult) -> list[ReportLine]:
+    mean = (
+        _format_publication_metric(mechanism.mean_silhouette.value)
+        if mechanism.mean_silhouette is not None
+        else f"unavailable ({mechanism.unavailable_reason})"
+    )
+    return [
+        ReportLine(line)
+        for line in [
+            f"Seed: {mechanism.seed.value}",
+            f"Mean silhouette: {mean}",
+            *(
+                f"Client {item.client.client_id.value}: cluster={item.cluster_index.value}; silhouette="
+                + (
+                    _format_publication_metric(item.value.value)
+                    if item.value is not None
+                    else f"unavailable ({item.unavailable_reason})"
+                )
+                for item in mechanism.observations
             ),
         ]
     ]

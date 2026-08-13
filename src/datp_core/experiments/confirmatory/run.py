@@ -626,6 +626,7 @@ def _confirmatory_cluster_mechanisms() -> tuple[MechanismEvidence, ...]:
         ClusterEvidenceRecord,
         cluster_assignment_switch_frequencies,
         cluster_evidence_from_grouped_result,
+        cluster_silhouette_from_grouped_result,
         cluster_stability,
         local_threshold_dispersion,
     )
@@ -675,6 +676,7 @@ def _confirmatory_cluster_mechanisms() -> tuple[MechanismEvidence, ...]:
         )
         mechanisms.append(cluster_record)
         cluster_records.append(cluster_record)
+        mechanisms.append(cluster_silhouette_from_grouped_result(result))
         mechanisms.append(_grouped_dispersion_evidence(result, cluster_document))
     for left, right in zip(available, available[1:], strict=False):
         mechanisms.append(

@@ -1,5 +1,6 @@
 from enum import StrEnum
 from itertools import permutations
+from math import sqrt
 from typing import ClassVar
 
 from pydantic import model_validator
@@ -117,6 +118,44 @@ class ClusterEvidenceRecord(StrictModel):
         }:
             return AvailabilityStatus.AVAILABLE
         return AvailabilityStatus.UNAVAILABLE
+
+
+class ClusterSilhouetteObservation(StrictModel):
+    client: ClientIdentity
+    cluster_index: ClusterIndex
+    value: MetricValue | None
+    unavailable_reason: AnalysisReasonText | None
+
+    @model_validator(mode="after")
+    def validate_availability(self) -> "ClusterSilhouetteObservation":
+        if (self.value is None) == (self.unavailable_reason is None):
+            raise ValueError("cluster silhouette observation requires exactly one value or unavailable reason")
+        return self
+
+
+class ClusterSilhouetteResult(StrictModel):
+    seed: Seed
+    observations: tuple[ClusterSilhouetteObservation, ...]
+    mean_silhouette: MetricValue | None
+    unavailable_reason: AnalysisReasonText | None
+
+    evidence_role: ClassVar[EvidenceRole] = EvidenceRole.MECHANISM
+
+    @model_validator(mode="after")
+    def validate_result(self) -> "ClusterSilhouetteResult":
+        if not self.observations:
+            raise ValueError("cluster silhouette requires at least one client observation")
+        if len({item.client for item in self.observations}) != len(self.observations):
+            raise ValueError("cluster silhouette observations require unique clients")
+        if (self.mean_silhouette is None) != (self.unavailable_reason is not None):
+            raise ValueError("cluster silhouette mean requires exactly one value or unavailable reason")
+        if self.mean_silhouette is not None and any(item.value is None for item in self.observations):
+            raise ValueError("available cluster silhouette mean requires every client silhouette")
+        return self
+
+    @property
+    def availability(self) -> AvailabilityStatus:
+        return AvailabilityStatus.AVAILABLE if self.mean_silhouette is not None else AvailabilityStatus.UNAVAILABLE
 
 
 class ClusterContingencyRow(StrictModel):
@@ -286,6 +325,80 @@ def cluster_evidence_from_grouped_result(
         evidence_availability=evidence_availability,
         dispersion_unavailable_reason=dispersion_reason,
     )
+
+
+def cluster_silhouette_from_grouped_result(result: GroupedThresholdResult) -> ClusterSilhouetteResult:
+    assignments = _assignment_by_client(result.clusters)
+    fingerprints = {item.client: _fingerprint_vector(item) for item in result.fingerprints}
+    if tuple(sorted(fingerprints, key=lambda client: client.client_id.value)) != tuple(
+        sorted(assignments, key=lambda client: client.client_id.value)
+    ):
+        raise ValueError("cluster silhouette requires fingerprints for exactly the assigned clients")
+    nonempty_groups = tuple(membership for membership in result.clusters if membership.members)
+    if len(nonempty_groups) < 2:
+        reason = AnalysisReasonText("mean silhouette is unavailable with fewer than two non-empty clusters")
+        return ClusterSilhouetteResult(
+            seed=result.coordinate.training_seed,
+            observations=tuple(
+                ClusterSilhouetteObservation(
+                    client=client,
+                    cluster_index=assignments[client],
+                    value=None,
+                    unavailable_reason=reason,
+                )
+                for client in sorted(assignments, key=lambda item: item.client_id.value)
+            ),
+            mean_silhouette=None,
+            unavailable_reason=reason,
+        )
+    observations: list[ClusterSilhouetteObservation] = []
+    for membership in result.clusters:
+        for client in membership.members:
+            if len(membership.members) == 1:
+                value = MetricValue(0.0)
+            else:
+                own_distances = tuple(
+                    _euclidean_distance(fingerprints[client], fingerprints[other])
+                    for other in membership.members
+                    if other != client
+                )
+                within = sum(own_distances) / len(own_distances)
+                between = min(
+                    sum(_euclidean_distance(fingerprints[client], fingerprints[other]) for other in other_group.members)
+                    / len(other_group.members)
+                    for other_group in nonempty_groups
+                    if other_group.cluster_index != membership.cluster_index
+                )
+                denominator = max(within, between)
+                value = MetricValue(0.0 if denominator == 0.0 else (between - within) / denominator)
+            observations.append(
+                ClusterSilhouetteObservation(
+                    client=client,
+                    cluster_index=membership.cluster_index,
+                    value=value,
+                    unavailable_reason=None,
+                )
+            )
+    ordered = tuple(sorted(observations, key=lambda item: item.client.client_id.value))
+    return ClusterSilhouetteResult(
+        seed=result.coordinate.training_seed,
+        observations=ordered,
+        mean_silhouette=MetricValue(sum(item.value.value for item in ordered if item.value is not None) / len(ordered)),
+        unavailable_reason=None,
+    )
+
+
+def _fingerprint_vector(fingerprint: ClusterFingerprint) -> tuple[float, float, float, float]:
+    return (
+        fingerprint.standardized.mean.value,
+        fingerprint.standardized.standard_deviation.value,
+        fingerprint.standardized.skewness.value,
+        fingerprint.standardized.p95.value,
+    )
+
+
+def _euclidean_distance(left: tuple[float, ...], right: tuple[float, ...]) -> float:
+    return sqrt(sum((left_value - right_value) ** 2 for left_value, right_value in zip(left, right, strict=True)))
 
 
 def empty_cluster_evidence_record(
