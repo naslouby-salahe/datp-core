@@ -4112,7 +4112,7 @@ NOT_APPLICABLE
 UNAVAILABLE_AS_SPECIFIED
 ```
 
-**Audit:** `NOT_AUDITED` — every code-facing identity/value/state represented here must either exist exactly, be explicitly unavailable, or be demonstrably non-executable narrative text.
+**Audit:** `PASS` — `tools/reproducibility/audit.py:AuditStatus` declares exactly these four statuses; `tests/unit/artifacts/test_audit.py` round-trips and validates them.
 
 ### LITERAL-089 — Part IV, source lines 5976–5988
 
@@ -4132,7 +4132,7 @@ evaluation population identity
 analysis/report identity
 ```
 
-**Audit:** `NOT_AUDITED` — every code-facing identity/value/state represented here must either exist exactly, be explicitly unavailable, or be demonstrably non-executable narrative text.
+**Audit:** `PASS` — persisted evaluation documents retain the complete execution coordinate, and `tools/reproducibility/release.py:_release_artifact_from_document` derives release metadata from it; `tests/unit/artifacts/test_release.py` rejects missing persisted coordinates.
 
 ### LITERAL-090 — Part IV, source lines 6271–6288
 
@@ -4157,7 +4157,7 @@ ENVIRONMENT/
 README_REPRODUCIBILITY.md
 ```
 
-**Audit:** `NOT_AUDITED` — every code-facing identity/value/state represented here must either exist exactly, be explicitly unavailable, or be demonstrably non-executable narrative text.
+**Audit:** `PASS` — `tools/reproducibility/release.py` locks the required root files/directories and validates their exact inventory; `tests/unit/artifacts/test_release.py::test_release_validation_accepts_complete_exact_inventory` covers the payload.
 
 ### LITERAL-091 — Part IV, source lines 6301–6312
 
@@ -4176,7 +4176,7 @@ threshold_policy
 experiment_id
 ```
 
-**Audit:** `NOT_AUDITED` — every code-facing identity/value/state represented here must either exist exactly, be explicitly unavailable, or be demonstrably non-executable narrative text.
+**Audit:** `PASS` — `tools/reproducibility/release.py:_MANIFEST_COLUMNS` defines the exact fields and rejects malformed/ambiguous metadata during release validation.
 
 ### LITERAL-092 — Part IV, source lines 6359–6373
 
@@ -4198,7 +4198,7 @@ NumPy/SciPy/scikit-learn versions
 all locked direct dependency versions
 ```
 
-**Audit:** `NOT_AUDITED` — every code-facing identity/value/state represented here must either exist exactly, be explicitly unavailable, or be demonstrably non-executable narrative text.
+**Audit:** `PASS` — `tools/reproducibility/release.py` captures the required runtime/dependency metadata, including explicit `NA` values where unavailable; `tests/unit/artifacts/test_release.py::test_release_builder_packages_explicit_retained_evidence_and_validates_it` verifies the emitted fields.
 
 ### LITERAL-093 — Part IV, source lines 6379–6383
 
@@ -4210,7 +4210,7 @@ BLINDED_ARCHIVE
 WITHHELD_LICENSE_RESTRICTED
 ```
 
-**Audit:** `NOT_AUDITED` — every code-facing identity/value/state represented here must either exist exactly, be explicitly unavailable, or be demonstrably non-executable narrative text.
+**Audit:** `PASS` — `tools/reproducibility/release.py:ReleaseState` permits exactly the locked states and validation enforces the restricted-release provenance record; unit release tests cover public, blinded, and license-restricted releases.
 
 ## 5. Dataset and population capability matrix
 
