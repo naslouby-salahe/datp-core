@@ -2,7 +2,12 @@ from dataclasses import dataclass
 
 from pydantic import model_validator
 
-from datp_core.analysis.contrasts import PairedContrasts, PairedDifferenceCounts, SupplementaryPairedAnalysisPlan
+from datp_core.analysis.contrasts import (
+    ConfirmatoryDescriptiveEffects,
+    PairedContrasts,
+    PairedDifferenceCounts,
+    SupplementaryPairedAnalysisPlan,
+)
 from datp_core.analysis.descriptive import (
     DescriptiveSummary,
     ObservationCounts,
@@ -66,6 +71,7 @@ from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT
 @dataclass(frozen=True, slots=True)
 class ConfirmatoryAnalysisRequest:
     contrasts: PairedContrasts
+    descriptive_effects: ConfirmatoryDescriptiveEffects
     inference_protocol: PairedInferenceProtocol
     analysis_seed: Seed
     multiplicity_plan: MultiplicityPlan | None = None
@@ -77,6 +83,7 @@ class ConfirmatoryAnalysisRequest:
 
 class AnalysisDocument(StrictModel):
     contrasts: PairedContrasts
+    descriptive_effects: ConfirmatoryDescriptiveEffects
     inference_protocol: PairedInferenceProtocol
     interval: BootstrapInterval
     decision: ScientificDecisionResult
@@ -210,6 +217,7 @@ def prepare_confirmatory_analysis(request: ConfirmatoryAnalysisRequest) -> Analy
         deltas = contrasts.deltas
         return AnalysisDocument(
             contrasts=contrasts,
+            descriptive_effects=request.descriptive_effects,
             inference_protocol=protocol,
             interval=interval,
             decision=decide_confirmatory(interval),
@@ -235,6 +243,7 @@ def prepare_confirmatory_analysis(request: ConfirmatoryAnalysisRequest) -> Analy
     multiplicity = None if request.multiplicity_plan is None else holm_adjust(request.multiplicity_plan, protocol)
     return AnalysisDocument(
         contrasts=contrasts,
+        descriptive_effects=request.descriptive_effects,
         inference_protocol=protocol,
         interval=interval,
         decision=decide_confirmatory(interval),
@@ -398,6 +407,7 @@ def _blocked_confirmatory_document(
     )
     return AnalysisDocument(
         contrasts=request.contrasts,
+        descriptive_effects=request.descriptive_effects,
         inference_protocol=protocol,
         interval=interval,
         decision=ScientificDecisionResult(

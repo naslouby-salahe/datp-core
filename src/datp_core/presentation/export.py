@@ -8,7 +8,7 @@ from itertools import chain
 from pathlib import Path
 from typing import Any, TypedDict, cast
 
-from datp_core.analysis.contrasts import PairedContrasts
+from datp_core.analysis.contrasts import ConfirmatoryDescriptiveEffects, PairedContrasts
 from datp_core.analysis.descriptive import DescriptiveSummary, PairedDifferenceCounts
 from datp_core.analysis.inference.bootstrap.contracts import BcaOutcome, BootstrapInterval
 from datp_core.analysis.inference.multiplicity import MultiplicityResult
@@ -693,6 +693,7 @@ def _render_analysis_sections(
     sections.extend(_render_sign_consistency(document.sign_consistency))
     sections.extend(_render_exact_sign_test(document.exact_sign_test))
     sections.extend(_render_paired_contrasts(document.contrasts))
+    sections.extend(_render_confirmatory_descriptive_effects(document.descriptive_effects))
     if document.precision_diagnostics is not None:
         sections.extend(_render_precision_diagnostics(document.precision_diagnostics))
     if document.leave_one_device_out is not None:
@@ -979,6 +980,48 @@ def _render_mechanisms(
         lines.extend(_render_one_mechanism(mechanism))
         lines.append("")
     return [ReportLine(line) for line in lines]
+
+
+def _render_confirmatory_descriptive_effects(effects: ConfirmatoryDescriptiveEffects) -> list[ReportLine]:
+    relative_values = tuple(item.relative_cv_reduction.value for item in effects.values if item.relative_cv_reduction)
+    mean_relative = (
+        "unavailable"
+        if not relative_values
+        else _format_publication_metric(sum(relative_values) / len(relative_values))
+    )
+    mean_worst = _format_publication_metric(
+        sum(item.delta_worst_fpr.value for item in effects.values) / len(effects.values)
+    )
+    mean_iqr = _format_publication_metric(
+        sum(item.delta_iqr_fpr.value for item in effects.values) / len(effects.values)
+    )
+    lines = [
+        "## Confirmatory Descriptive Effects",
+        "",
+        f"Mean relative CV(FPR) reduction: {mean_relative}",
+        f"Mean DeltaWorstFPR: {mean_worst}",
+        f"Mean DeltaIQR: {mean_iqr}",
+        "",
+        "| Seed | Relative CV reduction | DeltaWorstFPR | DeltaIQR |",
+        "|---:|---:|---:|---:|",
+    ]
+    lines.extend(
+        "| "
+        + str(item.seed.value)
+        + " | "
+        + (
+            "unavailable (shared CV(FPR) <= 1e-12)"
+            if item.relative_cv_reduction is None
+            else _format_publication_metric(item.relative_cv_reduction.value)
+        )
+        + " | "
+        + _format_publication_metric(item.delta_worst_fpr.value)
+        + " | "
+        + _format_publication_metric(item.delta_iqr_fpr.value)
+        + " |"
+        for item in effects.values
+    )
+    return [ReportLine(line) for line in [*lines, ""]]
 
 
 _MECHANISM_TITLES: dict[type[object], ReportLine] = {

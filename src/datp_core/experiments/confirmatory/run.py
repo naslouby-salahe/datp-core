@@ -6,7 +6,14 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.analysis.contrasts import PairedContrast, PairedContrasts, build_paired_contrast
+from datp_core.analysis.contrasts import (
+    CONFIRMATORY_RELATIVE_CV_REDUCTION_CUTOFF,
+    ConfirmatoryDescriptiveEffect,
+    ConfirmatoryDescriptiveEffects,
+    PairedContrast,
+    PairedContrasts,
+    build_paired_contrast,
+)
 from datp_core.analysis.descriptive import (
     ClientEvaluationScoreSeries,
     ScoreGeometryResult,
@@ -228,6 +235,7 @@ def analyze_confirmatory_campaign() -> Path:
     result = analyze_confirmatory_evidence(
         AnalyzeConfirmatoryEvidenceRequest(
             contrasts=contrasts,
+            descriptive_effects=_confirmatory_descriptive_effects(),
             inference_protocol=CONFIRMATORY_INFERENCE_PROTOCOL,
             analysis_seed=CONFIRMATORY_ANALYSIS_SEED,
             output_directory=output,
@@ -272,6 +280,36 @@ def analyze_confirmatory_campaign() -> Path:
             evidence_role=EvidenceRole.MECHANISM,
         )
     return output
+
+
+def _confirmatory_descriptive_effects() -> ConfirmatoryDescriptiveEffects:
+    effects: list[ConfirmatoryDescriptiveEffect] = []
+    for seed in CONFIRMATORY_SEED_COHORT.values:
+        shared = load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.SHARED_THRESHOLD))
+        local = load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.LOCAL_THRESHOLD))
+        shared_cv = population_metric(shared, MetricId.FPR_COEFFICIENT_OF_VARIATION)
+        local_cv = population_metric(local, MetricId.FPR_COEFFICIENT_OF_VARIATION)
+        relative = (
+            None
+            if shared_cv.value <= CONFIRMATORY_RELATIVE_CV_REDUCTION_CUTOFF.value
+            else MetricValue((shared_cv.value - local_cv.value) / shared_cv.value)
+        )
+        effects.append(
+            ConfirmatoryDescriptiveEffect(
+                seed=seed,
+                shared_cv_fpr=shared_cv,
+                local_cv_fpr=local_cv,
+                relative_cv_reduction=relative,
+                delta_worst_fpr=MetricValue(
+                    population_metric(shared, MetricId.WORST_CLIENT_FPR).value
+                    - population_metric(local, MetricId.WORST_CLIENT_FPR).value
+                ),
+                delta_iqr_fpr=MetricValue(
+                    population_metric(shared, MetricId.FPR_IQR).value - population_metric(local, MetricId.FPR_IQR).value
+                ),
+            )
+        )
+    return ConfirmatoryDescriptiveEffects(values=tuple(effects))
 
 
 def _export_client_impact_synthesis_tables(mechanisms: tuple[MechanismEvidence, ...], output: Path) -> None:

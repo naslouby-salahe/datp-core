@@ -1,3 +1,4 @@
+from math import isclose
 from typing import overload
 
 from pydantic import model_validator
@@ -32,6 +33,43 @@ from datp_core.detector.training.contracts import FederatedTrainingCoordinate
 from datp_core.experiments.common.seeds import SeedCohort
 
 type MetricSeries = tuple[MetricValue, ...]
+
+CONFIRMATORY_RELATIVE_CV_REDUCTION_CUTOFF = MetricValue(1e-12)
+
+
+class ConfirmatoryDescriptiveEffect(StrictModel):
+    seed: Seed
+    shared_cv_fpr: MetricValue
+    local_cv_fpr: MetricValue
+    relative_cv_reduction: MetricValue | None
+    delta_worst_fpr: MetricValue
+    delta_iqr_fpr: MetricValue
+
+    @model_validator(mode="after")
+    def validate_relative_reduction(self) -> "ConfirmatoryDescriptiveEffect":
+        if self.shared_cv_fpr.value <= CONFIRMATORY_RELATIVE_CV_REDUCTION_CUTOFF.value:
+            if self.relative_cv_reduction is not None:
+                raise ValueError("relative CV reduction is unavailable when shared CV(FPR) is near zero")
+            return self
+        if self.relative_cv_reduction is None:
+            raise ValueError("relative CV reduction is required when shared CV(FPR) exceeds the cutoff")
+        expected = (self.shared_cv_fpr.value - self.local_cv_fpr.value) / self.shared_cv_fpr.value
+        if not isclose(self.relative_cv_reduction.value, expected, rel_tol=0.0, abs_tol=1e-15):
+            raise ValueError("relative CV reduction must match the paired shared/local CV(FPR) values")
+        return self
+
+
+class ConfirmatoryDescriptiveEffects(StrictModel):
+    values: tuple[ConfirmatoryDescriptiveEffect, ...]
+
+    @model_validator(mode="after")
+    def validate_unique_ordered_seeds(self) -> "ConfirmatoryDescriptiveEffects":
+        seeds = tuple(effect.seed for effect in self.values)
+        if len(seeds) != len(frozenset(seeds)):
+            raise ValueError("confirmatory descriptive effects require one record per seed")
+        if seeds != tuple(sorted(seeds, key=lambda seed: seed.value)):
+            raise ValueError("confirmatory descriptive effects must be ordered by seed")
+        return self
 
 
 class PairedDifferenceCounts(StrictModel):

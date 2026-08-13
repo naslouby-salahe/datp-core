@@ -5,7 +5,11 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from datp_core.analysis.contrasts import PairedContrasts, SupplementaryPairedAnalysisPlan
+from datp_core.analysis.contrasts import (
+    ConfirmatoryDescriptiveEffects,
+    PairedContrasts,
+    SupplementaryPairedAnalysisPlan,
+)
 from datp_core.analysis.inference.contracts import PairedInferenceProtocol
 from datp_core.analysis.inference.multiplicity import MultiplicityPlan
 from datp_core.analysis.influence import LeaveOneDeviceOutDiagnostics
@@ -49,6 +53,7 @@ class SeedEvidenceAssetName(StrEnum):
 @dataclass(frozen=True, slots=True, kw_only=True)
 class AnalyzeConfirmatoryEvidenceRequest:
     contrasts: PairedContrasts
+    descriptive_effects: ConfirmatoryDescriptiveEffects
     inference_protocol: PairedInferenceProtocol
     analysis_seed: Seed
     output_directory: Path
@@ -102,6 +107,7 @@ def analyze_confirmatory_evidence(
     document = prepare_confirmatory_analysis(
         ConfirmatoryAnalysisRequest(
             contrasts=request.contrasts,
+            descriptive_effects=request.descriptive_effects,
             inference_protocol=request.inference_protocol,
             analysis_seed=request.analysis_seed,
             multiplicity_plan=request.multiplicity_plan,
