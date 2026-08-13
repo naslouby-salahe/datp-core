@@ -6490,11 +6490,11 @@ README_REPRODUCIBILITY.md
 | `GLOBAL-024` | I | 767 | 6.2 Relationship to Laridi et al. | it must not be called `LARIDI_ANOMALY_INFORMED_REFERENCE`; | `PASS` | Active method identifiers retain benign-summary terminology only. |
 | `REPORT-002` | I | 768 | 6.2 Relationship to Laridi et al. | its results cannot be used to claim reproduction of Laridi et al.; | `PASS` | Comparator report disclaims a Laridi reproduction claim. |
 | `CALIBRATION-040` | I | 769 | 6.2 Relationship to Laridi et al. | the difference in calibration contracts must be disclosed in related work and limitations. | `PASS` | Prior-art distinction and comparator report disclose the benign-only boundary. |
-| `TRAIN-008` | I | 886 | 7.2 Ditto | a distinct global model; | `NOT_AUDITED` | — |
-| `TRAIN-009` | I | 887 | 7.2 Ditto | persistent client-personalized states; | `NOT_AUDITED` | — |
-| `TRAIN-010` | I | 888 | 7.2 Ditto | the correct proximal personalized objective; | `NOT_AUDITED` | — |
-| `TRAIN-011` | I | 889 | 7.2 Ditto | no aggregation of personalized states as if they were global; | `NOT_AUDITED` | — |
-| `TRAIN-012` | I | 890 | 7.2 Ditto | separate evaluation. | `NOT_AUDITED` | — |
+| `TRAIN-008` | I | 886 | 7.2 Ditto | a distinct global model; | `PASS` | Ditto training coordinates preserve a distinct global model. |
+| `TRAIN-009` | I | 887 | 7.2 Ditto | persistent client-personalized states; | `PASS` | Ditto coordinates persist one personalized state per client. |
+| `TRAIN-010` | I | 888 | 7.2 Ditto | the correct proximal personalized objective; | `PASS` | Training declarations validate the Ditto proximal coefficient/objective. |
+| `TRAIN-011` | I | 889 | 7.2 Ditto | no aggregation of personalized states as if they were global; | `PASS` | Personal and global state identities are distinct in the Ditto protocol. |
+| `TRAIN-012` | I | 890 | 7.2 Ditto | separate evaluation. | `PASS` | Personalized-model evaluation uses its own training coordinate. |
 | `TRAIN-013` | I | 937 | 7.2A Post-FedAvg client-local fine-tuning stress test | instantiate a **fresh optimizer** for each `(training_seed, client_id)` fine-tuning run; | `NOT_AUDITED` | — |
 | `TRAIN-014` | I | 938 | 7.2A Post-FedAvg client-local fine-tuning stress test | copy model weights only; never copy Adam/SGD momentum, moments, scheduler counters, gradient scaler state, or any other optimizer state from federated training; | `NOT_AUDITED` | — |
 | `TRAIN-015` | I | 939 | 7.2A Post-FedAvg client-local fine-tuning stress test | use the FedAvg reference learning rate, batch size, optimizer betas/momentum, epsilon, weight decay, loss, gradient handling, and benign-train data-loader semantics unchanged; | `NOT_AUDITED` | — |
