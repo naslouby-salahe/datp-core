@@ -6472,9 +6472,9 @@ README_REPRODUCIBILITY.md
 | `CALIBRATION-031` | I | 621 | 5.2 Local–global shrinkage | finite-calibration local estimation variance across the `R=10` nested subsamples, defined in Part III §8.4; | `NOT_AUDITED` | — |
 | `CALIBRATION-032` | I | 622 | 5.2 Local–global shrinkage | `Bias_tau` and `RMSE_tau` versus each client's full-calibration local threshold, defined in Part II §8.1; | `NOT_AUDITED` | — |
 | `CALIBRATION-033` | I | 623 | 5.2 Local–global shrinkage | held-out target-attainment error and calibration-to-held-out generalization gap, defined in Part III §§4.7–4.8. | `NOT_AUDITED` | — |
-| `THRESHOLD-017` | I | 639 | 5.2 Local–global shrinkage | `lambda = 0` gives the shared endpoint; | `NOT_AUDITED` | — |
-| `THRESHOLD-018` | I | 640 | 5.2 Local–global shrinkage | `lambda = 1` gives the local endpoint; | `NOT_AUDITED` | — |
-| `THRESHOLD-019` | I | 641 | 5.2 Local–global shrinkage | intermediate values partially pool client information. | `NOT_AUDITED` | — |
+| `THRESHOLD-017` | I | 639 | 5.2 Local–global shrinkage | `lambda = 0` gives the shared endpoint; | `PASS` | Fixed-shrinkage tests require the exact shared endpoint. |
+| `THRESHOLD-018` | I | 640 | 5.2 Local–global shrinkage | `lambda = 1` gives the local endpoint; | `PASS` | Fixed-shrinkage tests require the exact local endpoint. |
+| `THRESHOLD-019` | I | 641 | 5.2 Local–global shrinkage | intermediate values partially pool client information. | `PASS` | The complete declared intermediate curve is constructed per client. |
 | `CALIBRATION-034` | I | 687 | 5.4 Split-conformal local threshold: LOCAL_CONFORMAL_THRESHOLD | arbitrary client-conditional coverage; | `NOT_AUDITED` | — |
 | `CALIBRATION-035` | I | 688 | 5.4 Split-conformal local threshold: LOCAL_CONFORMAL_THRESHOLD | validity under unrestricted non-exchangeability; | `NOT_AUDITED` | — |
 | `CALIBRATION-036` | I | 689 | 5.4 Split-conformal local threshold: LOCAL_CONFORMAL_THRESHOLD | robustness to Byzantine calibration (explicitly outside scope in light of Rob-FCP/PRISM-FCP[^robfcp2024][^prismfcp2026]); | `NOT_AUDITED` | — |
