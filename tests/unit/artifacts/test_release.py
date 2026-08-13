@@ -14,6 +14,7 @@ from tools.reproducibility.release import (
     build_release_bundle,
     campaign_evaluation_release_artifacts,
     campaign_publication_release_artifacts,
+    campaign_standard_training_release_artifacts,
     campaign_threshold_release_artifacts,
     validate_release_bundle,
 )
@@ -215,6 +216,73 @@ def test_campaign_threshold_release_discovery_inherits_evaluation_coordinate_met
     assert tuple(item.artifact_type for item in artifacts) == ("threshold_result", "temporal_threshold_provenance")
     assert all(item.training_seed == "4" for item in artifacts)
     assert all(item.experiment_id == "shared_vs_local_confirmation" for item in artifacts)
+
+
+def test_standard_training_release_discovery_requires_coordinate_artifacts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    evaluation = tmp_path / "experiment" / "evaluation" / "federated_evaluation.json"
+    evaluation.parent.mkdir(parents=True)
+    evaluation.write_text("{}", encoding="utf-8")
+    training = tmp_path / "federated-training"
+    training.mkdir()
+    document = cast(
+        FederatedEvaluationDocument,
+        SimpleNamespace(
+            score_coordinate=SimpleNamespace(), clients=(), threshold_method=FederatedThresholdMethod.LOCAL_THRESHOLD
+        ),
+    )
+    monkeypatch.setattr(release, "_load_evaluation_document", lambda _: document)
+    monkeypatch.setattr(release, "federated_training_directory", lambda *_: training)
+    monkeypatch.setattr(
+        release,
+        "_release_artifact_from_document",
+        lambda source, relative, _: ReleaseArtifact(source, relative, "evaluation", training_seed="4"),
+    )
+
+    with pytest.raises(ArtifactIntegrityError, match="coordinate release artifact is missing"):
+        campaign_standard_training_release_artifacts(tmp_path)
+
+
+def test_standard_training_release_discovery_retains_models_history_and_scores(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    evaluation = tmp_path / "experiment" / "evaluation" / "federated_evaluation.json"
+    evaluation.parent.mkdir(parents=True)
+    evaluation.write_text("{}", encoding="utf-8")
+    training = tmp_path / "federated-training"
+    client = "device_a"
+    for name in ("terminal_model.safetensors", "round_summary.parquet", "client_rounds.parquet", "device_name.txt"):
+        (training / name).parent.mkdir(parents=True, exist_ok=True)
+        (training / name).write_text(name, encoding="utf-8")
+    for name in ("calibration.parquet", "evaluation.parquet"):
+        path = training / "scores" / client / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(name, encoding="utf-8")
+    document = cast(
+        FederatedEvaluationDocument,
+        SimpleNamespace(
+            score_coordinate=SimpleNamespace(),
+            clients=(SimpleNamespace(client=SimpleNamespace(client_id=SimpleNamespace(value=client))),),
+            threshold_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
+        ),
+    )
+    coordinate = ReleaseArtifact(evaluation, Path("METRICS/evaluation.json"), "evaluation", training_seed="4")
+    monkeypatch.setattr(release, "_load_evaluation_document", lambda _: document)
+    monkeypatch.setattr(release, "federated_training_directory", lambda *_: training)
+    monkeypatch.setattr(release, "_release_artifact_from_document", lambda *_: coordinate)
+
+    artifacts = campaign_standard_training_release_artifacts(tmp_path)
+
+    assert tuple(item.artifact_type for item in artifacts) == (
+        "terminal_model",
+        "training_history",
+        "training_history",
+        "training_history",
+        "score_artifact",
+        "score_artifact",
+    )
+    assert all(item.training_seed == "4" for item in artifacts)
 
 
 def test_campaign_publication_release_discovery_requires_the_rendered_publication(tmp_path: Path) -> None:

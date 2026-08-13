@@ -19,6 +19,9 @@ from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAsse
 from datp_core.artifacts.repositories.thresholds import FederatedThresholdAssetName
 from datp_core.core.errors import ArtifactIntegrityError, ErrorMessage
 from datp_core.data.registry import population_declaration
+from datp_core.detector.checkpoints.identities import FederatedHistoryAssetName
+from datp_core.detector.scoring.models import FederatedScoreAssetName
+from datp_core.experiments.execution.layout import ExecutionArtifactDirectory, federated_training_directory
 
 _MANIFEST_FILENAME = "MANIFEST_SHA256.csv"
 _SIDECAR_FILENAME = "MANIFEST_SHA256.sha256"
@@ -111,11 +114,14 @@ class ReleaseValidation:
 def release_artifact_from_evaluation(source: Path, relative_path: Path) -> ReleaseArtifact:
     """Bind released evaluation evidence to its persisted scientific coordinate."""
 
+    return _release_artifact_from_document(source, relative_path, _load_evaluation_document(source))
+
+
+def _load_evaluation_document(source: Path) -> FederatedEvaluationDocument:
     try:
-        document = FederatedEvaluationDocument.model_validate_json(source.read_text(encoding="utf-8"))
+        return FederatedEvaluationDocument.model_validate_json(source.read_text(encoding="utf-8"))
     except (OSError, ValueError) as error:
         raise ArtifactIntegrityError(ErrorMessage(f"released evaluation document is unreadable: {source}")) from error
-    return _release_artifact_from_document(source, relative_path, document)
 
 
 def campaign_evaluation_release_artifacts(output_root: Path) -> tuple[ReleaseArtifact, ...]:
@@ -143,6 +149,94 @@ def campaign_threshold_release_artifacts(output_root: Path) -> tuple[ReleaseArti
     for result in results:
         artifacts.extend(_threshold_release_artifacts_for_result(output_root, result))
     return tuple(artifacts)
+
+
+def campaign_standard_training_release_artifacts(output_root: Path) -> tuple[ReleaseArtifact, ...]:
+    """Release standard federated models, histories, and score files from typed evaluation coordinates only."""
+
+    documents = tuple(sorted(output_root.rglob(FederatedEvaluationAssetName.DOCUMENT.value)))
+    training_evidence: dict[Path, tuple[Path, FederatedEvaluationDocument]] = {}
+    for source in documents:
+        document = _load_evaluation_document(source)
+        directory = federated_training_directory(document.score_coordinate, output_root)
+        if directory.is_dir():
+            training_evidence.setdefault(directory, (source, document))
+    if not training_evidence:
+        raise ArtifactIntegrityError(ErrorMessage("campaign release requires standard federated training evidence"))
+    artifacts: list[ReleaseArtifact] = []
+    for directory, (source, document) in sorted(training_evidence.items()):
+        coordinate = _release_artifact_from_document(
+            source, Path("METRICS") / source.relative_to(output_root), document
+        )
+        artifacts.extend(_standard_training_release_artifacts(output_root, directory, document, coordinate))
+    return tuple(artifacts)
+
+
+def _standard_training_release_artifacts(
+    output_root: Path,
+    directory: Path,
+    document: FederatedEvaluationDocument,
+    coordinate: ReleaseArtifact,
+) -> tuple[ReleaseArtifact, ...]:
+    required_history = (
+        FederatedHistoryAssetName.TERMINAL_MODEL,
+        FederatedHistoryAssetName.ROUND_SUMMARY,
+        FederatedHistoryAssetName.CLIENT_ROUNDS,
+        FederatedHistoryAssetName.DEVICE_NAME,
+    )
+    artifacts = [
+        _required_coordinate_artifact(
+            output_root,
+            directory / name.value,
+            "terminal_model" if name is FederatedHistoryAssetName.TERMINAL_MODEL else "training_history",
+            coordinate,
+        )
+        for name in required_history
+    ]
+    personalized = directory / FederatedHistoryAssetName.PERSONALIZED_ROUNDS.value
+    if personalized.is_file():
+        artifacts.append(
+            _artifact_with_coordinate_metadata(
+                personalized,
+                Path("MODELS") / personalized.relative_to(output_root),
+                "personalized_training_history",
+                coordinate,
+            )
+        )
+    score_root = directory / ExecutionArtifactDirectory.SCORES.value
+    for client_result in document.clients:
+        client = client_result.client.client_id.value
+        for asset in (FederatedScoreAssetName.CALIBRATION, FederatedScoreAssetName.EVALUATION):
+            artifacts.append(
+                _required_coordinate_artifact(
+                    output_root,
+                    score_root / client / asset.value,
+                    "score_artifact",
+                    coordinate,
+                )
+            )
+        future = score_root / client / FederatedScoreAssetName.FUTURE_RECALIBRATION.value
+        if future.is_file():
+            artifacts.append(
+                _artifact_with_coordinate_metadata(
+                    future, Path("SCORES") / future.relative_to(output_root), "future_recalibration_score", coordinate
+                )
+            )
+    return tuple(artifacts)
+
+
+def _required_coordinate_artifact(
+    output_root: Path,
+    source: Path,
+    artifact_type: str,
+    coordinate: ReleaseArtifact,
+) -> ReleaseArtifact:
+    if not source.is_file():
+        raise ArtifactIntegrityError(ErrorMessage(f"coordinate release artifact is missing: {source}"))
+    logical_directory = "MODELS" if artifact_type in {"terminal_model", "training_history"} else "SCORES"
+    return _artifact_with_coordinate_metadata(
+        source, Path(logical_directory) / source.relative_to(output_root), artifact_type, coordinate
+    )
 
 
 def _threshold_release_artifacts_for_result(output_root: Path, result: Path) -> tuple[ReleaseArtifact, ...]:
