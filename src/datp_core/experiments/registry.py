@@ -316,7 +316,7 @@ EXPERIMENTS = (
     ),
     _declare(
         ExperimentId.FIXED_SHRINKAGE_CURVE,
-        EvidenceRole.SUPPORTIVE,
+        EvidenceRole.THRESHOLD_VARIANT,
         PopulationId.NBAIOT_NATURAL_DEVICES,
         TrainingModelId.FEDAVG_AUTOENCODER,
         PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
@@ -325,7 +325,7 @@ EXPERIMENTS = (
     ),
     _declare(
         ExperimentId.SIZE_AWARE_SHRINKAGE,
-        EvidenceRole.SUPPORTIVE,
+        EvidenceRole.THRESHOLD_VARIANT,
         PopulationId.NBAIOT_NATURAL_DEVICES,
         TrainingModelId.FEDAVG_AUTOENCODER,
         PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
@@ -344,7 +344,7 @@ EXPERIMENTS = (
     ),
     _declare(
         ExperimentId.LOCAL_CONFORMAL_COVERAGE,
-        EvidenceRole.SUPPORTIVE,
+        EvidenceRole.THRESHOLD_VARIANT,
         PopulationId.NBAIOT_NATURAL_DEVICES,
         TrainingModelId.FEDAVG_AUTOENCODER,
         PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
@@ -353,7 +353,7 @@ EXPERIMENTS = (
     ),
     _declare(
         ExperimentId.FEDERATED_BENIGN_STATISTICS_COMPARISON,
-        EvidenceRole.THRESHOLD_VARIANT,
+        EvidenceRole.COMPARATOR,
         PopulationId.NBAIOT_NATURAL_DEVICES,
         TrainingModelId.FEDAVG_AUTOENCODER,
         PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
@@ -362,7 +362,7 @@ EXPERIMENTS = (
     ),
     _declare(
         ExperimentId.FEDERATED_QUANTILE_ESTIMATION,
-        EvidenceRole.THRESHOLD_VARIANT,
+        EvidenceRole.COMPARATOR,
         PopulationId.NBAIOT_NATURAL_DEVICES,
         TrainingModelId.FEDAVG_AUTOENCODER,
         PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
@@ -371,7 +371,7 @@ EXPERIMENTS = (
     ),
     _declare(
         ExperimentId.FIXED_COEFFICIENT_STATISTICS_SENSITIVITY,
-        EvidenceRole.THRESHOLD_VARIANT,
+        EvidenceRole.EXPLORATORY,
         PopulationId.NBAIOT_NATURAL_DEVICES,
         TrainingModelId.FEDAVG_AUTOENCODER,
         PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,

@@ -349,7 +349,7 @@ class TemporalRecoveryResult(StrictModel):
     def recovery_ratio(self) -> MetricValue | None:
         if self.unavailable_reason is not None:
             return None
-        if self.drift_excess.value <= self.drift_excess_materiality_threshold.value:
+        if self.drift_excess.value < self.drift_excess_materiality_threshold.value:
             return None
         return MetricValue(self.recovered_amount.value / self.drift_excess.value)
 

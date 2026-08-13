@@ -177,10 +177,22 @@ def test_temporal_recovery_uses_the_locked_drift_and_recovery_formulae() -> None
 
     nonmaterial = TemporalRecoveryResult.model_construct(
         static_reference_cv=MetricValue(0.10),
-        frozen_future_cv=MetricValue(0.15),
+        frozen_future_cv=MetricValue(0.1499),
         recalibrated_future_cv=MetricValue(0.10),
         decision_protocol=LOCKED_TEMPORAL_DECISION_PROTOCOL,
         unavailable_reason=None,
     )
     assert nonmaterial.recovery_ratio is None
     assert nonmaterial.availability is AvailabilityStatus.UNDEFINED
+
+    # The locked claim-survival condition is `drift_excess >= 0.05`; at or above
+    # the materiality threshold the recovery ratio remains defined.
+    at_materiality = TemporalRecoveryResult.model_construct(
+        static_reference_cv=MetricValue(0.10),
+        frozen_future_cv=MetricValue(0.1501),
+        recalibrated_future_cv=MetricValue(0.10),
+        decision_protocol=LOCKED_TEMPORAL_DECISION_PROTOCOL,
+        unavailable_reason=None,
+    )
+    assert at_materiality.recovery_ratio is not None
+    assert at_materiality.recovery_ratio.value == pytest.approx(1.0)

@@ -107,6 +107,7 @@ EXPECTED_MEMBERS = (
                 "SUPPORTIVE",
                 "MECHANISM",
                 "THRESHOLD_VARIANT",
+                "COMPARATOR",
                 "EXTERNAL_VALIDATION",
                 "TRAINING_STRESS_TEST",
                 "APPLICABILITY_BOUNDARY",

@@ -62,6 +62,7 @@ class EvidenceRole(StrEnum):
     SUPPORTIVE = "supportive"
     MECHANISM = "mechanism"
     THRESHOLD_VARIANT = "threshold_variant"
+    COMPARATOR = "comparator"
     EXTERNAL_VALIDATION = "external_validation"
     TRAINING_STRESS_TEST = "training_stress_test"
     APPLICABILITY_BOUNDARY = "applicability_boundary"

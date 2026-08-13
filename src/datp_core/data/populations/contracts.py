@@ -682,6 +682,7 @@ def population_allowed_evidence_roles(population_id: PopulationId) -> frozenset[
                     EvidenceRole.SUPPORTIVE,
                     EvidenceRole.MECHANISM,
                     EvidenceRole.THRESHOLD_VARIANT,
+                    EvidenceRole.COMPARATOR,
                     EvidenceRole.TRAINING_STRESS_TEST,
                     EvidenceRole.OPERATIONAL_TRANSLATION,
                     EvidenceRole.EXPLORATORY,

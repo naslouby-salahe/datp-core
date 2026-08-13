@@ -19,7 +19,6 @@ def test_supporting_evidence_families_have_locked_nonconfirmatory_roles() -> Non
             ExperimentId.CALIBRATION_SIZE_ABLATION,
             ExperimentId.CALIBRATION_COLD_START_ONBOARDING,
             ExperimentId.PREPROCESSING_GEOMETRY_SENSITIVITY,
-            ExperimentId.LOCAL_CONFORMAL_COVERAGE,
         )
     } == {
         ExperimentId.SHARED_CONSTRUCTION_SENSITIVITY: EvidenceRole.SUPPORTIVE,
@@ -28,7 +27,28 @@ def test_supporting_evidence_families_have_locked_nonconfirmatory_roles() -> Non
         ExperimentId.CALIBRATION_SIZE_ABLATION: EvidenceRole.SUPPORTIVE,
         ExperimentId.CALIBRATION_COLD_START_ONBOARDING: EvidenceRole.SUPPORTIVE,
         ExperimentId.PREPROCESSING_GEOMETRY_SENSITIVITY: EvidenceRole.SUPPORTIVE,
-        ExperimentId.LOCAL_CONFORMAL_COVERAGE: EvidenceRole.SUPPORTIVE,
+    }
+    assert {
+        experiment: roles[experiment]
+        for experiment in (
+            ExperimentId.FIXED_SHRINKAGE_CURVE,
+            ExperimentId.SIZE_AWARE_SHRINKAGE,
+            ExperimentId.LOCAL_CONFORMAL_COVERAGE,
+        )
+    } == {
+        ExperimentId.FIXED_SHRINKAGE_CURVE: EvidenceRole.THRESHOLD_VARIANT,
+        ExperimentId.SIZE_AWARE_SHRINKAGE: EvidenceRole.THRESHOLD_VARIANT,
+        ExperimentId.LOCAL_CONFORMAL_COVERAGE: EvidenceRole.THRESHOLD_VARIANT,
+    }
+    assert {
+        experiment: roles[experiment]
+        for experiment in (
+            ExperimentId.FEDERATED_BENIGN_STATISTICS_COMPARISON,
+            ExperimentId.FEDERATED_QUANTILE_ESTIMATION,
+        )
+    } == {
+        ExperimentId.FEDERATED_BENIGN_STATISTICS_COMPARISON: EvidenceRole.COMPARATOR,
+        ExperimentId.FEDERATED_QUANTILE_ESTIMATION: EvidenceRole.COMPARATOR,
     }
     assert {
         experiment: roles[experiment]
@@ -47,19 +67,9 @@ def test_supporting_evidence_families_have_locked_nonconfirmatory_roles() -> Non
         ExperimentId.THRESHOLD_MOVEMENT_TRADEOFF: EvidenceRole.MECHANISM,
     }
     assert {
-        experiment: roles[experiment]
-        for experiment in (
-            ExperimentId.FEDERATED_BENIGN_STATISTICS_COMPARISON,
-            ExperimentId.FEDERATED_QUANTILE_ESTIMATION,
-            ExperimentId.FIXED_COEFFICIENT_STATISTICS_SENSITIVITY,
-        )
+        experiment: roles[experiment] for experiment in (ExperimentId.FIXED_COEFFICIENT_STATISTICS_SENSITIVITY,)
     } == {
-        experiment: EvidenceRole.THRESHOLD_VARIANT
-        for experiment in (
-            ExperimentId.FEDERATED_BENIGN_STATISTICS_COMPARISON,
-            ExperimentId.FEDERATED_QUANTILE_ESTIMATION,
-            ExperimentId.FIXED_COEFFICIENT_STATISTICS_SENSITIVITY,
-        )
+        ExperimentId.FIXED_COEFFICIENT_STATISTICS_SENSITIVITY: EvidenceRole.EXPLORATORY,
     }
     assert {
         experiment: roles[experiment]
