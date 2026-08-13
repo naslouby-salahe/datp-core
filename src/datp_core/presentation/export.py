@@ -45,6 +45,7 @@ from datp_core.analysis.mechanisms.equity_utility import (
     ConfirmatoryEquityUtilityBundle,
     confirmatory_equity_utility_metric,
 )
+from datp_core.analysis.mechanisms.family_adequacy import FamilyExplanatoryAdequacyResult
 from datp_core.analysis.mechanisms.family_recall import FamilyRecallPolicyCampaignSummary, FamilyRecallPolicyComparison
 from datp_core.analysis.mechanisms.movement import (
     ThresholdMovement,
@@ -1071,6 +1072,7 @@ _MECHANISM_TITLES: dict[type[object], ReportLine] = {
     EquityUtilityParetoView: ReportLine("equity_utility_pareto"),
     FamilyRecallPolicyComparison: ReportLine("nbaiot_malware_family_sensitivity"),
     FamilyRecallPolicyCampaignSummary: ReportLine("nbaiot_malware_family_sensitivity_campaign_summary"),
+    FamilyExplanatoryAdequacyResult: ReportLine("physical_family_explanatory_adequacy"),
     CampaignFixedSupportStrata: ReportLine("campaign_fixed_calibration_support_strata"),
     SupportStratumOutcomeReport: ReportLine("support_stratum_seed_outcomes"),
     SupportStratumCampaignSummary: ReportLine("support_stratum_cross_seed_summary"),
@@ -1417,6 +1419,36 @@ def _render_divergence_result(mechanism: DivergenceResult) -> list[ReportLine]:
 
 
 @_render_one_mechanism.register
+def _render_family_explanatory_adequacy(mechanism: FamilyExplanatoryAdequacyResult) -> list[ReportLine]:
+    lines = [
+        f"Seed: {mechanism.seed.value}",
+        f"Within-family pairs: {mechanism.within_family_pair_count.value}",
+        f"Between-family pairs: {mechanism.between_family_pair_count.value}",
+        "Singleton families: " + ", ".join(item.value for item in mechanism.singleton_families),
+    ]
+    if mechanism.unavailable_reason is not None:
+        lines.append(f"Reason: {mechanism.unavailable_reason}")
+    else:
+        assert mechanism.within_family_js is not None
+        assert mechanism.between_family_js is not None
+        assert mechanism.family_separation_js is not None
+        assert mechanism.mean_within_family_threshold_sd is not None
+        assert mechanism.between_family_threshold_sd is not None
+        lines.extend(
+            [
+                f"Within-family JS: {_format_publication_metric(mechanism.within_family_js.value)}",
+                f"Between-family JS: {_format_publication_metric(mechanism.between_family_js.value)}",
+                f"Family separation JS: {_format_publication_metric(mechanism.family_separation_js.value)}",
+                "Mean within-family threshold SD: "
+                f"{_format_publication_metric(mechanism.mean_within_family_threshold_sd.value)}",
+                "Between-family threshold SD: "
+                f"{_format_publication_metric(mechanism.between_family_threshold_sd.value)}",
+            ]
+        )
+    return [ReportLine(line) for line in lines]
+
+
+@_render_one_mechanism.register
 def _render_cluster_stability_result(mechanism: ClusterStabilityResult) -> list[ReportLine]:
     left_memberships = _render_cluster_memberships(mechanism.left_memberships)
     right_memberships = _render_cluster_memberships(mechanism.right_memberships)
@@ -1529,11 +1561,13 @@ def _render_cluster_indexes(indexes: tuple[ClusterIndex, ...]) -> str:
 
 
 def _render_cluster_memberships(memberships: tuple[ClusterMembership, ...]) -> str:
-    return "; ".join(
-        f"{membership.cluster_index.value}:"
-        + ",".join(client.client_id.value for client in membership.members)
-        for membership in memberships
-    ) or "none"
+    return (
+        "; ".join(
+            f"{membership.cluster_index.value}:" + ",".join(client.client_id.value for client in membership.members)
+            for membership in memberships
+        )
+        or "none"
+    )
 
 
 @_render_one_mechanism.register

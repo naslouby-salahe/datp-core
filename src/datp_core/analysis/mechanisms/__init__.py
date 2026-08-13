@@ -75,6 +75,10 @@ from datp_core.analysis.mechanisms.equity_utility import (
     EquityUtilitySeedObservation,
     confirmatory_equity_utility_bundle,
 )
+from datp_core.analysis.mechanisms.family_adequacy import (
+    FamilyExplanatoryAdequacyResult,
+    family_explanatory_adequacy,
+)
 from datp_core.analysis.mechanisms.family_recall import (
     FamilyRecallDifference,
     FamilyRecallPolicyCampaignSummary,
@@ -171,6 +175,7 @@ type MechanismEvidence = (
     | EquityUtilityParetoView
     | FamilyRecallPolicyComparison
     | FamilyRecallPolicyCampaignSummary
+    | FamilyExplanatoryAdequacyResult
     | GroupedDispersionResult
     | ModelAlignmentResult
     | ScientificDecisionResult
@@ -239,6 +244,7 @@ __all__ = (
     "FamilyRecallPolicyComparison",
     "FamilyRecallPolicyCampaignSummary",
     "FamilyRecallPolicyEvidence",
+    "FamilyExplanatoryAdequacyResult",
     "DivergenceBlocker",
     "DivergenceResult",
     "EquityUtilityMeasureSummary",
@@ -286,6 +292,7 @@ __all__ = (
     "confirmatory_equity_utility_bundle",
     "equity_utility_pareto",
     "compare_family_recall_policies",
+    "family_explanatory_adequacy",
     "decide_absorption_cohort",
     "decide_model_absorption",
     "empty_cluster_evidence_record",

@@ -44,6 +44,7 @@ from datp_core.analysis.mechanisms import (
     compare_family_recall_policies,
     confirmatory_equity_utility_bundle,
     equity_utility_pareto,
+    family_explanatory_adequacy,
     grouped_dispersion,
     heterogeneity_benefit_association,
     jensen_shannon_from_client_scores,
@@ -71,6 +72,7 @@ from datp_core.core.identifiers import (
     ClientIdentityToken,
     EvidenceRole,
     ExperimentId,
+    FamilyIdentity,
     FederatedThresholdMethod,
     FigureTitle,
     MetricId,
@@ -80,8 +82,8 @@ from datp_core.core.identifiers import (
     TrainingModelId,
 )
 from datp_core.core.numeric import MetricValue, ModelCoefficientValue, Ratio, Seed, SeedObservationCount
-from datp_core.data.nbaiot.schema import NBaIoTDevice
-from datp_core.data.populations.contracts import ClientIdentity
+from datp_core.data.nbaiot.schema import NBaIoTDevice, device_family
+from datp_core.data.populations.contracts import ClientIdentity, FamilyAssignment
 from datp_core.detector.scoring.models import FederatedScoreAssetName
 from datp_core.detector.training.models import FederatedTrainingCoordinate
 from datp_core.experiments.common.coordinates import ExperimentCoordinate
@@ -363,6 +365,18 @@ def _confirmatory_mechanisms() -> tuple[MechanismEvidence, ...]:
         vectors = _client_score_vectors(shared)
         divergence = jensen_shannon_from_client_scores(vectors)
         mechanisms.append(divergence)
+        family_assignments = _natural_device_family_assignments(tuple(item.client for item in local.clients))
+        mechanisms.append(
+            family_explanatory_adequacy(
+                seed=seed,
+                divergence=divergence,
+                family_by_client=family_assignments,
+                local_thresholds=tuple(
+                    (assignment, next(item.threshold for item in local.clients if item.client == assignment.client))
+                    for assignment in family_assignments
+                ),
+            )
+        )
         if divergence.aggregate is not None:
             association_observations.append(
                 AssociationObservation(
@@ -820,6 +834,21 @@ def _client_score_vectors(document: FederatedEvaluationDocument) -> tuple[Client
             ErrorMessage("Jensen-Shannon construction requires at least two client score vectors")
         )
     return tuple(vectors)
+
+
+def _natural_device_family_assignments(clients: tuple[ClientIdentity, ...]) -> tuple[FamilyAssignment, ...]:
+    if not clients or any(client.population is not PopulationId.NBAIOT_NATURAL_DEVICES for client in clients):
+        raise ScientificContractError(ErrorMessage("family adequacy requires N-BaIoT natural-device clients"))
+    assignments: list[FamilyAssignment] = []
+    for client in sorted(clients):
+        try:
+            device = NBaIoTDevice(client.client_id.value)
+        except ValueError as error:
+            raise ScientificContractError(
+                ErrorMessage(f"unrecognized N-BaIoT natural-device identity: {client.client_id.value}")
+            ) from error
+        assignments.append(FamilyAssignment(client=client, family=FamilyIdentity(device_family(device).value)))
+    return tuple(assignments)
 
 
 def _confirmatory_declaration() -> ExperimentDeclaration:
