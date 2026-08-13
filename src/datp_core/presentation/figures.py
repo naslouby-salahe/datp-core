@@ -174,6 +174,14 @@ def confirmatory_paired_effect_figure(
         x_values=seed_values,
         y_values=tuple(mean for _ in seed_values),
     )
+    zero_reference_series = PairedMetricFigureSeries(
+        label=FigureLabel("horizontal zero reference"),
+        x_label=FigureLabel("training seed"),
+        y_label=FigureLabel("Delta = CV(FPR) shared minus local"),
+        availability=AvailabilityStatus.AVAILABLE,
+        x_values=seed_values,
+        y_values=tuple(MetricValue(0.0) for _ in seed_values),
+    )
     interval_series = (
         (
             PairedMetricFigureSeries(
@@ -201,6 +209,7 @@ def confirmatory_paired_effect_figure(
                 y_values=deltas,
                 point_labels=labels,
             ),
+            zero_reference_series,
             mean_series,
             *interval_series,
         ),
