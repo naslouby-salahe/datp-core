@@ -52,6 +52,13 @@ datp-core
 └── status [EXPERIMENT_ID]
 ```
 
+Reproducibility-release construction and validation are research tooling, intentionally
+separate from the detector runtime. Run its validator explicitly with:
+
+```bash
+python -m tools.reproducibility.release <release-root>
+```
+
 An execution writes its current results. Existing destinations are replaced only through the CLI's explicit overwrite contract. Interrupted-training recovery is isolated from normal execution.
 
 ## Validation

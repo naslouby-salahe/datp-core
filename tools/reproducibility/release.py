@@ -11,7 +11,7 @@ from pathlib import Path
 from platform import platform, processor
 from re import fullmatch
 from shutil import copy2
-from sys import version
+from sys import argv, version
 
 from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
@@ -441,3 +441,20 @@ def _sha256_file(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def main() -> None:
+    """Validate an already-created reproducibility release outside the runtime CLI."""
+
+    if len(argv) != 2:
+        raise SystemExit("usage: python -m tools.reproducibility.release <release-root>")
+    try:
+        release = validate_release_bundle(Path(argv[1]))
+    except (ArtifactIntegrityError, ValueError) as error:
+        raise SystemExit(str(error)) from error
+    print(f"release={release.root}")
+    print(f"artifacts={len(release.entries)}")
+
+
+if __name__ == "__main__":
+    main()

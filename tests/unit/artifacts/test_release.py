@@ -6,10 +6,8 @@ from types import SimpleNamespace
 from typing import cast
 
 import pytest
-
-from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
-from datp_core.artifacts import release
-from datp_core.artifacts.release import (
+from tools.reproducibility import release
+from tools.reproducibility.release import (
     ReleaseArtifact,
     ReleaseBuildRequest,
     ReleaseState,
@@ -18,6 +16,8 @@ from datp_core.artifacts.release import (
     campaign_publication_release_artifacts,
     validate_release_bundle,
 )
+
+from datp_core.analysis.metrics.federated import FederatedEvaluationDocument
 from datp_core.core.errors import ArtifactIntegrityError
 from datp_core.core.identifiers import CoordinateStableKey, FederatedThresholdMethod, PopulationId, TrainingModelId
 from datp_core.core.numeric import Seed
