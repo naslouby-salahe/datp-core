@@ -1,5 +1,5 @@
 import pytest
-from tests.unit.thresholding.helpers import COORDINATE, identity
+from tests.unit.thresholding.helpers import COORDINATE, client_scores, identity
 
 from datp_core.core.errors import ScientificContractError
 from datp_core.core.identifiers import (
@@ -33,6 +33,7 @@ from datp_core.thresholds.policies.cluster import (
     ClusterMembership,
     FingerprintFeatures,
     GroupedThresholdResult,
+    construct_grouped_threshold_with_omitted_feature,
 )
 from datp_core.thresholds.policies.family import (
     FamilyMembership,
@@ -40,7 +41,7 @@ from datp_core.thresholds.policies.family import (
 )
 from datp_core.thresholds.policies.local import LocalThresholdResult
 from datp_core.thresholds.policies.shared import SharedThresholdResult
-from datp_core.thresholds.protocols import KMeansInitialization
+from datp_core.thresholds.protocols import CLUSTER_THRESHOLD_PROTOCOL, ClusterFingerprintFeature, KMeansInitialization
 from datp_core.thresholds.variants.conformal import (
     ConformalAssignment,
     ConformalThresholdResult,
@@ -200,6 +201,22 @@ def test_cluster_contracts_require_four_features_and_declared_group_count() -> N
             random_state=random_state,
             group_count=group_count,
         )
+
+
+def test_cluster_feature_ablation_refits_kmeans_without_the_omitted_feature() -> None:
+    eligible = tuple(
+        client_scores(f"client_{index}", (float(index), float(index + 1), float(index + 2), float(index + 3)))
+        for index in range(4)
+    )
+
+    result = construct_grouped_threshold_with_omitted_feature(
+        eligible,
+        CLUSTER_THRESHOLD_PROTOCOL,
+        omitted_feature=ClusterFingerprintFeature.BENIGN_ERROR_SKEWNESS,
+    )
+
+    assert len(result.clusters) == CLUSTER_THRESHOLD_PROTOCOL.group_count.value
+    assert all(fingerprint.standardized.skewness.value == 0.0 for fingerprint in result.fingerprints)
 
 
 def test_shrinkage_contracts_enforce_formula_and_complete_curve() -> None:

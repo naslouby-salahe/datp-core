@@ -36,6 +36,7 @@ from datp_core.thresholds.contracts import (
 )
 from datp_core.thresholds.protocols import (
     CANONICAL_QUANTILE,
+    ClusterFingerprintFeature,
     ClusterThresholdAggregation,
     ClusterThresholdProtocol,
     KMeansInitialization,
@@ -175,6 +176,24 @@ def construct_grouped_threshold(
     eligible: tuple[ClientBenignCalibrationScores, ...],
     protocol: ClusterThresholdProtocol,
 ) -> GroupedThresholdResult:
+    return _construct_grouped_threshold(eligible, protocol, omitted_feature=None)
+
+
+def construct_grouped_threshold_with_omitted_feature(
+    eligible: tuple[ClientBenignCalibrationScores, ...],
+    protocol: ClusterThresholdProtocol,
+    *,
+    omitted_feature: ClusterFingerprintFeature,
+) -> GroupedThresholdResult:
+    return _construct_grouped_threshold(eligible, protocol, omitted_feature=omitted_feature)
+
+
+def _construct_grouped_threshold(
+    eligible: tuple[ClientBenignCalibrationScores, ...],
+    protocol: ClusterThresholdProtocol,
+    *,
+    omitted_feature: ClusterFingerprintFeature | None,
+) -> GroupedThresholdResult:
     if len(eligible) <= protocol.group_count.value:
         raise ScientificContractError(
             ErrorMessage("grouped thresholding requires more eligible clients than the declared group count"),
@@ -194,7 +213,8 @@ def construct_grouped_threshold(
             ErrorMessage("fingerprint matrix must be finite before scaling and clustering"),
             subject=ContractSubject.THRESHOLD,
         )
-    standardized_matrix = StandardScaler().fit_transform(matrix)
+    clustering_matrix = np.delete(matrix, _feature_column(omitted_feature), axis=1) if omitted_feature else matrix
+    standardized_matrix = StandardScaler().fit_transform(clustering_matrix)
     labels = KMeans(
         n_clusters=protocol.group_count.value,
         init=_sklearn_init(protocol.initialization),
@@ -206,7 +226,7 @@ def construct_grouped_threshold(
         ClusterFingerprint(
             client=item.client,
             raw=raw,
-            standardized=_as_fingerprint_features(standardized),
+            standardized=_as_fingerprint_features(_restore_omitted_standardized_feature(standardized, omitted_feature)),
         )
         for item, raw, standardized in zip(ordered, raw_features, standardized_matrix, strict=True)
     )
@@ -229,6 +249,21 @@ def construct_grouped_threshold(
         random_state=protocol.random_state,
         group_count=protocol.group_count,
     )
+
+
+def _feature_column(feature: ClusterFingerprintFeature) -> int:
+    return tuple(ClusterFingerprintFeature).index(feature)
+
+
+def _restore_omitted_standardized_feature(
+    values: np.ndarray,
+    omitted_feature: ClusterFingerprintFeature | None,
+) -> np.ndarray:
+    if omitted_feature is None:
+        return values
+    restored = np.zeros(4, dtype=np.float64)
+    restored[np.arange(4) != _feature_column(omitted_feature)] = values
+    return restored
 
 
 def _as_fingerprint_features(row: np.ndarray) -> FingerprintFeatures:
