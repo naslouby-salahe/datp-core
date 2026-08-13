@@ -860,6 +860,7 @@ def _render_exact_sign_test(result: ExactPairedSignTestResult | None) -> list[Re
         lines.extend(
             (
                 f"Positive nonzero pairs: {result.positive_pair_count.value}/{result.nonzero_pair_count.value}",
+                f"Negative nonzero pairs: {result.negative_pair_count.value}/{result.nonzero_pair_count.value}",
                 "Two-sided exact p-value: "
                 + (
                     "unavailable"
