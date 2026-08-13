@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from datp_core.analysis.descriptive import summarize_cross_seed_metric_values
+from datp_core.analysis.inference.bootstrap.contracts import BootstrapInterval
+from datp_core.analysis.inference.bootstrap.estimation import seed_level_bca_interval
 from datp_core.analysis.mechanisms import ClientScoreVector, jensen_shannon_from_client_scores
 from datp_core.analysis.metrics.models import metric_by_id
 from datp_core.analysis.metrics.population import calculate_population_metrics
@@ -56,7 +58,12 @@ from datp_core.experiments.common.reports import (
     AnalysisReportPublication,
     finalize_analysis_report,
 )
-from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
+from datp_core.experiments.common.seeds import (
+    CONFIRMATORY_ANALYSIS_SEED,
+    CONFIRMATORY_SEED_COHORT,
+    SeedCohort,
+)
+from datp_core.experiments.confirmatory.spec import CONFIRMATORY_INFERENCE_PROTOCOL
 from datp_core.experiments.execution import execute_declared_experiment_seed
 from datp_core.experiments.execution.evidence import load_evaluation_document, population_metric
 from datp_core.experiments.execution.layout import (
@@ -159,6 +166,7 @@ class EstimatorScopeSummaryReport(StrictModel):
     rows: tuple[EstimatorScopeSummary, ...]
     contrasts: tuple[EstimatorScopeContrast, ...]
     sign_counts: tuple[EstimatorScopeSignCounts, ...]
+    secondary_moment_scope_gain_interval: BootstrapInterval
 
 
 class CalibrationSizeAblationRow(StrictModel):
@@ -750,6 +758,7 @@ def report_threshold_estimator_scope_sensitivity(
             rows=tuple(rows),
             contrasts=tuple(contrasts),
             sign_counts=_estimator_scope_sign_counts(tuple(contrasts)),
+            secondary_moment_scope_gain_interval=_moment_scope_gain_interval(tuple(contrasts)),
         ),
         _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
     )
@@ -798,6 +807,15 @@ def _estimator_scope_sign_counts(
                 tuple(item.moment_scope_gain.value for item in contrasts),
             ),
         )
+    )
+
+
+def _moment_scope_gain_interval(contrasts: tuple[EstimatorScopeContrast, ...]) -> BootstrapInterval:
+    return seed_level_bca_interval(
+        tuple(MetricValue(item.moment_scope_gain.value) for item in contrasts),
+        protocol=CONFIRMATORY_INFERENCE_PROTOCOL,
+        analysis_seed=CONFIRMATORY_ANALYSIS_SEED,
+        require_full_cohort=True,
     )
 
 

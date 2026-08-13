@@ -3,6 +3,7 @@ import pytest
 from datp_core.core.numeric import MetricValue, Seed
 from datp_core.experiments.threshold_robustness.run import (
     _estimator_scope_sign_counts,
+    _moment_scope_gain_interval,
     estimator_scope_contrast,
 )
 
@@ -21,3 +22,25 @@ def test_estimator_scope_contrast_retains_both_scope_gains_and_difference() -> N
     assert contrast.estimator_sensitivity.value == pytest.approx(0.1)
     sign_counts = _estimator_scope_sign_counts((contrast,))
     assert tuple(item.positive.value for item in sign_counts) == (1, 1)
+
+
+def test_moment_scope_gain_interval_is_secondary_seed_level_bca_evidence() -> None:
+    contrasts = tuple(
+        estimator_scope_contrast(
+            seed=Seed(seed),
+            q95_shared=MetricValue(0.5),
+            q95_local=MetricValue(0.3),
+            moment_shared=MetricValue(0.4 + seed / 100),
+            moment_local=MetricValue(0.2),
+        )
+        for seed in range(10)
+    )
+
+    interval = _moment_scope_gain_interval(contrasts)
+
+    assert interval.outcome.value == "available"
+    assert interval.point_estimate is not None
+    assert interval.point_estimate.value == pytest.approx(0.245)
+    assert interval.lower_bound is not None
+    assert interval.upper_bound is not None
+    assert interval.lower_bound.value <= interval.point_estimate.value <= interval.upper_bound.value
