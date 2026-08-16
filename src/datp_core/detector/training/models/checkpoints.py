@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from datp_core.core.errors import ErrorMessage, ScientificContractError
-from datp_core.core.identifiers import ContractSubject, CudaDeviceName, TrainingModelId
+from datp_core.core.identifiers import ContractSubject, DeviceName, TrainingModelId
 from datp_core.core.numeric import BatchSize, RoundNumber
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.autoencoder import AutoencoderModelState
@@ -25,7 +25,7 @@ class FederatedTrainingResult:
     history: FederatedTrainingHistory
     termination_reason: TrainingTerminationReason
     terminal_model_state: AutoencoderModelState
-    device_name: CudaDeviceName
+    device_name: DeviceName
     batch_size_used: BatchSize
 
     def __post_init__(self) -> None:
@@ -36,8 +36,8 @@ class FederatedTrainingResult:
             )
         if not self.device_name.strip():
             raise ScientificContractError(
-                ErrorMessage("training result requires a non-empty CUDA device name"),
-                subject=ContractSubject.CUDA,
+                ErrorMessage("training result requires a non-empty training device name"),
+                subject=ContractSubject.RUNTIME,
             )
         if self.history.rounds[-1].round_number.value > self.diagnostic_snapshot_protocol.maximum_round.value:
             raise ScientificContractError(

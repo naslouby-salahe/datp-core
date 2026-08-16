@@ -214,11 +214,6 @@ def model_from_terminal_state(
     autoencoder: AutoencoderProtocol,
     device: torch.device,
 ) -> ReconstructionAutoencoder:
-    if device.type != "cuda":
-        raise ScientificContractError(
-            ErrorMessage("scoring requires a CUDA device"),
-            subject=ContractSubject.CUDA,
-        )
     model = ReconstructionAutoencoder(autoencoder.widths).to(device)
     model_state.apply_to(model)
     model.eval()

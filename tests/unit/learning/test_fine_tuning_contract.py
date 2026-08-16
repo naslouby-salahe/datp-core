@@ -1,4 +1,3 @@
-import torch
 from tests.unit.learning.federated.helpers import (
     AUTOENCODER,
     BATCH_SIZE,
@@ -28,8 +27,7 @@ def test_fine_tuning_seed_is_stable_per_client_and_distinct_between_clients() ->
     ) != derive_fedavg_local_fine_tuning_seed(DatasetId.NBAIOT, Seed(7), second)
 
 
-def test_fine_tuning_builds_fresh_client_models_from_weights_only(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr("datp_core.detector.training.fine_tuning.resolve_cuda_device", lambda: torch.device("cpu"))
+def test_fine_tuning_builds_fresh_client_models_from_weights_only(tmp_path) -> None:
     source = build_reconstruction_autoencoder(AUTOENCODER, initialization_seed=Seed(3))
     source_state = AutoencoderModelState.from_model(source)
     protocol = FedAvgLocalFineTuningProtocol(

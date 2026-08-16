@@ -316,10 +316,6 @@ class LogicalElementCount(PositiveIntegerValue):
     validation_name: ClassVar[str] = "logical element count"
 
 
-class CudaDeviceCount(NonNegativeIntegerValue):
-    validation_name: ClassVar[str] = "CUDA device count"
-
-
 class ClientPublicationCount(NonNegativeIntegerValue):
     validation_name: ClassVar[str] = "client publication count"
 

@@ -6,7 +6,6 @@ from tests.unit.learning.federated.helpers import (
     FEATURE_NAMES,
     client_identity,
     fitted_state,
-    require_cuda,
 )
 
 from datp_core.core.numeric import RowCount, Seed
@@ -34,7 +33,6 @@ def _float64_frame(row_count: RowCount, seed: Seed) -> pl.DataFrame:
 
 
 def test_prepare_federated_client_data_matches_the_naive_polars_to_numpy_astype_conversion(tmp_path) -> None:
-    require_cuda()
     state = fitted_state(tmp_path / "client_state.skops", "client_a")
     training_frame = _float64_frame(RowCount(20), Seed(3))
     validation_frame = _float64_frame(RowCount(10), Seed(4))
@@ -59,5 +57,3 @@ def test_prepare_federated_client_data_matches_the_naive_polars_to_numpy_astype_
     assert prepared.validation_features_cpu.dtype == TORCH_LEARNING_DTYPE
     assert torch.equal(prepared.features_cpu.cpu(), reference_tensor)
     assert torch.equal(prepared.validation_features_cpu.cpu(), reference_validation_tensor)
-    assert prepared.features_cpu.is_pinned()
-    assert prepared.validation_features_cpu.is_pinned()

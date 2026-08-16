@@ -40,7 +40,6 @@ from datp_core.detector.scoring.models import ClientScoringInput
 from datp_core.detector.training.contracts import (
     AutoencoderProtocol,
     FedAvgProtocol,
-    FederatedClientDataResidency,
     FedProxProtocol,
     TrainingProtocolVariant,
 )
@@ -77,7 +76,6 @@ EDGE_FEATURE_NAMES = FeatureNameSequence(tuple(FeatureName(name) for name in EDG
 class FederatedExecutionContext:
     coordinate: FederatedTrainingCoordinate
     batch_size: BatchSize
-    client_data_residency: FederatedClientDataResidency
     execution_identity: ExternalTemporalExecutionIdentity | None
     clients: tuple[ClientIdentity, ...]
     family_by_client: tuple[FamilyAssignment, ...]
@@ -126,12 +124,6 @@ def training_batch_size_for(coordinate: ExperimentCoordinate) -> BatchSize:
     if coordinate.experiment is ExperimentId.HISTORICAL_DATP_REPRODUCTION:
         return ANCHOR_BATCH_SIZE
     return BATCH_SIZE
-
-
-def client_data_residency_for(coordinate: ExperimentCoordinate) -> FederatedClientDataResidency:
-    if coordinate.experiment is ExperimentId.HISTORICAL_DATP_REPRODUCTION:
-        return FederatedClientDataResidency.STREAMING
-    return FederatedClientDataResidency.GPU_RESIDENT_COHORT
 
 
 def federated_model_coefficient(coordinate: ExperimentCoordinate) -> ProximalCoefficient | None:
@@ -231,7 +223,6 @@ def resolve_execution_context(coordinate: ExperimentCoordinate, output_root: Pat
     return FederatedExecutionContext(
         coordinate=training_coordinate,
         batch_size=training_batch_size_for(coordinate),
-        client_data_residency=client_data_residency_for(coordinate),
         execution_identity=execution_identity,
         clients=clients,
         family_by_client=family_assignments,

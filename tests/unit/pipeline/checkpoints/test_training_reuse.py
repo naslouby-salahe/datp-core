@@ -10,7 +10,6 @@ from tests.unit.learning.federated.helpers import (
     POPULATION_CLIENT_COUNT,
     build_all_client_inputs,
     fedavg_coordinate,
-    require_cuda,
 )
 
 from datp_core.artifacts.serializers.safetensors import save_state_dict_tensors
@@ -26,7 +25,6 @@ from datp_core.detector.training import federated as federated_module
 from datp_core.detector.training.contracts import (
     AutoencoderArchitecture,
     AutoencoderProtocol,
-    FederatedClientDataResidency,
 )
 from datp_core.detector.training.engine import FederatedTrainingRequest
 from datp_core.detector.training.models import FederatedTrainingExecution, TrainingTerminationReason
@@ -46,14 +44,12 @@ def _request(tmp_path: Path) -> FederatedTrainingRequest:
         batch_size=BATCH_SIZE,
         learning_rate=LEARNING_RATE,
         output_directory=tmp_path / "training",
-        client_data_residency=FederatedClientDataResidency.STREAMING,
     )
 
 
 def test_train_global_federated_reuses_persisted_evidence_across_separate_invocations(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    require_cuda()
     request = _request(tmp_path)
 
     original_training = federated_module.run_federated_training
@@ -98,7 +94,6 @@ def test_train_global_federated_reuses_persisted_evidence_across_separate_invoca
 def test_train_global_federated_raises_explicitly_on_corrupt_persisted_history(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    require_cuda()
     request = _request(tmp_path)
     federated_module.train_global_federated(request)
 
@@ -133,7 +128,7 @@ def test_load_federated_training_returns_none_without_terminal_model_artifact(tm
 def test_load_federated_training_rejects_incomplete_persisted_evidence(tmp_path: Path) -> None:
     directory = tmp_path / "training"
     directory.mkdir()
-    (directory / FederatedHistoryAssetName.DEVICE_NAME.value).write_text("cuda:0", encoding="utf-8")
+    (directory / FederatedHistoryAssetName.DEVICE_NAME.value).write_text("cpu", encoding="utf-8")
 
     with pytest.raises(ArtifactIntegrityError):
         load_federated_training(
@@ -172,7 +167,6 @@ def test_checkpoint_loaders_reject_symbolic_link_artifacts(tmp_path: Path) -> No
 
 
 def test_load_federated_training_raises_on_architecture_mismatch(tmp_path: Path) -> None:
-    require_cuda()
     request = _request(tmp_path)
     federated_module.train_global_federated(request)
 

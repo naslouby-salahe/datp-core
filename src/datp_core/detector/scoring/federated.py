@@ -37,7 +37,7 @@ from datp_core.detector.scoring.models import (
     GenerateFederatedScoresRequest,
     ScoreGenerationRequest,
 )
-from datp_core.runtime.compute import resolve_cuda_device
+from datp_core.runtime.compute import LEARNING_DEVICE
 
 
 @dataclass(slots=True)
@@ -91,7 +91,7 @@ def publish_federated_scores(request: GenerateFederatedScoresRequest) -> Federat
             batch_size=request.batch_size,
             output_directory=request.output_directory,
         ),
-        resolve_cuda_device(),
+        LEARNING_DEVICE,
     )
 
 

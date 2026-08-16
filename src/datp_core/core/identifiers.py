@@ -326,7 +326,6 @@ class ContractSubject(StrEnum):
     CLIENT_IDENTITY = "client_identity"
     CONFIRMATORY_LADDER = "confirmatory_ladder"
     COORDINATE = "coordinate"
-    CUDA = "cuda"
     FEATURES = "features"
     HELD_OUT_METRICS = "held_out_metrics"
     LABEL = "label"
@@ -452,16 +451,8 @@ class ReloadValidationEvidence(NonEmptyString):
     validation_name: ClassVar[str] = "reload validation evidence"
 
 
-class CudaDeviceName(NonEmptyString):
-    validation_name: ClassVar[str] = "CUDA device name"
-
-
-class CudaVersion(NonEmptyString):
-    validation_name: ClassVar[str] = "CUDA version"
-
-
-class TorchVersion(NonEmptyString):
-    validation_name: ClassVar[str] = "PyTorch version"
+class DeviceName(NonEmptyString):
+    validation_name: ClassVar[str] = "training device name"
 
 
 class ColumnName(NonEmptyString):

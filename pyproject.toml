@@ -62,7 +62,7 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src", "."]
-addopts = ["--import-mode=importlib", "-p", "tests.pytest_cuda"]
+addopts = ["--import-mode=importlib"]
 
 [tool.ruff]
 line-length = 120

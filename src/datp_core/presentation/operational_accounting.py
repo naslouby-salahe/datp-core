@@ -87,7 +87,7 @@ def export_ditto_incremental_state_and_compute(
         f"Host: `{environment.host}`  ",
         f"Operating system: `{environment.operating_system}`  ",
         f"Python: `{environment.python_runtime}`  ",
-        f"PyTorch: `{environment.torch_runtime}`; CUDA runtime: `{environment.cuda_runtime}`",
+        f"PyTorch: `{environment.torch_runtime}`",
         "",
         f"Serialized global-model bytes: `{cost.serialized_global_model_bytes.value}`  ",
         "Global-update communication bytes (all training rounds, upload + download): "

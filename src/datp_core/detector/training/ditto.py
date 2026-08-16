@@ -11,7 +11,7 @@ from datp_core.core.errors import (
     ErrorMessage,
     ScientificContractError,
 )
-from datp_core.core.identifiers import ContractSubject, CudaDeviceName, NonEmptyString, TrainingModelId
+from datp_core.core.identifiers import ContractSubject, DeviceName, NonEmptyString, TrainingModelId
 from datp_core.core.numeric import BatchSize, ClientCount, ElapsedSeconds, LearningRate, RoundNumber, Seed
 from datp_core.data.populations.contracts import ClientIdentity
 from datp_core.detector.autoencoder import (
@@ -50,7 +50,7 @@ from datp_core.detector.training.models import (
     PersonalizedTerminalModel,
     TrainingTerminationReason,
 )
-from datp_core.runtime.compute import resolve_cuda_device
+from datp_core.runtime.compute import LEARNING_DEVICE
 from datp_core.runtime.determinism import configure_deterministic_execution
 
 
@@ -109,26 +109,19 @@ def _validate_request(request: DittoTrainingRequest) -> None:
 
 
 def _ditto_runtime_environment() -> DittoRuntimeEnvironment:
-    cuda_runtime = torch.version.cuda
-    if cuda_runtime is None:
-        raise ScientificContractError(
-            ErrorMessage("Ditto cost characterization requires a reported CUDA runtime"),
-            subject=ContractSubject.RUNTIME,
-        )
     hostname = __import__("socket").gethostname().strip()
     return DittoRuntimeEnvironment(
         host=NonEmptyString(hostname),
         operating_system=NonEmptyString(platform()),
         python_runtime=NonEmptyString(version.replace("\n", " ")),
         torch_runtime=NonEmptyString(torch.__version__),
-        cuda_runtime=NonEmptyString(cuda_runtime),
     )
 
 
 def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
     _validate_request(request)
     configure_deterministic_execution(request.training_seed)
-    device = resolve_cuda_device()
+    device = LEARNING_DEVICE
     runtime_environment = _ditto_runtime_environment()
 
     ordered_inputs = tuple(sorted(request.clients, key=lambda item: item.client))
@@ -279,7 +272,7 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
             )
         ),
         terminal_model_state=global_model_state.on_cpu_with_contiguous_tensors(),
-        device_name=CudaDeviceName(torch.cuda.get_device_name(device).strip()),
+        device_name=DeviceName("cpu"),
         batch_size_used=request.batch_size,
     )
 

@@ -19,7 +19,7 @@ from datp_core.detector.training.engine import (
     train_client_update,
 )
 from datp_core.detector.training.models import ClientTrainingInput, FederatedTrainingCoordinate
-from datp_core.runtime.compute import resolve_cuda_device
+from datp_core.runtime.compute import LEARNING_DEVICE
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,7 +114,7 @@ def _fine_tune_client(
     request: FineTuneFedAvgClientsRequest,
     client: ClientTrainingInput,
 ) -> FineTunedTerminalModel:
-    device = resolve_cuda_device()
+    device = LEARNING_DEVICE
     started = monotonic()
     update = train_client_update(
         client_data=prepare_federated_client_data(client, request.autoencoder),

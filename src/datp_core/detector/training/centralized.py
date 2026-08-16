@@ -15,7 +15,7 @@ from datp_core.core.errors import (
 from datp_core.core.identifiers import (
     CentralizedModelId,
     ContractSubject,
-    CudaDeviceName,
+    DeviceName,
     FeatureNameSequence,
     OptimizerId,
     OutcomeLabel,
@@ -67,7 +67,7 @@ from datp_core.detector.training.protocols import (
     NBAIOT_AUTOENCODER,
     WEIGHT_DECAY,
 )
-from datp_core.runtime.compute import require_cuda_available, resolve_cuda_device
+from datp_core.runtime.compute import LEARNING_DEVICE
 from datp_core.runtime.determinism import configure_deterministic_execution
 
 
@@ -127,7 +127,7 @@ class CentralizedTrainingResult:
     feature_count: FeatureCount
     epoch_losses: tuple[CentralizedEpochLoss, ...]
     terminal_model_state: AutoencoderModelState
-    device_name: CudaDeviceName
+    device_name: DeviceName
     batch_size_used: BatchSize
     final_epoch: RoundNumber
 
@@ -189,7 +189,7 @@ def train_centralized_autoencoder(request: CentralizedTrainingRequest) -> Centra
     _validate_training_request(request)
     reject_federated_preprocessing_for_training(request.preprocessing_state)
     configure_deterministic_execution(request.training_seed)
-    device = resolve_cuda_device()
+    device = LEARNING_DEVICE
     extracted = _extract_training_arrays(request)
     reject_attack_rows_in_centralized_training(extracted.labels, request.benign_label)
     if extracted.feature_matrix.shape[1] != request.autoencoder.widths[0].value:
@@ -234,7 +234,7 @@ def train_centralized_autoencoder(request: CentralizedTrainingRequest) -> Centra
         feature_count=FeatureCount(int(extracted.feature_matrix.shape[1])),
         epoch_losses=training_results.epoch_losses,
         terminal_model_state=model_state,
-        device_name=CudaDeviceName(torch.cuda.get_device_name(device)),
+        device_name=DeviceName("cpu"),
         batch_size_used=request.batch_size,
         final_epoch=request.diagnostic_snapshot_protocol.maximum_round,
     )
@@ -342,7 +342,6 @@ def _build_loader(
     batch_size: BatchSize,
     seed: Seed,
 ) -> DataLoader[tuple[torch.Tensor, ...]]:
-    require_cuda_available()
     tensor = torch.tensor(matrix, dtype=TORCH_LEARNING_DTYPE)
     dataset = TensorDataset(tensor)
     generator = torch.Generator(device="cpu")
@@ -354,7 +353,6 @@ def _build_loader(
         drop_last=True,
         generator=generator,
         num_workers=CENTRALIZED_DATALOADER_WORKER_COUNT.value,
-        pin_memory=True,
     )
 
 
@@ -374,7 +372,7 @@ def _run_training_epochs(
         batch_count = 0
 
         for (batch,) in loader:
-            batch = batch.to(device, non_blocking=True)
+            batch = batch.to(device)
             optimizer.zero_grad(set_to_none=True)
             reconstruction = model(batch)
             loss = nn.functional.mse_loss(reconstruction, batch)

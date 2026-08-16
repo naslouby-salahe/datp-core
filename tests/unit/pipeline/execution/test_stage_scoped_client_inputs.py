@@ -8,7 +8,6 @@ from datp_core.app.planning import PlanDisposition, PlanningEvidence, PlanReason
 from datp_core.core.identifiers import ClientIdentityToken, ExperimentId, PopulationIdentityKind
 from datp_core.core.numeric import Seed
 from datp_core.data.populations.contracts import ClientIdentity
-from datp_core.detector.training.contracts import FederatedClientDataResidency
 from datp_core.experiments.common.coordinates import ExperimentCoordinate
 from datp_core.experiments.common.seeds import SeedCohort
 from datp_core.experiments.execution import workspace as workspace_module
@@ -43,7 +42,6 @@ def _workspace(tmp_path: Path) -> workspace_module.ExperimentWorkspace:
         coordinate=training_coordinate_for(coordinate),
         family_by_client=(),
         training_directory=tmp_path,
-        client_data_residency=FederatedClientDataResidency.STREAMING,
     )
     return workspace_module.ExperimentWorkspace(
         coordinate=coordinate,

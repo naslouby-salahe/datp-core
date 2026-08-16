@@ -2,7 +2,6 @@ from pathlib import Path
 
 import numpy as np
 import polars as pl
-import torch
 
 from datp_core.core.identifiers import (
     ClientIdentityToken,
@@ -200,9 +199,3 @@ def build_all_client_inputs(output_directory: Path) -> tuple[ClientTrainingInput
     return tuple(
         build_client_input(client_id, output_directory, seed=Seed(index)) for index, client_id in enumerate(CLIENT_IDS)
     )
-
-
-def require_cuda() -> torch.device:
-    if not torch.cuda.is_available():
-        raise RuntimeError("federated tests require CUDA")
-    return torch.device("cuda")

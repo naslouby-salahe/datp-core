@@ -224,7 +224,6 @@ class ExperimentWorkspace:
                     batch_size=training_batch_size_for(self.coordinate),
                     learning_rate=LEARNING_RATE,
                     output_directory=self.context.training_directory,
-                    client_data_residency=self.context.client_data_residency,
                     progress_callback=self._round_progress_callback,
                 ),
             )

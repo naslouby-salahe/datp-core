@@ -13,7 +13,6 @@ from tests.unit.learning.federated.helpers import (
     build_all_client_inputs,
     client_identity,
     fedavg_coordinate,
-    require_cuda,
 )
 
 from datp_core.core.errors import ArtifactIntegrityError
@@ -22,7 +21,6 @@ from datp_core.detector.checkpoints.contracts import DiagnosticSnapshotProtocol
 from datp_core.detector.checkpoints.publication import write_federated_training
 from datp_core.detector.scoring import federated as scoring_federated
 from datp_core.detector.scoring.models import ClientScoringInput, GenerateFederatedScoresRequest
-from datp_core.detector.training.contracts import FederatedClientDataResidency
 from datp_core.detector.training.engine import (
     FederatedTrainingExecution,
     FederatedTrainingRequest,
@@ -46,7 +44,6 @@ def _trained_result(tmp_path: Path):
         batch_size=BATCH_SIZE,
         learning_rate=LEARNING_RATE,
         output_directory=tmp_path / "training",
-        client_data_residency=FederatedClientDataResidency.STREAMING,
     )
     execution = run_federated_training(request)
     return write_federated_training(
@@ -81,7 +78,6 @@ def _request(tmp_path: Path, training) -> GenerateFederatedScoresRequest:
 def test_publish_federated_scores_reuses_persisted_evidence_across_separate_invocations(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    require_cuda()
     training = _trained_result(tmp_path)
 
     first = scoring_federated.publish_federated_scores(_request(tmp_path, training))
@@ -100,7 +96,6 @@ def test_publish_federated_scores_reuses_persisted_evidence_across_separate_invo
 def test_publish_federated_scores_raises_explicitly_when_row_identities_diverge(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    require_cuda()
     training = _trained_result(tmp_path)
     scoring_federated.publish_federated_scores(_request(tmp_path, training))
 
@@ -130,7 +125,6 @@ def test_load_federated_scores_returns_none_without_any_persisted_artifact(tmp_p
 
 
 def test_load_federated_scores_raises_on_incomplete_persisted_evidence(tmp_path: Path) -> None:
-    require_cuda()
     training = _trained_result(tmp_path)
     request = _request(tmp_path, training)
     scoring_federated.publish_federated_scores(request)
@@ -142,7 +136,6 @@ def test_load_federated_scores_raises_on_incomplete_persisted_evidence(tmp_path:
 
 
 def test_load_federated_scores_rejects_cached_label_provenance_drift(tmp_path: Path) -> None:
-    require_cuda()
     training = _trained_result(tmp_path)
     request = _request(tmp_path, training)
     scoring_federated.publish_federated_scores(request)
@@ -157,7 +150,6 @@ def test_load_federated_scores_rejects_cached_label_provenance_drift(tmp_path: P
 def test_publish_federated_scores_rejects_reuse_for_a_different_terminal_detector(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    require_cuda()
     training = _trained_result(tmp_path)
     scoring_federated.publish_federated_scores(_request(tmp_path, training))
     changed_state = training.terminal_model_state.to_torch_state_dict()

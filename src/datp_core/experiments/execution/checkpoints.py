@@ -39,7 +39,6 @@ def train_execution_model(
                 batch_size=context.batch_size,
                 learning_rate=LEARNING_RATE,
                 output_directory=context.training_directory,
-                client_data_residency=context.client_data_residency,
             ),
         )
     )

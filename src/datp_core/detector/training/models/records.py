@@ -178,7 +178,6 @@ class DittoRuntimeEnvironment:
     operating_system: NonEmptyString
     python_runtime: NonEmptyString
     torch_runtime: NonEmptyString
-    cuda_runtime: NonEmptyString
 
 
 def _validate_personalized_references(

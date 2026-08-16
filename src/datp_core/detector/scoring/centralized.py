@@ -22,7 +22,7 @@ from datp_core.detector.scoring.models import (
     GenerateCentralizedScoresResult,
     PooledScoreArtifact,
 )
-from datp_core.runtime.compute import resolve_cuda_device
+from datp_core.runtime.compute import LEARNING_DEVICE
 
 
 def generate_centralized_scores(request: GenerateCentralizedScoresRequest) -> GenerateCentralizedScoresResult:
@@ -44,7 +44,7 @@ def generate_centralized_scores(request: GenerateCentralizedScoresRequest) -> Ge
 
 def score_centralized_reference(request: CentralizedScoringRequest) -> CentralizedScoringResult:
     _validate_request(request)
-    device = resolve_cuda_device()
+    device = LEARNING_DEVICE
     model = model_from_terminal_state(request.training.terminal_model_state, request.autoencoder, device)
     calibration = _score_partition(
         request,
@@ -104,7 +104,7 @@ def _score_partition(
         feature_names=request.feature_names,
         model=model,
         batch_size=request.batch_size,
-        device=resolve_cuda_device(),
+        device=LEARNING_DEVICE,
         destination=destination,
     )
     return PooledScoreArtifact(

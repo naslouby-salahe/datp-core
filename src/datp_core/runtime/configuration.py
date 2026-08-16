@@ -1,12 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from datp_core.core.numeric import NonNegativeIntegerValue
-
-
-class CudaDeviceIndex(NonNegativeIntegerValue):
-    validation_name = "CUDA device index"
-
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class RepositoryLayout:
@@ -22,21 +16,12 @@ class RepositoryLayout:
             raise ValueError("repository roots must be distinct")
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class RuntimeConfiguration:
-    layout: RepositoryLayout
-    cuda_device_index: CudaDeviceIndex
-
-
-CANONICAL_RUNTIME = RuntimeConfiguration(
-    layout=RepositoryLayout(
-        data_root=Path("data"),
-        outputs_root=Path("outputs"),
-        results_root=Path("results"),
-    ),
-    cuda_device_index=CudaDeviceIndex(0),
+REPOSITORY_LAYOUT = RepositoryLayout(
+    data_root=Path("data"),
+    outputs_root=Path("outputs"),
+    results_root=Path("results"),
 )
 
-DATA_ROOT = CANONICAL_RUNTIME.layout.data_root
-OUTPUTS_ROOT = CANONICAL_RUNTIME.layout.outputs_root
-RESULTS_ROOT = CANONICAL_RUNTIME.layout.results_root
+DATA_ROOT = REPOSITORY_LAYOUT.data_root
+OUTPUTS_ROOT = REPOSITORY_LAYOUT.outputs_root
+RESULTS_ROOT = REPOSITORY_LAYOUT.results_root

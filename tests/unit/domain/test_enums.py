@@ -268,7 +268,6 @@ EXPECTED_MEMBERS = (
                 "CLIENT_IDENTITY",
                 "CONFIRMATORY_LADDER",
                 "COORDINATE",
-                "CUDA",
                 "FEATURES",
                 "HELD_OUT_METRICS",
                 "LABEL",

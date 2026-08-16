@@ -129,11 +129,6 @@ class CentralizedTrainingProtocol(StrictModel):
     optimizer: OptimizerProtocol
 
 
-class FederatedClientDataResidency(StrEnum):
-    STREAMING = "streaming"
-    GPU_RESIDENT_COHORT = "gpu_resident_cohort"
-
-
 class ModelAbsorptionDecisionProtocol(StrictModel):
     full_retention_minimum: Ratio
     partial_retention_minimum: Ratio

@@ -14,7 +14,6 @@ from datp_core.core.errors import (
 from datp_core.core.identifiers import ContractSubject, OptimizerId
 from datp_core.core.numeric import BatchSize, FeatureCount, LearningRate, RowCount, Seed
 from datp_core.detector.training.contracts import AutoencoderArchitecture, AutoencoderProtocol, OptimizerProtocol
-from datp_core.runtime.compute import require_cuda_available
 
 LEARNING_DTYPE = np.float32
 TORCH_LEARNING_DTYPE = torch.float32
@@ -267,7 +266,7 @@ def _require_model_on_device(model: ReconstructionAutoencoder, device: torch.dev
     if any(parameter.device != device for parameter in parameters):
         raise ScientificContractError(
             ErrorMessage("autoencoder parameters must all reside on the declared scoring device"),
-            subject=ContractSubject.CUDA,
+            subject=ContractSubject.RUNTIME,
         )
     if any(parameter.dtype != TORCH_LEARNING_DTYPE for parameter in parameters):
         raise ScientificContractError(
@@ -283,11 +282,6 @@ def reconstruction_errors(
     batch_size: BatchSize,
     device: torch.device,
 ) -> np.ndarray:
-    require_cuda_available()
-    if device.type != "cuda":
-        raise ScientificContractError(
-            ErrorMessage("reconstruction scoring requires a CUDA device"), subject=ContractSubject.CUDA
-        )
     _require_scoreable_feature_matrix(model, features)
     _require_model_on_device(model, device)
 

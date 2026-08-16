@@ -15,7 +15,7 @@ from datp_core.core.identifiers import (
     ClientIdentityToken,
     CommunicationEstimationMethod,
     ContractSubject,
-    CudaDeviceName,
+    DeviceName,
     NonEmptyString,
     PopulationIdentityKind,
     TrainingModelId,
@@ -206,13 +206,13 @@ def persist_federated_training_history(
     history: FederatedTrainingHistory,
     directory: Path,
     *,
-    device_name: CudaDeviceName,
+    device_name: DeviceName,
 ) -> None:
     normalized_device = device_name.strip()
     if not normalized_device:
         raise ScientificContractError(
-            ErrorMessage("training publication requires a non-empty CUDA device name"),
-            subject=ContractSubject.CUDA,
+            ErrorMessage("training publication requires a non-empty training device name"),
+            subject=ContractSubject.RUNTIME,
         )
 
     r_nums: list[int] = []
@@ -319,23 +319,25 @@ def history_frames(directory: Path) -> FederatedHistoryFrames:
     )
 
 
-def load_published_device_name(directory: Path) -> CudaDeviceName:
+def load_published_device_name(directory: Path) -> DeviceName:
     path = directory / FederatedHistoryAssetName.DEVICE_NAME.value
     if path.is_symlink():
         raise ArtifactIntegrityError(
-            ErrorMessage("published CUDA device name cannot be a symbolic link"),
-            subject=ContractSubject.CUDA,
+            ErrorMessage("published training device name cannot be a symbolic link"),
+            subject=ContractSubject.RUNTIME,
         )
     try:
         value = path.read_text(encoding="utf-8").strip()
     except (OSError, UnicodeError) as error:
         raise ArtifactIntegrityError(
-            ErrorMessage("published CUDA device name is unreadable"),
-            subject=ContractSubject.CUDA,
+            ErrorMessage("published training device name is unreadable"),
+            subject=ContractSubject.RUNTIME,
         ) from error
     if not value:
-        raise ArtifactIntegrityError(ErrorMessage("published CUDA device name is empty"), subject=ContractSubject.CUDA)
-    return CudaDeviceName(value)
+        raise ArtifactIntegrityError(
+            ErrorMessage("published training device name is empty"), subject=ContractSubject.RUNTIME
+        )
+    return DeviceName(value)
 
 
 def load_federated_training_history(

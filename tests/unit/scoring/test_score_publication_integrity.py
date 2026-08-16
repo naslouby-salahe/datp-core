@@ -1,13 +1,13 @@
 from pathlib import Path
 
 import pytest
-from tests.unit.learning.federated.helpers import AUTOENCODER, FEATURE_NAMES, benign_frame, require_cuda
+from tests.unit.learning.federated.helpers import AUTOENCODER, FEATURE_NAMES, benign_frame
 
 from datp_core.core.identifiers import PartitionRole
 from datp_core.core.numeric import BatchSize, RowCount, Seed
 from datp_core.detector.autoencoder import build_reconstruction_autoencoder
 from datp_core.detector.scoring import frames as frames_module
-from datp_core.runtime.compute import resolve_cuda_device
+from datp_core.runtime.compute import LEARNING_DEVICE
 
 
 def _model(device):
@@ -19,8 +19,7 @@ def _model(device):
 def test_score_and_persist_autoencoder_frame_does_not_reread_the_written_parquet(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    require_cuda()
-    device = resolve_cuda_device()
+    device = LEARNING_DEVICE
     model = _model(device)
     frame = benign_frame(RowCount(4), seed=Seed(0))
     destination = tmp_path / "calibration.parquet"
@@ -48,8 +47,7 @@ def test_score_and_persist_autoencoder_frame_does_not_reread_the_written_parquet
 def test_score_and_persist_autoencoder_frame_raises_on_row_count_mismatch(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    require_cuda()
-    device = resolve_cuda_device()
+    device = LEARNING_DEVICE
     model = _model(device)
     frame = benign_frame(RowCount(4), seed=Seed(0))
     destination = tmp_path / "calibration.parquet"
