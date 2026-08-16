@@ -89,7 +89,6 @@ def assess_declared_feasibility(
     expected_identities: tuple[ClientIdentityToken, ...] | None,
     chronology_required: bool,
 ) -> PopulationFeasibility:
-
     return feasibility_from_candidates(
         FeasibilityAssessmentRequest(
             expected_count=expected_count,
@@ -102,7 +101,6 @@ def assess_declared_feasibility(
 
 
 def finalize_population(request: PopulationFinalizationRequest) -> PopulationManifest:
-
     declaration = request.declaration
     if (
         declaration.id is not request.population

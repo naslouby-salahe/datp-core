@@ -139,7 +139,6 @@ def construct_edge_temporal_groups(
     partition_seed: Seed,
     split_protocol: SplitProtocolId,
 ) -> PopulationConstructionResult:
-
     if split_protocol is not SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE:
         raise ScientificContractError(
             ErrorMessage("Edge temporal groups require the locked chronological split protocol"),
@@ -344,7 +343,6 @@ def _model_input_eligible_membership(
     sort_columns: tuple[str, ...],
     membership_only: bool,
 ) -> tuple[pl.DataFrame, ModelInputExclusionEvidence]:
-
     annotated = candidate_rows.collect(engine="streaming")
     eligible = annotated.filter(pl.col("__model_input_eligible")).drop("__model_input_eligible")
     excluded_ids = tuple(

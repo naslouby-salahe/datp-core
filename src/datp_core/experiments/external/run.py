@@ -327,7 +327,6 @@ class CiciotBoundaryReport(StrictModel):
 
 
 def analyze_external_benign_statistics(*, output_root: Path, overwrite: bool) -> ExternalBenignStatisticsReportResult:
-
     declaration = _declaration(ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION)
     output = output_root / ExternalBenignStatisticsAssetName.ROOT / declaration.id.value / declaration.population.value
     if overwrite and output.exists():

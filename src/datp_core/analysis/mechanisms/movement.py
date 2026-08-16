@@ -309,7 +309,6 @@ def summarize_threshold_movements_across_seeds(
     *,
     required_seed_count: SeedCount | None = None,
 ) -> ThresholdMovementMultiSeedUncertainty:
-
     summaries: list[ThresholdMovementSeedSummary] = []
     for cohort in cohorts:
         if (

@@ -39,7 +39,6 @@ class ControlledPartitionAllocator:
         *,
         minimum_per_client: RowCount | None = None,
     ) -> tuple[RowCount, ...]:
-
         if row_count.value == 0:
             return tuple(RowCount(0) for _ in range(self.client_count.value))
         minimum = minimum_per_client or RowCount(0)
@@ -64,7 +63,6 @@ class ControlledPartitionAllocator:
         return counts
 
     def permutation(self, row_count: RowCount) -> np.ndarray:
-
         return self._generator.permutation(row_count.value)
 
     def _proportions(self) -> tuple[Ratio, ...]:

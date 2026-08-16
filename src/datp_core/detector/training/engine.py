@@ -544,7 +544,6 @@ def compute_weighted_validation_loss(
     autoencoder: AutoencoderProtocol,
     device: torch.device,
 ) -> MetricValue:
-
     if not prepared:
         raise ScientificContractError(
             ErrorMessage("validation loss requires at least one client"),

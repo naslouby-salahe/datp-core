@@ -682,9 +682,7 @@ def _report_fedprox(experiment_id: ExperimentId) -> ReportResult:
         _write_stress_results(
             experiment_id,
             activation_path.parent / ResearchArtifact.RESULTS,
-            tuple(
-                item.alignment for _coefficient, alignment, _observations in activation_evidence for item in alignment
-            ),
+            tuple(item.alignment for _, alignment, _ in activation_evidence for item in alignment),
         )
     except ScientificContractError as error:
         raise ReportEvidenceError(

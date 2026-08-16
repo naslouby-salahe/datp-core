@@ -266,7 +266,6 @@ def seed_level_bca_interval(
     analysis_seed: Seed,
     require_full_cohort: bool = True,
 ) -> BootstrapInterval:
-
     if not values:
         return BootstrapInterval.blocked(
             protocol=protocol,

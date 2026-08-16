@@ -9,7 +9,6 @@ class PublicationArtifactDirectory(StrEnum):
 
 
 def evaluation_run_directory(root: Path, coordinate: ExperimentCoordinate) -> Path:
-
     temporal = (
         coordinate.temporal_state.value
         if coordinate.temporal_state is not None
@@ -53,7 +52,6 @@ def evaluation_run_directory(root: Path, coordinate: ExperimentCoordinate) -> Pa
 
 
 def experiment_output_directory(root: Path, coordinate: ExperimentCoordinate) -> Path:
-
     return (
         evaluation_run_directory(root, coordinate)
         / PublicationArtifactDirectory.METRICS.value

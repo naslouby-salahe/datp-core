@@ -19,7 +19,6 @@ def _require_value[T](value: T | None, kind: ProgressEventKind) -> T:
 
 
 def format_progress_event(event: ProgressEvent) -> str:
-
     coordinate = event.coordinate
     identity = (
         f"{coordinate.experiment.value} seed={coordinate.training_seed.value} "

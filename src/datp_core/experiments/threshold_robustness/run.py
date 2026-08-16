@@ -1118,7 +1118,6 @@ def _fixed_cohort_rows_for_seed(
     method: FederatedThresholdMethod,
     cells: tuple[CalibrationSizeAblationCell, ...],
 ) -> tuple[CalibrationSizeFixedCohortRow, ...]:
-
     by_replicate: dict[ReplicateIndex, list[CalibrationSizeAblationCell]] = {}
     for cell in cells:
         by_replicate.setdefault(cell.replicate_index, []).append(cell)

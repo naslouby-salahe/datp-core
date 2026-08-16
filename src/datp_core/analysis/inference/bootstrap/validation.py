@@ -85,7 +85,6 @@ def _require_fixed_design(contrasts: PairedContrasts) -> None:
 
 
 def _require_fixed_score_identity(contrasts: PairedContrasts) -> None:
-
     if not contrasts:
         raise PairedAnalysisContractError(BcaReason.SEED_COHORT_MISMATCH)
     for contrast in contrasts.values:

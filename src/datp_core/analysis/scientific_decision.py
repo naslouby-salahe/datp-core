@@ -52,7 +52,6 @@ _UNAVAILABLE_DECISIONS = frozenset(
 
 
 def decide_confirmatory(interval: BootstrapInterval) -> ScientificDecisionResult:
-
     if (
         interval.availability is not AvailabilityStatus.AVAILABLE
         or interval.point_estimate is None

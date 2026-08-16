@@ -64,7 +64,6 @@ def validate_score_input_frame(
     partition_role: PartitionRole,
     feature_names: FeatureNameSequence,
 ) -> None:
-
     if frame.height == 0 and partition_role in CALIBRATION_PARTITIONS:
         raise ScientificContractError(
             ErrorMessage(f"{partition_role.value} partition must not be empty"),

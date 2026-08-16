@@ -30,7 +30,6 @@ from datp_core.core.numeric import (
 
 
 def _nonzero_differences(deltas: NDArray[np.float64]) -> NDArray[np.float64]:
-
     return deltas[~np.isclose(deltas, 0.0, rtol=0.0, atol=0.0)]
 
 

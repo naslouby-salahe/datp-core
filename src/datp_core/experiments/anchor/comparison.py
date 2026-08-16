@@ -37,7 +37,6 @@ def compare_anchor_metric(
     reference: AnchorMetricReference,
     observation: AnchorObservedMetric | None,
 ) -> AnchorMetricComparison:
-
     rule = reference.tolerance_rule
     if observation is None:
         return _build(
@@ -65,7 +64,6 @@ def compare_anchor_metric(
 
 
 def reject_global_floating_point_tolerance() -> None:
-
     raise ValueError("global floating-point tolerance is unsupported; declare a metric-specific rule")
 
 
@@ -76,7 +74,6 @@ def full_precision_failure_stands_despite_rounded_equality(
     expected: MetricValue,
     observed: MetricValue,
 ) -> bool:
-
     if full_precision_decision is AnchorComparisonDecision.EQUIVALENT:
         return False
     return floats_exactly_equal(
@@ -120,7 +117,6 @@ def _diagnostic_result(
     rule: DiagnosticRule,
     delta: _NumericDelta,
 ) -> AnchorMetricComparison:
-
     if floats_exactly_equal(delta.expected, delta.observed):
         return _pass(reference, observation, rule, delta)
     return _build(

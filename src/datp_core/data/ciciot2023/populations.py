@@ -49,7 +49,6 @@ _CSV_SUFFIX_PATTERN = CICIoT2023ArtifactName.CSV_SUFFIX.value.replace(".", r"\."
 
 
 def _client_id_from_source_path_expression() -> pl.Expr:
-
     return (
         pl.col(SOURCE_PATH_COLUMN)
         .str.split("/")
@@ -114,7 +113,6 @@ def construct_ciciot_file_clients(
 
 
 def _ciciot_excluded_row_evidence(canonical_root: Path) -> pl.DataFrame:
-
     return (
         pl.scan_parquet(canonical_data_glob(canonical_root))
         .select(
@@ -142,7 +140,6 @@ def _ciciot_excluded_row_evidence(canonical_root: Path) -> pl.DataFrame:
 
 
 def _ciciot_client_eligibility_evidence(excluded_rows: pl.DataFrame) -> pl.DataFrame:
-
     return (
         excluded_rows.group_by(CLIENT_ID_COLUMN)
         .agg(
@@ -190,7 +187,6 @@ def _load_eligible_membership(canonical_root: Path) -> pl.DataFrame:
 
 
 def _candidate_ids(canonical_root: Path) -> tuple[ClientIdentityToken, ...]:
-
     candidates = tuple(
         ClientIdentityToken(value)
         for value in (

@@ -337,7 +337,6 @@ def score_geometry_figure(
     title: FigureTitle,
     client_id: ClientIdentityToken | None = None,
 ) -> FigureSpec:
-
     series: list[EmpiricalCdfFigureSeries] = []
     for client_geometry in geometry.clients:
         if client_id is not None and client_geometry.client.client_id != client_id:
@@ -390,7 +389,6 @@ def score_geometry_figure(
 
 
 def render_markdown_figure(figure: FigureSpec) -> ReportLine:
-
     rows = [
         f"### {figure.title}",
         "",

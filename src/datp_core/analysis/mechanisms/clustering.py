@@ -40,7 +40,6 @@ class ClusterPartitionSummary(StrictModel):
         declared_group_count: GroupCount | None = None,
         observed_empty_cluster_indexes: tuple[ClusterIndex, ...] = (),
     ) -> "ClusterPartitionSummary":
-
         size_by_index = {item.cluster_index.value: len(item.members) for item in memberships}
         for empty_index in observed_empty_cluster_indexes:
             size_by_index.setdefault(empty_index.value, 0)
@@ -545,7 +544,6 @@ def empty_cluster_evidence_record(
     reason: AnalysisReasonText,
     observed_empty_cluster_indexes: tuple[ClusterIndex, ...] = (),
 ) -> ClusterEvidenceRecord:
-
     partition = ClusterPartitionSummary.from_memberships(
         filled_memberships,
         declared_group_count=declared_group_count,

@@ -15,7 +15,6 @@ from datp_core.core.numeric import MetricValue
 
 
 def load_evaluation_document(path: Path) -> FederatedEvaluationDocument:
-
     try:
         if not path.is_file():
             raise ScientificContractError(

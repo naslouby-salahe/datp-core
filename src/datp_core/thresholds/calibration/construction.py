@@ -437,7 +437,6 @@ def build_calibration(request: BuildCalibrationRequest) -> BuildCalibrationResul
 
 
 def build_declared_calibration(score_manifest: FederatedScoreArtifactManifest) -> BuildCalibrationResult:
-
     return build_calibration(
         BuildCalibrationRequest(
             score_manifest=score_manifest,
@@ -485,7 +484,6 @@ def build_onboarding_target_calibration(
 def construct_calibration_size_ablation(
     request: ConstructCalibrationSizeAblationRequest,
 ) -> tuple[CalibrationSizeAblationCell, ...]:
-
     cells: list[CalibrationSizeAblationCell] = []
     capabilities = population_capabilities(request.score_manifest.coordinate.population)
     replicate_count = require_calibration_subsample_replicate_count()

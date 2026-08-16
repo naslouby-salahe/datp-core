@@ -209,7 +209,6 @@ def decide_model_absorption(
     personalized_effect: MetricValue | None,
     protocol: ModelAbsorptionDecisionProtocol,
 ) -> ScientificDecisionResult:
-
     if reference_effect is None or personalized_effect is None or reference_effect.value <= 0.0:
         return ScientificDecisionResult(
             evidence_role=EvidenceRole.TRAINING_STRESS_TEST,
@@ -256,7 +255,6 @@ def decide_absorption_cohort(
     inference_protocol: PairedInferenceProtocol | None = None,
     analysis_seed: Seed = CONFIRMATORY_ANALYSIS_SEED,
 ) -> AbsorptionCohortResult:
-
     route_count = alternative_route_seed_count
     blocked = _blocked_cohort(observations, required_seed_cohort)
     if blocked is not None:

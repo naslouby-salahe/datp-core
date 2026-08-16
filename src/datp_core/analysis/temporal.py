@@ -452,7 +452,6 @@ def decide_temporal_campaign(
     analysis_seed: Seed = CONFIRMATORY_ANALYSIS_SEED,
     inference_protocol: PairedInferenceProtocol | None = None,
 ) -> ScientificDecisionResult:
-
     from datp_core.analysis.inference.bootstrap.estimation import seed_level_bca_interval
 
     blocked = _blocked_temporal_campaign(records, required_seed_cohort)
@@ -670,7 +669,6 @@ def temporal_seed_series_intervals(
     required_seed_cohort: SeedCohort = BOUNDED_EVIDENCE_SEED_COHORT,
     analysis_seed: Seed = CONFIRMATORY_ANALYSIS_SEED,
 ) -> TemporalSeedSeriesIntervals:
-
     from datp_core.analysis.inference.bootstrap.estimation import seed_level_bca_interval
 
     protocol = _temporal_inference_protocol(required_seed_cohort)
@@ -780,7 +778,6 @@ def validate_frozen_recalibrated_pair(
     frozen: TemporalDeploymentProvenance,
     recalibrated: TemporalDeploymentProvenance,
 ) -> None:
-
     if frozen.state is not TemporalState.FROZEN_FUTURE or recalibrated.state is not TemporalState.RECALIBRATED_FUTURE:
         raise ScientificContractError(
             ErrorMessage("temporal comparison requires frozen and recalibrated future states"),

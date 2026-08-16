@@ -183,7 +183,6 @@ def summarize_communication(
     coordinate: FederatedTrainingCoordinate,
     messages: tuple[CommunicationMessageDiagnostic, ...],
 ) -> CommunicationDiagnostic:
-
     expected_elements = 0
     expected_bytes = 0
 

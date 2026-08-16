@@ -31,7 +31,6 @@ def reproduce_command(
         typer.Option("--overwrite", help="Rebuild independent anchor reproduction only"),
     ] = False,
 ) -> None:
-
     try:
         result = reproduce_anchor(
             overwrite=_overwrite_mode(overwrite),
@@ -45,7 +44,6 @@ def reproduce_command(
 
 @app.command("verify")
 def verify_command() -> None:
-
     try:
         result = verify_anchor_programme(mode=ProgrammeExecutionMode.FULL)
     except (DatpCoreError, ValueError) as error:
@@ -55,7 +53,6 @@ def verify_command() -> None:
 
 @app.command("status")
 def status_command() -> None:
-
     try:
         result = anchor_status()
     except (DatpCoreError, ValueError) as error:

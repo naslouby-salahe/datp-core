@@ -25,7 +25,6 @@ def experiment_command(
         typer.Option("--overwrite", help="Rebuild this experiment's owned artifacts"),
     ] = False,
 ) -> None:
-
     try:
         result = run_experiment(
             experiment_id,
@@ -47,7 +46,6 @@ def campaign_command(
         typer.Option("--overwrite", help="Rebuild campaign-owned execution and analysis artifacts"),
     ] = False,
 ) -> None:
-
     try:
         result = run_campaign(overwrite=_overwrite_mode(overwrite))
     except (DatpCoreError, ValueError) as error:

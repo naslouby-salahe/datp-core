@@ -33,7 +33,6 @@ def _overwrite_mode(overwrite: bool) -> OverwriteMode:
 def validate_command(
     experiment_id: Annotated[ExperimentId | None, typer.Argument(case_sensitive=False)] = None,
 ) -> None:
-
     try:
         result = validate_programme(experiment_id)
     except (DatpCoreError, ValueError) as error:
@@ -48,7 +47,6 @@ def validate_command(
 def plan_command(
     experiment_id: Annotated[ExperimentId | None, typer.Argument(case_sensitive=False)] = None,
 ) -> None:
-
     try:
         presentation = build_programme_plan(experiment_id)
     except (DatpCoreError, ValueError) as error:
@@ -64,7 +62,6 @@ def preprocess_command(
         typer.Option("--overwrite", help="Rebuild dataset-level canonical artifacts"),
     ] = False,
 ) -> None:
-
     try:
         result = preprocess_datasets(dataset_id, overwrite=_overwrite_mode(overwrite))
     except (DatpCoreError, ValueError) as error:
@@ -81,7 +78,6 @@ def smoke_command(
         typer.Option("--overwrite", help="Rebuild smoke-owned artifacts"),
     ] = False,
 ) -> None:
-
     try:
         result = run_smoke(experiment_id, overwrite=_overwrite_mode(overwrite))
     except (DatpCoreError, ValueError) as error:
@@ -101,7 +97,6 @@ def smoke_command(
 def report_command(
     experiment_id: Annotated[ExperimentId | None, typer.Argument(case_sensitive=False)] = None,
 ) -> None:
-
     try:
         result = generate_report(experiment_id)
     except (DatpCoreError, ValueError) as error:
@@ -115,7 +110,6 @@ def report_command(
 def status_command(
     experiment_id: Annotated[ExperimentId | None, typer.Argument(case_sensitive=False)] = None,
 ) -> None:
-
     try:
         report = programme_status(experiment_id)
     except (DatpCoreError, ValueError) as error:
@@ -130,7 +124,6 @@ def results_command(
         typer.Option("--overwrite", help="Rebuild the delivery results bundle from passed experiments"),
     ] = False,
 ) -> None:
-
     try:
         typer.echo(generate_delivery_results(overwrite=_overwrite_mode(overwrite)))
     except (DatpCoreError, ValueError) as error:

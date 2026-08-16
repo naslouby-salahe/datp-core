@@ -79,7 +79,6 @@ def client_partitions(
     feature_names: FeatureNameSequence,
     split_protocol: SplitProtocolId,
 ) -> ClientCollection[ClientPathToken, PreprocessingPartitions]:
-
     return ClientCollection(
         tuple(
             ClientOwned(

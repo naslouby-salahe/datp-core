@@ -24,7 +24,6 @@ class DatasetMaterializationResult:
 
 
 def materialize_datasets(request: DatasetMaterializationRequest) -> DatasetMaterializationResult:
-
     publications: list[DatasetPublication] = []
     for dataset in request.datasets:
         canonical_root = canonical_root_under(request.data_root, dataset)

@@ -239,7 +239,6 @@ def historical_sources_for_seed_directories(
     local_root: Path,
     seed_cohort: SeedCohort = HISTORICAL_ANCHOR_SEED_COHORT,
 ) -> tuple[HistoricalMetricArtifactSource, ...]:
-
     validate_historical_seed_cohort(seed_cohort)
 
     def _generate():
@@ -265,7 +264,6 @@ def reproduce_anchor(
     observations: tuple[AnchorObservedMetric, ...] | None = None,
     dependency_blocker: AnchorDependencyBlocker | None = None,
 ) -> AnchorReproductionResult:
-
     seed_cohort = validate_historical_seed_cohort(protocol.seed_cohort)
     references = references_from_protocol(protocol)
     resolved_observations = observations or ()
@@ -389,7 +387,6 @@ def _anchor_bca_comparison(
     observations: tuple[AnchorObservedMetric, ...],
     seed_cohort: SeedCohort,
 ) -> AnchorBcaComparison:
-
     shared = {
         item.seed: item.value
         for item in observations

@@ -166,7 +166,6 @@ def edge_canonical_root(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def edge_temporal_eligible_root(tmp_path: Path) -> Path:
-
     root = tmp_path / "edge_temporal_ok"
     static = root / "data" / "static_benign"
     temporal = root / "data" / "temporal_benign"

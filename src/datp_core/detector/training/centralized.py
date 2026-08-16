@@ -186,7 +186,6 @@ def reject_attack_rows_in_centralized_training(
 
 
 def train_centralized_autoencoder(request: CentralizedTrainingRequest) -> CentralizedTrainingExecution:
-
     _validate_training_request(request)
     reject_federated_preprocessing_for_training(request.preprocessing_state)
     configure_deterministic_execution(request.training_seed)
@@ -253,7 +252,6 @@ def declared_centralized_training_values() -> CentralizedTrainingDefaults:
 
 
 def require_no_hidden_scientific_defaults() -> None:
-
     if CENTRALIZED_TRAINING_PROTOCOL.optimizer.identity is not OptimizerId.ADAM:
         raise UnresolvedScientificValueError(
             ErrorMessage("centralized optimizer identity is not the declared Adam protocol"),

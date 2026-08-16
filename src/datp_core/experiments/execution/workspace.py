@@ -129,7 +129,6 @@ def _pooled_calibration_quantile(
     calibration_by_client: dict[ClientIdentity, ClientBenignCalibrationScores],
     quantile: Quantile,
 ) -> ThresholdValue:
-
     pooled_values = np.asarray(
         tuple(score.value for scores in calibration_by_client.values() for score in scores.scores),
         dtype=np.float64,

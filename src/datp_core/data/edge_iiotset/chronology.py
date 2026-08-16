@@ -102,7 +102,6 @@ class _PcapAligner:
         self.trailing_evidence_rows = sum(1 for _ in records)
 
     def align_all(self) -> RowCount:
-
         return RowCount(sum(1 for _ in self.matches()))
 
     def validation(self, group_identity: ChronologyGroupIdentity) -> ChronologyValidation:

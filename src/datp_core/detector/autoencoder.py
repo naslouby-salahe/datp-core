@@ -62,30 +62,24 @@ class AutoencoderModelState:
 
     @classmethod
     def from_model(cls, model: "ReconstructionAutoencoder") -> "AutoencoderModelState":
-
         return cls.from_torch_state_dict(model.state_dict())
 
     @classmethod
     def from_torch_state_dict(cls, state_dict: Mapping[str, torch.Tensor]) -> "AutoencoderModelState":
-
         return cls._from_tensor_mapping(state_dict)
 
     def to_torch_state_dict(self) -> dict[str, torch.Tensor]:
-
         return {name: tensor.detach().clone() for name, tensor in self._parameters.items()}
 
     def on_cpu_with_contiguous_tensors(self) -> "AutoencoderModelState":
-
         return AutoencoderModelState._from_tensor_mapping(
             {name: tensor.detach().cpu().contiguous() for name, tensor in self._parameters.items()}
         )
 
     def apply_to(self, model: "ReconstructionAutoencoder") -> None:
-
         model.load_state_dict(self.to_torch_state_dict(), strict=True)
 
     def is_equivalent_to(self, other: "AutoencoderModelState") -> bool:
-
         if self._parameters.keys() != other._parameters.keys():
             return False
         return all(torch.equal(tensor, other._parameters[name]) for name, tensor in self._parameters.items())
@@ -123,7 +117,6 @@ class AutoencoderModelState:
         cls,
         contributions: Sequence[AutoencoderStateContribution],
     ) -> "AutoencoderModelState":
-
         if not contributions:
             raise ScientificContractError(
                 ErrorMessage("aggregation requires at least one client update"),

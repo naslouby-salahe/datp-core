@@ -201,7 +201,6 @@ def build_paired_contrast(
     right_value: MetricValue,
     evidence_role: EvidenceRole,
 ) -> PairedContrast:
-
     if left.score_coordinate != right.score_coordinate:
         raise ScientificContractError(ErrorMessage("paired evaluation documents use different training coordinates"))
     if left.threshold_method is right.threshold_method:

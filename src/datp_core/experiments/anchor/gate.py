@@ -46,7 +46,6 @@ class AnchorArtifactValidationFailure(StrEnum):
 
 
 def decide_anchor_gate(reproduction: AnchorReproductionResult) -> AnchorGateDecision:
-
     blocking, declared = _partition_discrepancies(reproduction.discrepancies)
     mandatory_ok = _all_mandatory_comparisons_equivalent(reproduction)
 
@@ -78,7 +77,6 @@ def decide_anchor_gate(reproduction: AnchorReproductionResult) -> AnchorGateDeci
 
 
 def dependent_readiness_from_gate(decision: AnchorGateDecision) -> ExperimentReadiness:
-
     if decision.status is AnchorGateStatus.ANCHOR_REPRODUCTION_FAILED:
         return ExperimentReadiness.BLOCKED
     if decision.status in {AnchorGateStatus.PASS, AnchorGateStatus.PASS_WITH_DECLARED_DISCREPANCY}:
@@ -90,7 +88,6 @@ def dependent_readiness_from_gate(decision: AnchorGateDecision) -> ExperimentRea
 
 
 def assert_gate_not_bypassable(decision: AnchorGateDecision) -> AnchorGateDecision:
-
     if decision.dependent_readiness is ExperimentReadiness.EXECUTABLE:
         raise AnchorReproductionError(
             ErrorMessage("anchor gate cannot mark dependent experiments executable"),
@@ -139,7 +136,6 @@ def _all_mandatory_comparisons_equivalent(reproduction: AnchorReproductionResult
 def _partition_discrepancies(
     discrepancies: tuple[AnchorDiscrepancy, ...],
 ) -> tuple[tuple[AnchorDiscrepancy, ...], tuple[AnchorDiscrepancy, ...]]:
-
     if not _DECLARED_REASONS_SET:
         return discrepancies, ()
 
@@ -184,7 +180,6 @@ def build_anchor_confirmatory_handoff(
     decision: AnchorGateDecision,
     diagnostics_directory: Path,
 ) -> AnchorConfirmatoryHandoff:
-
     if decision.status is AnchorGateStatus.ANCHOR_REPRODUCTION_FAILED:
         raise AnchorReproductionError(
             ErrorMessage("blocked anchor gate cannot produce a confirmatory handoff"),
@@ -212,7 +207,6 @@ def build_anchor_confirmatory_handoff(
 
 
 def load_verified_anchor_gate_artifact(diagnostics_directory: Path) -> VerifiedAnchorGateArtifact:
-
     decision = _load_gate_decision(diagnostics_directory)
     decision = assert_gate_not_bypassable(decision)
 
@@ -229,7 +223,6 @@ def load_verified_anchor_gate_artifact(diagnostics_directory: Path) -> VerifiedA
 
 
 def load_anchor_gate_decision(diagnostics_directory: Path) -> AnchorGateDecision:
-
     return assert_gate_not_bypassable(_load_gate_decision(diagnostics_directory))
 
 
@@ -238,7 +231,6 @@ def load_anchor_confirmatory_handoff(
     *,
     verified_gate: VerifiedAnchorGateArtifact,
 ) -> AnchorConfirmatoryHandoff:
-
     if not diagnostics_directory.is_dir() or diagnostics_directory.is_symlink():
         raise AnchorReproductionError(
             ErrorMessage(f"anchor-gate diagnostics directory is missing: {diagnostics_directory}"),
@@ -297,7 +289,6 @@ def load_anchor_confirmatory_handoff(
 def validate_handoff_against_confirmatory_programme(
     handoff: AnchorConfirmatoryHandoff,
 ) -> AnchorConfirmatoryHandoff:
-
     endpoint = CONFIRMATORY_ENDPOINT
     mismatches: list[str] = []
 

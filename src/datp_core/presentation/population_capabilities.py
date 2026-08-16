@@ -70,6 +70,7 @@ _ROWS = (
     ),
 )
 
+
 def render_population_capability_table() -> str:
     lines = [
         "# Population capability and claim-boundary table",

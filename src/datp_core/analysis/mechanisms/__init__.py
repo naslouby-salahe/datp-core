@@ -340,7 +340,6 @@ def threshold_movements_from_evaluations(
     local: FederatedEvaluationDocument,
     experiment: ExperimentId,
 ) -> ThresholdMovementCohort:
-
     shared_clients = {item.client for item in shared.clients}
     local_clients = {item.client for item in local.clients}
     if shared_clients != local_clients:

@@ -240,7 +240,6 @@ def _collect_heterogeneity_movement_cohorts() -> tuple[ThresholdMovementCohort, 
 def _controlled_heterogeneity_figures(
     observations: tuple[AssociationObservation, ...],
 ) -> tuple[FigureSpec, ...]:
-
     x_label = FigureLabel("locked benign-calibration Jensen-Shannon divergence")
     y_label = FigureLabel("shared-local CV(FPR) gain")
     by_regime: dict[RegimeLabel, list[AssociationObservation]] = {}

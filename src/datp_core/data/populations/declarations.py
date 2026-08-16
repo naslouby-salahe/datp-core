@@ -100,7 +100,6 @@ POPULATIONS = (
 
 
 def split_protocol_for_population(population: PopulationId) -> SplitProtocolId:
-
     match population:
         case PopulationId.EDGE_TEMPORAL_CLIENTS:
             return SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE

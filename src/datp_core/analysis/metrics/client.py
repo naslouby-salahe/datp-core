@@ -24,7 +24,6 @@ def calculate_client_metrics(
     fixed_average_precision: MetricAvailability | None = None,
     score_values: np.ndarray | None = None,
 ) -> tuple[MetricAvailability, ...]:
-
     if len(scores) != len(labels) or len(scores) != confusion.evaluation_row_count.value:
         raise ScientificContractError(
             ErrorMessage("client scores, labels, and confusion counts must align"), subject=ContractSubject.ROWS

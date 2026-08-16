@@ -135,7 +135,6 @@ def resolve_single_model_federated_training_protocol(
     model: TrainingModelId,
     coefficient: ModelCoefficientValue | ProximalCoefficient | DittoRegularization | None,
 ) -> training_contracts.FedAvgProtocol | training_contracts.FedProxProtocol:
-
     match model:
         case TrainingModelId.FEDAVG_AUTOENCODER:
             if coefficient is not None:

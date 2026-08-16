@@ -222,7 +222,6 @@ def report_centralized_reference(
     output_root: Path,
     overwrite: bool,
 ) -> Path:
-
     root = output_root / CentralizedReferenceArtifactDirectory.ROOT / scope.population.value
     evaluations: list[CentralizedEvaluationDocument] = []
     for seed in scope.seed_cohort.values:

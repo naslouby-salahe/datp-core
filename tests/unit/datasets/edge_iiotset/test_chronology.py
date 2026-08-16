@@ -46,7 +46,6 @@ def test_unmatched_pcap_is_not_chronology(tmp_path) -> None:
 
 
 def test_nonmonotonic_source_order_remains_temporal_eligible_after_alignment(tmp_path) -> None:
-
     csv_path = tmp_path / "Distance.csv"
     pcap_path = tmp_path / "Distance.pcap"
     later = datetime(2021, 12, 27, 22, 58, 21, tzinfo=UTC)

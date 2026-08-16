@@ -107,7 +107,6 @@ def default_anchor_diagnostics_directory(output_root: Path = OUTPUTS_ROOT) -> Pa
 
 
 def verify_anchor(request: VerifyAnchorStageRequest) -> VerifyAnchorStageResult:
-
     observations, dependency_blocker = _resolve_observations(request)
     reproduction = reproduce_anchor(
         protocol=request.protocol,
@@ -135,7 +134,6 @@ def observation_from_evaluation_document(
     *,
     document_path: Path,
 ) -> AnchorObservedMetric:
-
     if document.threshold_method not in {
         FederatedThresholdMethod.SHARED_THRESHOLD,
         FederatedThresholdMethod.LOCAL_THRESHOLD,
@@ -170,7 +168,6 @@ def observation_from_evaluation_document(
 
 
 def load_independent_observations(package_directory: Path) -> tuple[AnchorObservedMetric, ...] | None:
-
     document_path = package_directory / IndependentAnchorAssetName.OBSERVATIONS.value
     if not document_path.is_file():
         return None
@@ -204,7 +201,6 @@ def collect_independent_observations_from_evaluations(
     output_root: Path,
     seed_cohort: SeedCohort = HISTORICAL_ANCHOR_SEED_COHORT,
 ) -> tuple[AnchorObservedMetric, ...]:
-
     from datp_core.app.planning import PlanDisposition, PlanningEvidence, PlanReason, expand_experiment_plan
     from datp_core.experiments.registry import EXPERIMENTS
 

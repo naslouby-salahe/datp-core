@@ -44,7 +44,6 @@ class TemporalFigureSourceExports:
 
 
 def temporal_publication_figures(document: TemporalAnalysisDocument) -> tuple[FigureSpec, FigureSpec]:
-
     fpr_series: list[FigureSeries] = []
     threshold_series: list[FigureSeries] = []
     for recovery in _ordered_recoveries(document):
@@ -101,7 +100,6 @@ def export_temporal_figure_sources(
     document: TemporalAnalysisDocument,
     output_directory: Path,
 ) -> TemporalFigureSourceExports:
-
     fpr_rows = _fpr_source_rows(document)
     threshold_rows = _threshold_source_rows(document)
     fpr_path = output_directory / FIGURE_011_SOURCE_FILENAME

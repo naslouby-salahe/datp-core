@@ -210,7 +210,6 @@ def run_family_grouped_mechanism_seed(
     overwrite: bool,
     progress: ProgressHook | None = None,
 ) -> ConfirmatorySeedResult:
-
     matches = tuple(item for item in EXPERIMENTS if item.id is ExperimentId.FAMILY_AND_GROUPED_GRANULARITY)
     if len(matches) != 1:
         raise ScientificContractError(ErrorMessage("family/grouped mechanism experiment must be declared exactly once"))
@@ -1053,7 +1052,6 @@ def _grouped_dispersion_evidence(
     result: GroupedThresholdResult,
     cluster_document: FederatedEvaluationDocument,
 ) -> GroupedDispersionResult:
-
     fpr_by_client = {
         item.client: metric_by_id(item.metrics, MetricId.FALSE_POSITIVE_RATE) for item in cluster_document.clients
     }

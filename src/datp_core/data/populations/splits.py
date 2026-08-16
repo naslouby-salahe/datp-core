@@ -95,7 +95,6 @@ def hamilton_integer_counts(
     total: RowCount,
     ratios: tuple[Ratio, ...],
 ) -> tuple[RowCount, ...]:
-
     _require_hamilton_inputs(total, ratios)
     total_value = total.value
     raw = tuple(total_value * ratio.value for ratio in ratios)
@@ -269,7 +268,6 @@ def _static_reference_assignments(
     membership: pl.DataFrame,
     partition_seed: Seed,
 ) -> pl.DataFrame:
-
     if membership.filter(pl.col(OUTCOME_LABEL_COLUMN) == _ATTACK).height > 0:
         raise LeakageError(
             ErrorMessage("the matched static reference is benign-only"),
@@ -314,7 +312,6 @@ def _static_reference_assignments(
 
 
 def _historical_gap_assignments(membership: pl.DataFrame) -> pl.DataFrame:
-
     protocol = historical_temporal_gap_split_protocol()
     pieces: list[pl.DataFrame] = []
     for client_id in membership.get_column(CLIENT_ID_COLUMN).unique().sort().to_list():

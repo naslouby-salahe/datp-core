@@ -11,7 +11,6 @@ class StrictModel(BaseModel):
 
 
 def pydantic_value_schema(cls, _source_type, _handler):
-
     def validate(value):
         return value if isinstance(value, cls) else cls(value)
 
@@ -22,7 +21,6 @@ def pydantic_value_schema(cls, _source_type, _handler):
 
 
 def str_subclass_schema(cls: type, _source_type: object, _handler: object) -> object:
-
     def validate(value: object) -> object:
         return value if isinstance(value, cls) else cls(value)
 
@@ -35,7 +33,6 @@ def str_subclass_schema(cls: type, _source_type: object, _handler: object) -> ob
 def str_enum_schema[EnumT: StrEnum](
     cls: type[EnumT], _source_type: object, _handler: GetCoreSchemaHandler
 ) -> CoreSchema:
-
     def validate(value: object) -> EnumT:
         if isinstance(value, cls):
             return value
@@ -47,7 +44,6 @@ def str_enum_schema[EnumT: StrEnum](
 
 
 def sequence_pydantic_schema(cls: type, _source_type: object, _handler: GetCoreSchemaHandler) -> CoreSchema:
-
     def validate(value: object) -> object:
         if isinstance(value, cls):
             return value
