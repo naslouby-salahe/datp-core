@@ -80,7 +80,7 @@ def render_population_capability_table() -> str:
         "| --- | --- | ---: | --- | --- | --- | --- | --- |",
     ]
     lines.extend(
-        f"| `{row.population.value}` | {row.client_identity} | {row.locked_client_count} | "
+        f"| `{row.population.name}` | {row.client_identity} | {row.locked_client_count} | "
         f"{row.physical_device_claim} | {row.fpr_equity_metrics} | {row.per_client_attack_metrics} | "
         f"{row.genuine_chronology} | {row.evidence_role} |"
         for row in _ROWS
