@@ -1,7 +1,7 @@
 .PHONY: install format format-check lint lint-imports pylint typecheck test test-parallel \
 	test-unit test-integration test-property test-scientific test-e2e test-target nox \
-	validate plan preprocess smoke report status run-experiment run-campaign \
-	anchor-reproduce anchor-verify anchor-status release-validate clean \
+	validate plan preprocess smoke report status results run-experiment run-campaign \
+	anchor-reproduce anchor-verify anchor-status clean \
 	code-health sonar-analyze codescene-delta
 
 UV ?= uv
@@ -12,7 +12,7 @@ SONAR_SERVER ?= https://sonarcloud.io
 CS ?= /usr/local/bin/cs
 
 # Optional make-variable arguments for CLI targets:
-#   EXPERIMENT_ID, DATASET_ID, OVERWRITE=1, TEST_TARGET, RELEASE_ROOT
+#   EXPERIMENT_ID, DATASET_ID, OVERWRITE=1, TEST_TARGET
 
 install: ## Install the project with every optional group and extra
 	$(UV) sync --all-groups --all-extras
@@ -84,6 +84,9 @@ report: ## CLI: generate experiment reports (optional EXPERIMENT_ID)
 status: ## CLI: show programme status (optional EXPERIMENT_ID)
 	$(UV) run datp-core status $(EXPERIMENT_ID)
 
+results: ## CLI: build the delivery results bundle from passed experiments
+	$(UV) run datp-core results $(if $(OVERWRITE),--overwrite,)
+
 run-experiment: ## CLI: execute one experiment (EXPERIMENT_ID required)
 	@test -n "$(EXPERIMENT_ID)" || (echo "EXPERIMENT_ID is required (see datp-core validate)" && exit 1)
 	$(UV) run datp-core run experiment $(EXPERIMENT_ID) $(if $(OVERWRITE),--overwrite,)
@@ -99,10 +102,6 @@ anchor-verify: ## CLI: verify the anchor reproduction gate
 
 anchor-status: ## CLI: show anchor gate status
 	$(UV) run datp-core anchor status
-
-release-validate: ## Validate a reproducibility release bundle (RELEASE_ROOT required)
-	@test -n "$(RELEASE_ROOT)" || (echo "RELEASE_ROOT is required" && exit 1)
-	$(UV) run python -m tools.reproducibility.release $(RELEASE_ROOT)
 
 clean: ## Remove Python caches, coverage data, and build artifacts
 	rm -rf build dist .coverage .pytest_cache .ruff_cache .benchmarks .nox

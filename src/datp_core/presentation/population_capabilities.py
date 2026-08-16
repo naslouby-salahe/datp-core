@@ -70,15 +70,6 @@ _ROWS = (
     ),
 )
 
-_ROADMAP_POPULATION_LABELS = {
-    PopulationId.NBAIOT_NATURAL_DEVICES: "NBAIOT_NATURAL_DEVICES",
-    PopulationId.CICIOT_FILE_CLIENTS: "CICIOT_FILE_CLIENTS",
-    PopulationId.NBAIOT_DIRICHLET_CLIENTS: "NBAIOT_DIRICHLET_CLIENTS",
-    PopulationId.EDGE_SENSOR_CLIENTS: "EDGE_SENSOR_CLIENTS",
-    PopulationId.EDGE_TEMPORAL_CLIENTS: "EDGE_TEMPORAL_CLIENTS",
-}
-
-
 def render_population_capability_table() -> str:
     lines = [
         "# Population capability and claim-boundary table",
@@ -88,7 +79,7 @@ def render_population_capability_table() -> str:
         "| --- | --- | ---: | --- | --- | --- | --- | --- |",
     ]
     lines.extend(
-        f"| `{_ROADMAP_POPULATION_LABELS[row.population]}` | {row.client_identity} | {row.locked_client_count} | "
+        f"| `{row.population.value}` | {row.client_identity} | {row.locked_client_count} | "
         f"{row.physical_device_claim} | {row.fpr_equity_metrics} | {row.per_client_attack_metrics} | "
         f"{row.genuine_chronology} | {row.evidence_role} |"
         for row in _ROWS

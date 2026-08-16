@@ -6,7 +6,7 @@ import typer
 
 from datp_core.app.cli.validation import fail
 from datp_core.app.contracts import OverwriteMode, ProgrammeExecutionMode
-from datp_core.app.research import run_campaign, run_experiment
+from datp_core.app.research import format_experiment_completion, run_campaign, run_experiment
 from datp_core.core.errors import DatpCoreError
 from datp_core.core.identifiers import ExperimentId
 
@@ -34,11 +34,10 @@ def experiment_command(
         )
     except (DatpCoreError, ValueError) as error:
         fail(error)
-    outcomes = ",".join(f"{item.method.value}={item.status.value}" for item in result.method_outcomes)
-    typer.echo(
-        f"experiment={result.experiment.value} seeds={len(result.seeds)} "
-        f"output_root={result.output_root} detail={result.detail} methods={outcomes}"
-    )
+    typer.echo(format_experiment_completion(result))
+    if result.method_outcomes:
+        outcomes = ",".join(f"{item.method.value}={item.status.value}" for item in result.method_outcomes)
+        typer.echo(f"methods={outcomes}")
 
 
 @app.command("campaign")

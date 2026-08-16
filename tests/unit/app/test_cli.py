@@ -8,7 +8,7 @@ RUNNER = CliRunner()
 def test_root_help_exposes_research_commands() -> None:
     result = RUNNER.invoke(app, ["--help"])
     assert result.exit_code == 0
-    for command in ("validate", "plan", "preprocess", "smoke", "anchor", "run", "report", "status"):
+    for command in ("validate", "plan", "preprocess", "smoke", "anchor", "run", "report", "status", "results"):
         assert command in result.stdout
 
 

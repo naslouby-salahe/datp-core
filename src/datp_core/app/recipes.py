@@ -5,8 +5,8 @@ from pathlib import Path
 from shutil import rmtree
 from typing import Protocol
 
-from datp_core.analysis.evidence import AnalysisAssetName
-from datp_core.analysis.mechanisms import AbsorptionSeedObservation
+from datp_core.analysis.evidence import ExperimentMetricResults, MetricObservation
+from datp_core.analysis.mechanisms import AbsorptionSeedObservation, MechanismEvidence
 from datp_core.analysis.mechanisms.model_alignment import (
     AlignmentReductionOutcome,
     ModelAlignmentMetric,
@@ -48,12 +48,11 @@ from datp_core.detector.training.protocols import (
 from datp_core.experiments.centralized_reference import (
     CIC_CENTRALIZED_REFERENCE,
     NBAIOT_CENTRALIZED_REFERENCE,
-    centralized_reference_directory,
     report_centralized_reference,
 )
+from datp_core.experiments.common.reports import persist_result_document
 from datp_core.experiments.common.seeds import BOUNDED_EVIDENCE_SEED_COHORT, CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.experiments.confirmatory.run import (
-    ConfirmatoryAssetDirectory,
     analyze_calibration_support_burden,
     analyze_confirmatory_campaign,
     analyze_equity_utility_pareto,
@@ -69,7 +68,6 @@ from datp_core.experiments.execution.evidence import load_evaluation_document
 from datp_core.experiments.execution.layout import EvaluationRunAssetDirectory, ExecutionRootDirectory
 from datp_core.experiments.execution.models import ProgressHook
 from datp_core.experiments.external import (
-    BoundedExternalAssetDirectory,
     analyze_ciciot_boundary_campaign,
     analyze_ciciot_boundary_evidence,
     analyze_external_benign_statistics,
@@ -77,12 +75,8 @@ from datp_core.experiments.external import (
     run_ciciot_boundary_seed,
     run_external_validation_seed,
 )
-from datp_core.experiments.external.run import ExternalBenignStatisticsAssetName
 from datp_core.experiments.federated_threshold import (
     FederatedEstimationSeedResult,
-    federated_benign_statistics_comparison_analysis_marker_present,
-    federated_quantile_estimation_analysis_marker_present,
-    fixed_coefficient_statistics_sensitivity_analysis_marker_present,
     report_federated_benign_statistics_comparison,
     report_federated_quantile_estimation,
     report_fixed_coefficient_statistics_sensitivity,
@@ -91,7 +85,6 @@ from datp_core.experiments.federated_threshold import (
     run_fixed_coefficient_statistics_sensitivity_seed,
 )
 from datp_core.experiments.heterogeneity import (
-    MechanismAnalysisDirectory,
     analyze_controlled_heterogeneity_sweep,
     analyze_heterogeneity_benefit_association,
     analyze_heterogeneity_support_interaction,
@@ -101,7 +94,6 @@ from datp_core.experiments.heterogeneity import (
 )
 from datp_core.experiments.registry import ExperimentDeclaration, require_experiment_declaration
 from datp_core.experiments.temporal import (
-    TemporalArtifactDirectory,
     TemporalCampaignResult,
     TemporalSeedResult,
     analyze_temporal_campaign,
@@ -110,12 +102,6 @@ from datp_core.experiments.temporal import (
 )
 from datp_core.experiments.threshold_robustness import (
     ThresholdRobustnessSeedResult,
-    calibration_cold_start_onboarding_analysis_marker_present,
-    calibration_size_ablation_analysis_marker_present,
-    fixed_shrinkage_curve_analysis_marker_present,
-    local_conformal_coverage_analysis_marker_present,
-    preprocessing_geometry_sensitivity_analysis_marker_present,
-    quantile_sensitivity_analysis_marker_present,
     report_calibration_cold_start_onboarding,
     report_calibration_size_ablation,
     report_fixed_shrinkage_curve,
@@ -136,10 +122,6 @@ from datp_core.experiments.threshold_robustness import (
     run_shared_construction_sensitivity_seed,
     run_size_aware_shrinkage_seed,
     run_threshold_estimator_scope_sensitivity_seed,
-    shared_calibration_contributor_availability_analysis_marker_present,
-    shared_construction_sensitivity_analysis_marker_present,
-    size_aware_shrinkage_analysis_marker_present,
-    threshold_estimator_scope_sensitivity_analysis_marker_present,
 )
 from datp_core.experiments.training_stress import (
     FedProxAlignmentEvidence,
@@ -158,7 +140,7 @@ from datp_core.experiments.training_stress import (
     run_fedavg_local_fine_tuning_stress_test_seed,
     run_fedprox_stress_test_seed,
 )
-from datp_core.presentation.export import MECHANISM_REPORT_FILENAME, PUBLICATION_FILENAME
+from datp_core.presentation.export import MechanismPublicationDocument
 from datp_core.runtime.configuration import OUTPUTS_ROOT
 from datp_core.runtime.filesystem import write_text_atomically
 
@@ -200,10 +182,6 @@ class ReportHandler(Protocol):
     def __call__(self, experiment_id: ExperimentId) -> ReportResult: ...
 
 
-class AnalysisMarker(Protocol):
-    def __call__(self, experiment_id: ExperimentId) -> bool: ...
-
-
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ExperimentRecipe:
     experiment: ExperimentId
@@ -211,7 +189,6 @@ class ExperimentRecipe:
     campaign_role: CampaignRole
     dispatch: DispatchHandler
     report: ReportHandler
-    analysis_marker: AnalysisMarker
 
 
 _METHOD_NOT_COMPLETED_DETAIL = "declared but not completed in this execution"
@@ -702,6 +679,13 @@ def _report_fedprox(experiment_id: ExperimentId) -> ReportResult:
             FileContentText(fedprox_activation_report(tuple(activation_evidence))),
         )
         paths.append(activation_path)
+        _write_stress_results(
+            experiment_id,
+            activation_path.parent / ResearchArtifact.RESULTS,
+            tuple(
+                item.alignment for _coefficient, alignment, _observations in activation_evidence for item in alignment
+            ),
+        )
     except ScientificContractError as error:
         raise ReportEvidenceError(
             ErrorMessage(str(error)), subject=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST
@@ -715,6 +699,7 @@ def _report_fedprox(experiment_id: ExperimentId) -> ReportResult:
 
 def _report_ditto(experiment_id: ExperimentId) -> ReportResult:
     outputs: list[Path] = []
+    mechanisms: list[MechanismEvidence] = []
     for regularization in DITTO_REGULARIZATION_GRID:
         output = ditto_analysis_directory(regularization, output_root=OUTPUTS_ROOT)
         if output.exists():
@@ -759,6 +744,12 @@ def _report_ditto(experiment_id: ExperimentId) -> ReportResult:
             ),
         )
         outputs.append(output)
+        mechanisms.extend(item.alignment for item in results)
+    _write_stress_results(
+        experiment_id,
+        outputs[0].parent / ResearchArtifact.RESULTS,
+        tuple(mechanisms),
+    )
     return ReportResult(experiment=experiment_id, paths=tuple(outputs), detail=DetailText(f"analyses={len(outputs)}"))
 
 
@@ -869,6 +860,11 @@ def _report_fine_tuning(experiment_id: ExperimentId) -> ReportResult:
         )
     )
     write_text_atomically(output, FileContentText("\n".join(rows) + "\n"))
+    _write_stress_results(
+        experiment_id,
+        output.parent / ResearchArtifact.RESULTS,
+        tuple(item.alignment for item in evidence_by_seed),
+    )
     return ReportResult(
         experiment=experiment_id,
         paths=(output.parent,),
@@ -1034,6 +1030,23 @@ def _report_estimation(experiment_id: ExperimentId) -> ReportResult:
     return ReportResult(experiment=experiment_id, paths=result.directories, detail=DetailText(result.detail))
 
 
+def _write_stress_results(
+    experiment_id: ExperimentId,
+    destination: Path,
+    mechanisms: tuple[MechanismEvidence, ...],
+) -> Path:
+    persist_result_document(
+        MechanismPublicationDocument(
+            experiment=experiment_id,
+            population=_declaration(experiment_id).population,
+            evidence_role=_declaration(experiment_id).role,
+            mechanisms=mechanisms,
+        ),
+        destination,
+    )
+    return destination
+
+
 def _supplementary_directory(experiment_id: ExperimentId) -> Path:
     return OUTPUTS_ROOT / ResearchDirectory.SUPPLEMENTARY / experiment_id.value
 
@@ -1063,6 +1076,7 @@ def _report_supplementary(experiment_id: ExperimentId) -> ReportResult:
         "|---:|---|---|---|---:|---|---:|",
     ]
     seen: set[tuple[Seed, FederatedThresholdMethod, MetricId]] = set()
+    observations: list[MetricObservation] = []
     for entry in plan.executable:
         coordinate = entry.coordinate
         key = (coordinate.training_seed, coordinate.threshold_method, coordinate.metric)
@@ -1081,6 +1095,17 @@ def _report_supplementary(experiment_id: ExperimentId) -> ReportResult:
             )
         document = load_evaluation_document(document_path)
         metric = metric_by_id(document.population.metrics, coordinate.metric)
+        observations.append(
+            MetricObservation(
+                seed=coordinate.training_seed,
+                threshold_method=coordinate.threshold_method,
+                metric=coordinate.metric,
+                status=metric.status,
+                value=metric.value if isinstance(metric, AvailableMetric) else None,
+                reason=metric.reason,
+                denominator=metric.denominator,
+            )
+        )
         value = f"{metric.value.value:.12g}" if isinstance(metric, AvailableMetric) else "—"
         reason = "—" if metric.reason is None else metric.reason.value
         denominator = "—" if metric.denominator is None else str(metric.denominator.value)
@@ -1088,194 +1113,27 @@ def _report_supplementary(experiment_id: ExperimentId) -> ReportResult:
             f"| {coordinate.training_seed.value} | {coordinate.threshold_method.value} | "
             f"{coordinate.metric.value} | {metric.status.value} | {value} | {reason} | {denominator} |"
         )
+    if not observations:
+        raise ReportEvidenceError(
+            ErrorMessage(f"supplementary report produced no metric observations: {experiment_id.value}"),
+            subject=experiment_id,
+        )
     report_path.parent.mkdir(parents=True, exist_ok=True)
+    persist_result_document(
+        ExperimentMetricResults(
+            experiment=experiment_id,
+            population=declaration.population,
+            evidence_role=declaration.role,
+            observations=tuple(observations),
+        ),
+        report_path.parent / ResearchArtifact.RESULTS,
+    )
     write_text_atomically(report_path, FileContentText("\n".join(lines) + "\n"))
-    return ReportResult(experiment=experiment_id, paths=(report_path,), detail=DetailText(f"generated {report_path}"))
-
-
-def _confirmatory_marker(experiment_id: ExperimentId) -> bool:
-    del experiment_id
-    return _nonempty_evidence_path(
-        OUTPUTS_ROOT
-        / ConfirmatoryAssetDirectory.ROOT
-        / PopulationId.NBAIOT_NATURAL_DEVICES.value
-        / ConfirmatoryAssetDirectory.ANALYSIS
-        / AnalysisAssetName.DOCUMENT
+    return ReportResult(
+        experiment=experiment_id,
+        paths=(report_path, report_path.parent / ResearchArtifact.RESULTS),
+        detail=DetailText(f"generated {report_path}"),
     )
-
-
-def _nonempty_evidence_path(path: Path) -> bool:
-    if path.is_file():
-        return path.stat().st_size > 0
-    if not path.is_dir():
-        return False
-    return any(child.is_file() and child.stat().st_size > 0 for child in path.rglob("*"))
-
-
-def _external_marker(experiment_id: ExperimentId) -> bool:
-    declaration = _declaration(experiment_id)
-    paired_complete = _nonempty_evidence_path(
-        OUTPUTS_ROOT
-        / BoundedExternalAssetDirectory.ANALYSIS
-        / experiment_id.value
-        / declaration.population.value
-        / AnalysisAssetName.EXTERNAL_DOCUMENT
-    )
-    if not paired_complete:
-        return False
-    if experiment_id is ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION:
-        return _nonempty_evidence_path(
-            OUTPUTS_ROOT
-            / ExternalBenignStatisticsAssetName.ROOT
-            / experiment_id.value
-            / declaration.population.value
-            / ExternalBenignStatisticsAssetName.SUMMARY
-        )
-    if experiment_id is ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY:
-        return _nonempty_evidence_path(
-            centralized_reference_directory(CIC_CENTRALIZED_REFERENCE, CONFIRMATORY_SEED_COHORT.values[0]) / "report"
-        )
-    raise ReportEvidenceError(ErrorMessage(f"unsupported external marker: {experiment_id.value}"))
-
-
-def _fedprox_marker(experiment_id: ExperimentId) -> bool:
-    del experiment_id
-    return all(
-        _nonempty_evidence_path(
-            fedprox_analysis_directory(
-                coefficient,
-                output_root=OUTPUTS_ROOT,
-            )
-            / PUBLICATION_FILENAME
-        )
-        for coefficient in FEDPROX_COEFFICIENTS
-    )
-
-
-def _ditto_marker(experiment_id: ExperimentId) -> bool:
-    del experiment_id
-    return all(
-        _nonempty_evidence_path(output / PUBLICATION_FILENAME)
-        and _nonempty_evidence_path(output / MECHANISM_REPORT_FILENAME)
-        for output in (ditto_analysis_directory(item, output_root=OUTPUTS_ROOT) for item in DITTO_REGULARIZATION_GRID)
-    )
-
-
-def _fine_tuning_marker(experiment_id: ExperimentId) -> bool:
-    del experiment_id
-    output = _fine_tuning_analysis_path()
-    return (
-        _nonempty_evidence_path(output)
-        and _nonempty_evidence_path(output.parent / PUBLICATION_FILENAME)
-        and _nonempty_evidence_path(output.parent / MECHANISM_REPORT_FILENAME)
-    )
-
-
-def _temporal_marker(experiment_id: ExperimentId) -> bool:
-    declaration = _declaration(experiment_id)
-    return all(
-        _nonempty_evidence_path(
-            OUTPUTS_ROOT
-            / ExecutionRootDirectory.BOUNDED_EVIDENCE
-            / experiment_id.value
-            / declaration.population.value
-            / declaration.role.value
-            / TemporalArtifactDirectory.ANALYSIS
-            / method.value
-            / AnalysisAssetName.TEMPORAL_DOCUMENT
-        )
-        for method in declaration.federated_thresholds
-    )
-
-
-def _heterogeneity_marker(experiment_id: ExperimentId) -> bool:
-    population = (
-        PopulationId.NBAIOT_DIRICHLET_CLIENTS
-        if experiment_id
-        in {
-            ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP,
-            ExperimentId.HETEROGENEITY_CALIBRATION_SUPPORT_INTERACTION,
-        }
-        else PopulationId.NBAIOT_NATURAL_DEVICES
-    )
-    output = (
-        OUTPUTS_ROOT
-        / MechanismAnalysisDirectory.ROOT
-        / experiment_id.value
-        / population.value
-        / MechanismAnalysisDirectory.ANALYSIS
-    )
-    if experiment_id in {
-        ExperimentId.PHYSICAL_FAMILY_ADEQUACY,
-        ExperimentId.CALIBRATION_SUPPORT_BURDEN,
-        ExperimentId.NATURAL_DEVICE_CLIENT_IMPACT,
-        ExperimentId.MALWARE_FAMILY_SENSITIVITY,
-        ExperimentId.EQUITY_UTILITY_PARETO,
-    }:
-        output = (
-            OUTPUTS_ROOT
-            / ConfirmatoryAssetDirectory.ROOT
-            / PopulationId.NBAIOT_NATURAL_DEVICES.value
-            / ConfirmatoryAssetDirectory.ANALYSIS
-            / (
-                ConfirmatoryAssetDirectory.PHYSICAL_FAMILY_ADEQUACY
-                if experiment_id is ExperimentId.PHYSICAL_FAMILY_ADEQUACY
-                else ConfirmatoryAssetDirectory.CALIBRATION_SUPPORT_BURDEN
-                if experiment_id is ExperimentId.CALIBRATION_SUPPORT_BURDEN
-                else ConfirmatoryAssetDirectory.NATURAL_DEVICE_CLIENT_IMPACT
-                if experiment_id is ExperimentId.NATURAL_DEVICE_CLIENT_IMPACT
-                else ConfirmatoryAssetDirectory.MALWARE_FAMILY_SENSITIVITY
-                if experiment_id is ExperimentId.MALWARE_FAMILY_SENSITIVITY
-                else ConfirmatoryAssetDirectory.EQUITY_UTILITY_PARETO
-            )
-        )
-    if experiment_id is ExperimentId.HETEROGENEITY_CALIBRATION_SUPPORT_INTERACTION:
-        analysis = output / "support_interaction_analysis.json"
-        surface = output / "support_interaction_surface.md"
-        return _nonempty_evidence_path(analysis) and _nonempty_evidence_path(surface)
-    return _nonempty_evidence_path(output / PUBLICATION_FILENAME) and _nonempty_evidence_path(
-        output / MECHANISM_REPORT_FILENAME
-    )
-
-
-def _robustness_marker(experiment_id: ExperimentId) -> bool:
-    if experiment_id is ExperimentId.SHARED_CONSTRUCTION_SENSITIVITY:
-        return shared_construction_sensitivity_analysis_marker_present(experiment_id)
-    if experiment_id is ExperimentId.QUANTILE_SENSITIVITY:
-        return quantile_sensitivity_analysis_marker_present(experiment_id)
-    if experiment_id is ExperimentId.THRESHOLD_ESTIMATOR_SCOPE_SENSITIVITY:
-        return threshold_estimator_scope_sensitivity_analysis_marker_present(experiment_id)
-    if experiment_id is ExperimentId.CALIBRATION_SIZE_ABLATION:
-        return calibration_size_ablation_analysis_marker_present(experiment_id)
-    if experiment_id is ExperimentId.CALIBRATION_COLD_START_ONBOARDING:
-        return calibration_cold_start_onboarding_analysis_marker_present(experiment_id)
-    if experiment_id is ExperimentId.SHARED_CALIBRATION_CONTRIBUTOR_AVAILABILITY:
-        return shared_calibration_contributor_availability_analysis_marker_present(experiment_id)
-    if experiment_id is ExperimentId.FIXED_SHRINKAGE_CURVE:
-        return fixed_shrinkage_curve_analysis_marker_present(experiment_id)
-    if experiment_id is ExperimentId.SIZE_AWARE_SHRINKAGE:
-        return size_aware_shrinkage_analysis_marker_present(experiment_id)
-    if experiment_id is ExperimentId.LOCAL_CONFORMAL_COVERAGE:
-        return local_conformal_coverage_analysis_marker_present(experiment_id)
-    if experiment_id is ExperimentId.PREPROCESSING_GEOMETRY_SENSITIVITY:
-        return preprocessing_geometry_sensitivity_analysis_marker_present(experiment_id)
-    raise ScientificContractError(ErrorMessage(f"unknown threshold-robustness experiment: {experiment_id.value}"))
-
-
-def _estimation_marker(experiment_id: ExperimentId) -> bool:
-    if experiment_id is ExperimentId.FEDERATED_BENIGN_STATISTICS_COMPARISON:
-        return federated_benign_statistics_comparison_analysis_marker_present(experiment_id)
-    if experiment_id is ExperimentId.FEDERATED_QUANTILE_ESTIMATION:
-        return federated_quantile_estimation_analysis_marker_present(experiment_id)
-    if experiment_id is ExperimentId.FIXED_COEFFICIENT_STATISTICS_SENSITIVITY:
-        return fixed_coefficient_statistics_sensitivity_analysis_marker_present(experiment_id)
-    raise ScientificContractError(
-        ErrorMessage(f"unknown federated threshold-estimation experiment: {experiment_id.value}")
-    )
-
-
-def _supplementary_marker(experiment_id: ExperimentId) -> bool:
-    return _nonempty_evidence_path(_supplementary_directory(experiment_id) / ResearchArtifact.EVIDENCE_REPORT)
 
 
 def _external_recipe(experiment_id: ExperimentId) -> DispatchHandler:
@@ -1351,7 +1209,6 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_dispatch_confirmatory,
         report=_report_confirmatory,
-        analysis_marker=_confirmatory_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.FAMILY_AND_GROUPED_GRANULARITY,
@@ -1359,7 +1216,6 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_dispatch_family,
         report=_report_supplementary,
-        analysis_marker=_supplementary_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.FEDPROX_ABSORPTION_STRESS_TEST,
@@ -1367,7 +1223,6 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_dispatch_fedprox,
         report=_report_fedprox,
-        analysis_marker=_fedprox_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.FEDAVG_LOCAL_FINE_TUNING,
@@ -1375,7 +1230,6 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_dispatch_fine_tuning,
         report=_report_fine_tuning,
-        analysis_marker=_fine_tuning_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.DITTO_ABSORPTION_STRESS_TEST,
@@ -1383,7 +1237,6 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_dispatch_ditto,
         report=_report_ditto,
-        analysis_marker=_ditto_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.FEDERATED_BENIGN_STATISTICS_COMPARISON,
@@ -1393,7 +1246,6 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
             ExperimentId.FEDERATED_BENIGN_STATISTICS_COMPARISON, run_federated_benign_statistics_comparison_seed
         ),
         report=_report_estimation,
-        analysis_marker=_estimation_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.FEDERATED_QUANTILE_ESTIMATION,
@@ -1401,7 +1253,6 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_estimation_recipe(ExperimentId.FEDERATED_QUANTILE_ESTIMATION, run_federated_quantile_estimation_seed),
         report=_report_estimation,
-        analysis_marker=_estimation_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.FIXED_COEFFICIENT_STATISTICS_SENSITIVITY,
@@ -1411,7 +1262,6 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
             ExperimentId.FIXED_COEFFICIENT_STATISTICS_SENSITIVITY, run_fixed_coefficient_statistics_sensitivity_seed
         ),
         report=_report_estimation,
-        analysis_marker=_estimation_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION,
@@ -1419,7 +1269,6 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_external_recipe(ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION),
         report=_report_external,
-        analysis_marker=_external_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY,
@@ -1427,7 +1276,6 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_external_recipe(ExperimentId.CICIOT_FILE_CLIENT_BOUNDARY),
         report=_report_external,
-        analysis_marker=_external_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
@@ -1435,7 +1283,6 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_dispatch_temporal,
         report=_report_temporal,
-        analysis_marker=_temporal_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.SHARED_CONSTRUCTION_SENSITIVITY,
@@ -1445,7 +1292,6 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
             ExperimentId.SHARED_CONSTRUCTION_SENSITIVITY, run_shared_construction_sensitivity_seed
         ),
         report=_report_robustness,
-        analysis_marker=_robustness_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.QUANTILE_SENSITIVITY,
@@ -1453,7 +1299,6 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_robustness_recipe(ExperimentId.QUANTILE_SENSITIVITY, run_quantile_sensitivity_seed),
         report=_report_robustness,
-        analysis_marker=_robustness_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.THRESHOLD_ESTIMATOR_SCOPE_SENSITIVITY,
@@ -1464,7 +1309,6 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
             run_threshold_estimator_scope_sensitivity_seed,
         ),
         report=_report_robustness,
-        analysis_marker=_robustness_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.CALIBRATION_SIZE_ABLATION,
@@ -1472,7 +1316,6 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_robustness_recipe(ExperimentId.CALIBRATION_SIZE_ABLATION, run_calibration_size_ablation_seed),
         report=_report_robustness,
-        analysis_marker=_robustness_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.CALIBRATION_COLD_START_ONBOARDING,
@@ -1483,7 +1326,6 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
             run_calibration_cold_start_onboarding_seed,
         ),
         report=_report_robustness,
-        analysis_marker=_robustness_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.SHARED_CALIBRATION_CONTRIBUTOR_AVAILABILITY,
@@ -1494,7 +1336,6 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
             run_shared_calibration_contributor_availability_seed,
         ),
         report=_report_robustness,
-        analysis_marker=_robustness_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.FIXED_SHRINKAGE_CURVE,
@@ -1502,7 +1343,6 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_robustness_recipe(ExperimentId.FIXED_SHRINKAGE_CURVE, run_fixed_shrinkage_curve_seed),
         report=_report_robustness,
-        analysis_marker=_robustness_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.SIZE_AWARE_SHRINKAGE,
@@ -1510,7 +1350,6 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_robustness_recipe(ExperimentId.SIZE_AWARE_SHRINKAGE, run_size_aware_shrinkage_seed),
         report=_report_robustness,
-        analysis_marker=_robustness_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.LOCAL_CONFORMAL_COVERAGE,
@@ -1518,7 +1357,6 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_robustness_recipe(ExperimentId.LOCAL_CONFORMAL_COVERAGE, run_local_conformal_coverage_seed),
         report=_report_robustness,
-        analysis_marker=_robustness_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.PREPROCESSING_GEOMETRY_SENSITIVITY,
@@ -1529,7 +1367,6 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
             run_preprocessing_geometry_sensitivity_seed,
         ),
         report=_report_robustness,
-        analysis_marker=_robustness_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.CONTROLLED_HETEROGENEITY_SWEEP,
@@ -1537,7 +1374,6 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_dispatch_heterogeneity,
         report=_report_heterogeneity,
-        analysis_marker=_heterogeneity_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.HETEROGENEITY_CALIBRATION_SUPPORT_INTERACTION,
@@ -1545,7 +1381,6 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_declared_recipe(ExperimentId.HETEROGENEITY_CALIBRATION_SUPPORT_INTERACTION),
         report=_report_heterogeneity,
-        analysis_marker=_heterogeneity_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.PHYSICAL_FAMILY_ADEQUACY,
@@ -1553,7 +1388,6 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_analysis_recipe(ExperimentId.PHYSICAL_FAMILY_ADEQUACY),
         report=_report_heterogeneity,
-        analysis_marker=_heterogeneity_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.CALIBRATION_SUPPORT_BURDEN,
@@ -1561,7 +1395,6 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_analysis_recipe(ExperimentId.CALIBRATION_SUPPORT_BURDEN),
         report=_report_heterogeneity,
-        analysis_marker=_heterogeneity_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.NATURAL_DEVICE_CLIENT_IMPACT,
@@ -1569,7 +1402,6 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_analysis_recipe(ExperimentId.NATURAL_DEVICE_CLIENT_IMPACT),
         report=_report_heterogeneity,
-        analysis_marker=_heterogeneity_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.MALWARE_FAMILY_SENSITIVITY,
@@ -1577,7 +1409,6 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_analysis_recipe(ExperimentId.MALWARE_FAMILY_SENSITIVITY),
         report=_report_heterogeneity,
-        analysis_marker=_heterogeneity_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.EQUITY_UTILITY_PARETO,
@@ -1585,7 +1416,6 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_analysis_recipe(ExperimentId.EQUITY_UTILITY_PARETO),
         report=_report_heterogeneity,
-        analysis_marker=_heterogeneity_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.PER_CLIENT_SCORE_GEOMETRY,
@@ -1593,7 +1423,6 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_analysis_recipe(ExperimentId.PER_CLIENT_SCORE_GEOMETRY),
         report=_report_heterogeneity,
-        analysis_marker=_heterogeneity_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.HETEROGENEITY_BENEFIT_ASSOCIATION,
@@ -1601,7 +1430,6 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_analysis_recipe(ExperimentId.HETEROGENEITY_BENEFIT_ASSOCIATION),
         report=_report_heterogeneity,
-        analysis_marker=_heterogeneity_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.THRESHOLD_MOVEMENT_TRADEOFF,
@@ -1609,7 +1437,6 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         campaign_role=CampaignRole.MANDATORY,
         dispatch=_analysis_recipe(ExperimentId.THRESHOLD_MOVEMENT_TRADEOFF),
         report=_report_heterogeneity,
-        analysis_marker=_heterogeneity_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.GROUP_MEDIAN_SUPPLEMENT,
@@ -1617,7 +1444,6 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         campaign_role=CampaignRole.OPTIONAL,
         dispatch=_declared_recipe(ExperimentId.GROUP_MEDIAN_SUPPLEMENT),
         report=_report_supplementary,
-        analysis_marker=_supplementary_marker,
     ),
     ExperimentRecipe(
         experiment=ExperimentId.OPTIONAL_EQUITY_INDICES,
@@ -1625,7 +1451,6 @@ EXPERIMENT_RECIPES: tuple[ExperimentRecipe, ...] = (
         campaign_role=CampaignRole.OPTIONAL,
         dispatch=_declared_recipe(ExperimentId.OPTIONAL_EQUITY_INDICES),
         report=_report_supplementary,
-        analysis_marker=_supplementary_marker,
     ),
 )
 

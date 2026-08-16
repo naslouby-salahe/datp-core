@@ -44,7 +44,7 @@ def _client() -> ClientIdentity:
     )
 
 
-def test_replicate_seed_uses_the_roadmap_sha256_identity_contract() -> None:
+def test_replicate_seed_uses_the_sha256_identity_contract() -> None:
     client = _client()
     material = b"DATP-Core|CALIBRATION_SUBSAMPLE|nbaiot|nbaiot_natural_devices|17|device_a|3"
     expected = int.from_bytes(sha256(material).digest()[:8], byteorder="big", signed=False) % (2**32)

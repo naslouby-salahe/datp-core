@@ -7,7 +7,7 @@ import pytest
 from datp_core.analysis.mechanisms.absorption import AbsorptionSeedObservation
 from datp_core.analysis.mechanisms.model_alignment import ModelAlignmentMetric, ModelAlignmentResult
 from datp_core.app.campaign import build_programme_plan
-from datp_core.app.contracts import AnchorRequirement, OverwriteMode
+from datp_core.app.contracts import AnchorRequirement, CampaignRole, EvidenceCompletion, OverwriteMode
 from datp_core.app.models import DetailText, ReportResult
 from datp_core.app.planning import PlanDisposition, seed_cohort_for
 from datp_core.app.recipes import _common_alignment_tuple_rows, evaluation_document_experiment_ids
@@ -193,6 +193,7 @@ def test_report_never_executes_and_consumes_existing_evidence_only(
         "datp_core.app.research.recipe_for",
         lambda _: SimpleNamespace(anchor_requirement=AnchorRequirement.NOT_REQUIRED, report=lambda _: report),
     )
+    monkeypatch.setattr("datp_core.app.research.require_experiment_passed", lambda *_args, **_kwargs: None)
 
     assert generate_report(experiment) is report
 
@@ -242,7 +243,7 @@ def test_campaign_execution_and_publication_do_not_depend_on_anchor(
     tmp_path: Path,
 ) -> None:
     experiment = ExperimentId.OPTIONAL_EQUITY_INDICES
-    recipe = SimpleNamespace(experiment=experiment)
+    recipe = SimpleNamespace(experiment=experiment, campaign_role=CampaignRole.OPTIONAL)
     observed_anchor_requirements: list[bool] = []
     observed_completeness_plans: list[object] = []
     result = SimpleNamespace(experiment=experiment)
@@ -272,6 +273,10 @@ def test_campaign_execution_and_publication_do_not_depend_on_anchor(
     monkeypatch.setattr(
         "datp_core.app.research._enforce_anchor_gate",
         lambda *_: pytest.fail("campaign must not enforce the anchor gate"),
+    )
+    monkeypatch.setattr(
+        "datp_core.app.research.generate_delivery_bundle",
+        lambda **_kwargs: SimpleNamespace(root=tmp_path / "results", disposition="generated"),
     )
 
     campaign = run_campaign(overwrite=OverwriteMode.KEEP_EXISTING)
@@ -306,10 +311,12 @@ def test_status_recognizes_dataset_manifest(monkeypatch: pytest.MonkeyPatch, tmp
     monkeypatch.setattr(
         research,
         "recipe_for",
-        lambda _: SimpleNamespace(
-            anchor_requirement=AnchorRequirement.NOT_REQUIRED,
-            analysis_marker=lambda _: False,
-        ),
+        lambda _: SimpleNamespace(anchor_requirement=AnchorRequirement.NOT_REQUIRED),
+    )
+    monkeypatch.setattr(
+        research,
+        "inspect_experiment_evidence",
+        lambda *_args, **_kwargs: SimpleNamespace(completion=EvidenceCompletion.NOT_STARTED),
     )
 
     status = research._status_for_experiment(experiment, research.AnchorGateStatus.PASS)

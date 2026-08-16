@@ -9,7 +9,13 @@ from datp_core.app.cli.anchor import app as anchor_app
 from datp_core.app.cli.execution import app as run_app
 from datp_core.app.cli.validation import fail
 from datp_core.app.contracts import OverwriteMode
-from datp_core.app.research import format_status, generate_report, programme_status, run_smoke
+from datp_core.app.research import (
+    format_status,
+    generate_delivery_results,
+    generate_report,
+    programme_status,
+    run_smoke,
+)
 from datp_core.app.validation import validate_programme
 from datp_core.core.errors import DatpCoreError
 from datp_core.core.identifiers import DatasetId, ExperimentId
@@ -115,6 +121,20 @@ def status_command(
     except (DatpCoreError, ValueError) as error:
         fail(error)
     typer.echo(format_status(report))
+
+
+@app.command("results")
+def results_command(
+    overwrite: Annotated[
+        bool,
+        typer.Option("--overwrite", help="Rebuild the delivery results bundle from passed experiments"),
+    ] = False,
+) -> None:
+
+    try:
+        typer.echo(generate_delivery_results(overwrite=_overwrite_mode(overwrite)))
+    except (DatpCoreError, ValueError) as error:
+        fail(error)
 
 
 def main() -> None:

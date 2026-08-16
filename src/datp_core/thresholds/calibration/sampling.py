@@ -136,7 +136,7 @@ def replicate_seed(
     client: ClientIdentity,
     replicate_index: ReplicateIndex,
 ) -> Seed:
-    """Derive the roadmap-locked PCG64 seed for one nested calibration draw."""
+    """Derive the deterministic PCG64 seed for one nested calibration draw."""
     material = "|".join(
         (
             "DATP-Core",

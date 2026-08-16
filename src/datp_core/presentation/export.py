@@ -69,7 +69,8 @@ from datp_core.analysis.mechanisms.support_strata import (
 )
 from datp_core.analysis.preparation import AnalysisDocument, ExternalAnalysisDocument, TemporalAnalysisDocument
 from datp_core.analysis.scientific_decision import ScientificDecision, ScientificDecisionResult
-from datp_core.artifacts.serializers.json import canonical_json_text
+from datp_core.artifacts.serializers.json import canonical_json_text, serialize_json_model
+from datp_core.core.contracts import StrictModel
 from datp_core.core.identifiers import (
     AnalysisReasonText,
     AvailabilityStatus,
@@ -107,6 +108,7 @@ from datp_core.thresholds.policies.cluster import ClusterMembership
 
 PUBLICATION_FILENAME = "publication.md"
 MECHANISM_REPORT_FILENAME = "mechanism_report.md"
+MECHANISM_RESULTS_FILENAME = "results.json"
 PUBLICATION_SOURCE_MANIFEST_FILENAME = "publication_source_manifest.json"
 PUBLICATION_SOURCE_DATA_FILENAME = "publication_source_data.csv"
 PUBLICATION_DECIMAL_PLACES = 3
@@ -152,6 +154,13 @@ def _format_publication_p_value(value: float) -> str:
     if value < PUBLICATION_P_VALUE_DISPLAY_THRESHOLD:
         return "< 0.001"
     return f"{value:.{PUBLICATION_P_VALUE_SIGNIFICANT_DIGITS}g}"
+
+
+class MechanismPublicationDocument(StrictModel):
+    experiment: ExperimentId
+    population: PopulationId
+    evidence_role: EvidenceRole
+    mechanisms: tuple[MechanismEvidence, ...]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -803,6 +812,16 @@ def export_mechanism_publication(
     figures: tuple[FigureSpec, ...] = (),
 ) -> Path:
     payload = "\n".join(_render_mechanisms(mechanisms))
+    output_directory.mkdir(parents=True, exist_ok=True)
+    serialize_json_model(
+        MechanismPublicationDocument(
+            experiment=experiment,
+            population=population,
+            evidence_role=evidence_role,
+            mechanisms=mechanisms,
+        ),
+        output_directory / MECHANISM_RESULTS_FILENAME,
+    )
     mechanism_report = write_text_atomically(output_directory / MECHANISM_REPORT_FILENAME, FileContentText(payload))
     tables = _mechanism_tables(mechanisms)
     return export_markdown(

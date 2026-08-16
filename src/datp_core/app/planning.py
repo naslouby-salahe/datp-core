@@ -108,7 +108,6 @@ class PlannedExperiment:
 
     @property
     def applicability(self) -> CoordinateApplicability:
-        """Expose the roadmap applicability record without conflating it with execution readiness."""
 
         match self.disposition:
             case PlanDisposition.EXECUTABLE:

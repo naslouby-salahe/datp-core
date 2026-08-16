@@ -18,7 +18,6 @@ from datp_core.analysis.metrics.semantics import metric_value
 from datp_core.app.planning import PlanReason, expand_experiment_plan
 from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
-from datp_core.artifacts.serializers.json import serialize_json_model
 from datp_core.core.contracts import StrictModel
 from datp_core.core.errors import (
     ErrorMessage,
@@ -58,6 +57,7 @@ from datp_core.experiments.common.reports import (
     AnalysisReportFinalizationInput,
     AnalysisReportPublication,
     finalize_analysis_report,
+    persist_result_document,
 )
 from datp_core.experiments.common.seeds import (
     CONFIRMATORY_ANALYSIS_SEED,
@@ -99,7 +99,6 @@ class ThresholdRobustnessArtifactName(StrEnum):
     ANALYSIS = "analysis"
     SUMMARY = "summary.json"
     SHARED_CONSTRUCTION_PANEL = "shared_construction_robustness.md"
-    COMPLETE = "complete.marker"
 
 
 class ThresholdRobustnessAnalysisMarker(StrEnum):
@@ -399,15 +398,6 @@ def _analysis_directory(experiment_id: ExperimentId, population: PopulationId) -
     )
 
 
-def _complete_marker(experiment_id: ExperimentId, population: PopulationId) -> Path:
-    return _analysis_directory(experiment_id, population) / ThresholdRobustnessArtifactName.COMPLETE
-
-
-def _complete_marker_present(experiment_id: ExperimentId, population: PopulationId) -> bool:
-    marker = _complete_marker(experiment_id, population)
-    return marker.is_file() and marker.stat().st_size > 0
-
-
 def _summary_path(experiment_id: ExperimentId, population: PopulationId) -> Path:
     return _analysis_directory(experiment_id, population) / ThresholdRobustnessArtifactName.SUMMARY
 
@@ -540,7 +530,7 @@ def report_shared_construction_sensitivity(
         if documents:
             rows.append(_method_summary(method, tuple(documents)))
     report = MethodCvSummaryReport(experiment=experiment_id, rows=tuple(rows))
-    serialize_json_model(
+    persist_result_document(
         report,
         _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
     )
@@ -551,7 +541,6 @@ def report_shared_construction_sensitivity(
     return finalize_analysis_report(
         AnalysisReportFinalizationInput(
             directory=directory,
-            marker=_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
             missing_count=SeedObservationCount(missing),
             marker_text=AnalysisMarkerText(ThresholdRobustnessAnalysisMarker.SHARED_CONSTRUCTION_SENSITIVITY),
         )
@@ -592,10 +581,6 @@ def _panel_value(value: MetricValue | float | None) -> str:
         return "UNAVAILABLE"
     numeric = value.value if isinstance(value, MetricValue) else value
     return f"{numeric:.12g}"
-
-
-def shared_construction_sensitivity_analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    return _complete_marker_present(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
 
 
 def run_quantile_sensitivity_seed(
@@ -642,22 +627,17 @@ def report_quantile_sensitivity(
                         summary=_method_summary(method, tuple(documents)),
                     )
                 )
-    serialize_json_model(
+    persist_result_document(
         QuantileSummaryReport(experiment=experiment_id, rows=tuple(rows)),
         _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
     )
     return finalize_analysis_report(
         AnalysisReportFinalizationInput(
             directory=directory,
-            marker=_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
             missing_count=SeedObservationCount(missing),
             marker_text=AnalysisMarkerText(ThresholdRobustnessAnalysisMarker.QUANTILE_SENSITIVITY),
         )
     )
-
-
-def quantile_sensitivity_analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    return _complete_marker_present(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
 
 
 def run_threshold_estimator_scope_sensitivity_seed(
@@ -754,7 +734,7 @@ def report_threshold_estimator_scope_sensitivity(
                 ),
             )
         )
-    serialize_json_model(
+    persist_result_document(
         EstimatorScopeSummaryReport(
             experiment=experiment_id,
             comparison_role=ValidationReasonText(
@@ -773,7 +753,6 @@ def report_threshold_estimator_scope_sensitivity(
     return finalize_analysis_report(
         AnalysisReportFinalizationInput(
             directory=directory,
-            marker=_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
             missing_count=SeedObservationCount(missing),
             marker_text=AnalysisMarkerText(ThresholdRobustnessAnalysisMarker.THRESHOLD_ESTIMATOR_SCOPE_SENSITIVITY),
         )
@@ -825,10 +804,6 @@ def _moment_scope_gain_interval(contrasts: tuple[EstimatorScopeContrast, ...]) -
         analysis_seed=CONFIRMATORY_ANALYSIS_SEED,
         require_full_cohort=True,
     )
-
-
-def threshold_estimator_scope_sensitivity_analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    return _complete_marker_present(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
 
 
 def run_calibration_size_ablation_seed(
@@ -911,22 +886,17 @@ def report_calibration_cold_start_onboarding(
                         family_fallback=cell.family_fallback,
                     )
                 )
-    serialize_json_model(
+    persist_result_document(
         OnboardingCalibrationReport(experiment=experiment_id, rows=tuple(rows)),
         _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
     )
     return finalize_analysis_report(
         AnalysisReportFinalizationInput(
             directory=directory,
-            marker=_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
             missing_count=SeedObservationCount(missing),
             marker_text=AnalysisMarkerText("calibration_cold_start_onboarding_analysis_complete"),
         )
     )
-
-
-def calibration_cold_start_onboarding_analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    return _complete_marker_present(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
 
 
 def run_shared_calibration_contributor_availability_seed(
@@ -1046,7 +1016,7 @@ def report_shared_calibration_contributor_availability(
                 maximum_median_delta_cv=MetricDelta(max(values)),
             )
         )
-    serialize_json_model(
+    persist_result_document(
         ContributorAvailabilityReport(
             experiment=experiment_id,
             rows=tuple(rows),
@@ -1059,17 +1029,12 @@ def report_shared_calibration_contributor_availability(
     return finalize_analysis_report(
         AnalysisReportFinalizationInput(
             directory=directory,
-            marker=_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
             missing_count=SeedObservationCount(missing),
             marker_text=AnalysisMarkerText(
                 ThresholdRobustnessAnalysisMarker.SHARED_CALIBRATION_CONTRIBUTOR_AVAILABILITY
             ),
         )
     )
-
-
-def shared_calibration_contributor_availability_analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    return _complete_marker_present(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
 
 
 def report_calibration_size_ablation(
@@ -1126,7 +1091,7 @@ def report_calibration_size_ablation(
             )
             threshold_stability_rows.extend(_threshold_stability_rows_for_seed(seed, method, cells, local_reference))
             threshold_order_rows.extend(_threshold_order_rows_for_seed(seed, method, cells, local_reference))
-    serialize_json_model(
+    persist_result_document(
         CalibrationSizeAblationReport(
             experiment=experiment_id,
             rows=tuple(rows),
@@ -1139,7 +1104,6 @@ def report_calibration_size_ablation(
     return finalize_analysis_report(
         AnalysisReportFinalizationInput(
             directory=directory,
-            marker=_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
             missing_count=SeedObservationCount(missing),
             marker_text=AnalysisMarkerText(
                 "calibration_size_ablation_analysis_complete "
@@ -1258,10 +1222,6 @@ def _threshold_order_rows_for_seed(
     return tuple(rows)
 
 
-def calibration_size_ablation_analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    return _complete_marker_present(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
-
-
 def run_fixed_shrinkage_curve_seed(
     training_seed: Seed,
     *,
@@ -1323,22 +1283,17 @@ def report_fixed_shrinkage_curve(
                     threshold_variance_across_clients=threshold_variance,
                 )
             )
-    serialize_json_model(
+    persist_result_document(
         ShrinkageCurveReport(experiment=experiment_id, rows=tuple(rows)),
         _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
     )
     return finalize_analysis_report(
         AnalysisReportFinalizationInput(
             directory=directory,
-            marker=_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
             missing_count=SeedObservationCount(missing),
             marker_text=AnalysisMarkerText(ThresholdRobustnessAnalysisMarker.FIXED_SHRINKAGE_CURVE),
         )
     )
-
-
-def fixed_shrinkage_curve_analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    return _complete_marker_present(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
 
 
 def run_size_aware_shrinkage_seed(
@@ -1431,7 +1386,7 @@ def report_size_aware_shrinkage(
                     balanced_accuracy=metric_value(metric_by_id(client.metrics, MetricId.BALANCED_ACCURACY)),
                 )
             )
-    serialize_json_model(
+    persist_result_document(
         SizeAwareShrinkageReport(
             experiment=experiment_id,
             methods=tuple(summaries),
@@ -1442,15 +1397,10 @@ def report_size_aware_shrinkage(
     return finalize_analysis_report(
         AnalysisReportFinalizationInput(
             directory=directory,
-            marker=_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
             missing_count=SeedObservationCount(missing),
             marker_text=AnalysisMarkerText(ThresholdRobustnessAnalysisMarker.SIZE_AWARE_SHRINKAGE),
         )
     )
-
-
-def size_aware_shrinkage_analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    return _complete_marker_present(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
 
 
 def run_local_conformal_coverage_seed(
@@ -1540,7 +1490,7 @@ def report_local_conformal_coverage(
                     average_precision=_client_metric_for(document, diagnostic.client, MetricId.AVERAGE_PRECISION),
                 )
             )
-    serialize_json_model(
+    persist_result_document(
         ConformalCoverageReport(
             experiment=experiment_id,
             interpretation=ValidationReasonText(
@@ -1557,15 +1507,10 @@ def report_local_conformal_coverage(
     return finalize_analysis_report(
         AnalysisReportFinalizationInput(
             directory=directory,
-            marker=_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
             missing_count=SeedObservationCount(missing),
             marker_text=AnalysisMarkerText(ThresholdRobustnessAnalysisMarker.LOCAL_CONFORMAL_COVERAGE),
         )
     )
-
-
-def local_conformal_coverage_analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    return _complete_marker_present(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
 
 
 def run_preprocessing_geometry_sensitivity_seed(
@@ -1703,7 +1648,7 @@ def report_preprocessing_geometry_sensitivity(
                 ),
             )
         )
-    serialize_json_model(
+    persist_result_document(
         PreprocessingGeometrySensitivityReport(
             experiment=experiment_id,
             rows=tuple(rows),
@@ -1714,12 +1659,7 @@ def report_preprocessing_geometry_sensitivity(
     return finalize_analysis_report(
         AnalysisReportFinalizationInput(
             directory=directory,
-            marker=_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
             missing_count=SeedObservationCount(missing),
             marker_text=AnalysisMarkerText(ThresholdRobustnessAnalysisMarker.PREPROCESSING_GEOMETRY_SENSITIVITY),
         )
     )
-
-
-def preprocessing_geometry_sensitivity_analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    return _complete_marker_present(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)

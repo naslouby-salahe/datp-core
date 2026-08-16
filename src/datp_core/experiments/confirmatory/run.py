@@ -114,7 +114,6 @@ from datp_core.presentation.figures import (
 )
 from datp_core.presentation.operational_accounting import export_threshold_stage_accounting
 from datp_core.presentation.population_capabilities import export_population_capability_table
-from datp_core.presentation.prior_art import export_prior_art_collision_table, export_prior_art_distinction_table
 from datp_core.presentation.target_attainment import (
     export_confirmatory_operating_point_table,
     export_target_attainment_table,
@@ -281,8 +280,6 @@ def analyze_confirmatory_campaign() -> Path:
         figures=figures,
     )
     export_population_capability_table(output / "population_capability_claim_boundary.md")
-    export_prior_art_collision_table(output / "prior_art_collision_table.md")
-    export_prior_art_distinction_table(output / "prior_art_distinction_table.md")
     pareto_views = _confirmatory_pareto_views()
     export_target_attainment_table(pareto_views[0], output / "calibration_target_attainment.md")
     export_confirmatory_operating_point_table(

@@ -1,7 +1,12 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from datp_core.app.contracts import ArtifactPresence, ProgrammeExecutionMode, RecipeRegistration
+from datp_core.app.contracts import (
+    ArtifactPresence,
+    ExperimentRunDisposition,
+    ProgrammeExecutionMode,
+    RecipeRegistration,
+)
 from datp_core.core.identifiers import (
     EvidenceRole,
     ExperimentId,
@@ -40,6 +45,11 @@ class ExperimentRunResult:
     output_root: Path
     detail: DetailText
     method_outcomes: tuple[ThresholdMethodOutcome, ...]
+    disposition: ExperimentRunDisposition
+    json_paths: tuple[Path, ...] = ()
+    csv_paths: tuple[Path, ...] = ()
+    figure_paths: tuple[Path, ...] = ()
+    report_paths: tuple[Path, ...] = ()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

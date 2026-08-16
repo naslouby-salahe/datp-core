@@ -18,7 +18,6 @@ from datp_core.app.planning import PlanReason, expand_experiment_plan
 from datp_core.artifacts.layout import evaluation_run_directory
 from datp_core.artifacts.repositories.evaluations import FederatedEvaluationAssetName
 from datp_core.artifacts.repositories.thresholds import FederatedThresholdAssetName
-from datp_core.artifacts.serializers.json import serialize_json_model
 from datp_core.core.contracts import StrictModel
 from datp_core.core.errors import (
     ErrorMessage,
@@ -53,6 +52,7 @@ from datp_core.experiments.common.reports import (
     AnalysisReportFinalizationInput,
     AnalysisReportPublication,
     finalize_analysis_report,
+    persist_result_document,
 )
 from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
 from datp_core.experiments.execution import execute_declared_experiment_seed
@@ -163,15 +163,6 @@ def _analysis_directory(experiment_id: ExperimentId, population: PopulationId) -
 
 def _summary_path(experiment_id: ExperimentId, population: PopulationId) -> Path:
     return _analysis_directory(experiment_id, population) / FederatedEstimationArtifactName.SUMMARY
-
-
-def _complete_marker(experiment_id: ExperimentId, population: PopulationId) -> Path:
-    return _summary_path(experiment_id, population)
-
-
-def _complete_marker_present(experiment_id: ExperimentId, population: PopulationId) -> bool:
-    marker = _complete_marker(experiment_id, population)
-    return marker.is_file() and marker.stat().st_size > 0
 
 
 def _evaluation_document_path(output_root: Path, coordinate: ExperimentCoordinate) -> Path:
@@ -543,7 +534,7 @@ def report_federated_benign_statistics_comparison(
         missing += loaded.missing_count.value
         if loaded.summary is not None:
             rows.append(loaded.summary)
-    serialize_json_model(
+    persist_result_document(
         EstimationSummaryReport(
             experiment=experiment_id,
             comparator_claim_boundary=ValidationReasonText(
@@ -557,15 +548,10 @@ def report_federated_benign_statistics_comparison(
     return finalize_analysis_report(
         AnalysisReportFinalizationInput(
             directory=directory,
-            marker=_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
             missing_count=SeedObservationCount(missing),
             marker_text=AnalysisMarkerText(FederatedEstimationAnalysisMarker.FEDERATED_BENIGN_STATISTICS_COMPARISON),
         )
     )
-
-
-def federated_benign_statistics_comparison_analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    return _complete_marker_present(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
 
 
 def run_federated_quantile_estimation_seed(
@@ -608,22 +594,17 @@ def report_federated_quantile_estimation(
         missing += loaded.missing_count.value
         if loaded.summary is not None:
             rows.append(loaded.summary)
-    serialize_json_model(
+    persist_result_document(
         EstimationSummaryReport(experiment=experiment_id, comparator_claim_boundary=None, rows=tuple(rows)),
         _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
     )
     return finalize_analysis_report(
         AnalysisReportFinalizationInput(
             directory=directory,
-            marker=_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
             missing_count=SeedObservationCount(missing),
             marker_text=AnalysisMarkerText(FederatedEstimationAnalysisMarker.FEDERATED_QUANTILE_ESTIMATION),
         )
     )
-
-
-def federated_quantile_estimation_analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    return _complete_marker_present(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
 
 
 def run_fixed_coefficient_statistics_sensitivity_seed(
@@ -696,19 +677,14 @@ def report_fixed_coefficient_statistics_sensitivity(
                 rows.extend(_fixed_coefficient_rows_for_seed(seed=seed, method=method, experiment_id=experiment_id))
             except ScientificContractError:
                 missing += 1
-    serialize_json_model(
+    persist_result_document(
         FixedCoefficientSummaryReport(experiment=experiment_id, rows=tuple(rows)),
         _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
     )
     return finalize_analysis_report(
         AnalysisReportFinalizationInput(
             directory=directory,
-            marker=_complete_marker(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
             missing_count=SeedObservationCount(missing),
             marker_text=AnalysisMarkerText(FederatedEstimationAnalysisMarker.FIXED_COEFFICIENT_STATISTICS_SENSITIVITY),
         )
     )
-
-
-def fixed_coefficient_statistics_sensitivity_analysis_marker_present(experiment_id: ExperimentId) -> bool:
-    return _complete_marker_present(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)

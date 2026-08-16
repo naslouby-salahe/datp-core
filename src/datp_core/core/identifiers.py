@@ -44,16 +44,13 @@ class ExperimentReadiness(StrEnum):
 class ProgrammeStatus(StrEnum):
     NOT_STARTED = "not_started"
     DATASET_READY = "dataset_ready"
-    PREPARATION_READY = "preparation_ready"
     BLOCKED_BY_DEPENDENCY = "blocked_by_dependency"
     BLOCKED_BY_ANCHOR = "blocked_by_anchor"
-    RUNNING = "running"
     INCOMPLETE = "incomplete"
     INVALID = "invalid"
     EXECUTION_COMPLETE = "execution_complete"
     ANALYSIS_COMPLETE = "analysis_complete"
-    REPORT_READY = "report_ready"
-    REPORT_GENERATED = "report_generated"
+    PASSED = "passed"
 
 
 class EvidenceRole(StrEnum):

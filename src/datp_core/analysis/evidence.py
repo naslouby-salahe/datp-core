@@ -12,6 +12,7 @@ from datp_core.analysis.contrasts import (
 )
 from datp_core.analysis.inference.contracts import PairedInferenceProtocol
 from datp_core.analysis.influence import LeaveOneDeviceOutDiagnostics
+from datp_core.analysis.metrics.models import MetricReason, MetricStatus
 from datp_core.analysis.preparation import (
     AnalysisDocument,
     ConfirmatoryAnalysisRequest,
@@ -27,11 +28,14 @@ from datp_core.analysis.temporal import TemporalDeploymentProvenance, TemporalRe
 from datp_core.artifacts.serializers.json import canonical_json_text
 from datp_core.core.contracts import StrictModel
 from datp_core.core.identifiers import (
+    EvidenceRole,
     ExperimentId,
     FederatedThresholdMethod,
     FileContentText,
+    MetricId,
+    PopulationId,
 )
-from datp_core.core.numeric import Seed
+from datp_core.core.numeric import MetricValue, RowCount, Seed
 from datp_core.experiments.common.coordinates import ExternalTemporalExecutionIdentity
 from datp_core.runtime.filesystem import write_text_atomically
 
@@ -47,6 +51,23 @@ class AnalysisAssetName(StrEnum):
 
 class SeedEvidenceAssetName(StrEnum):
     DOCUMENT = "seed.json"
+
+
+class MetricObservation(StrictModel):
+    seed: Seed
+    metric: MetricId
+    status: MetricStatus
+    threshold_method: FederatedThresholdMethod | None = None
+    value: MetricValue | None = None
+    reason: MetricReason | None = None
+    denominator: RowCount | None = None
+
+
+class ExperimentMetricResults(StrictModel):
+    experiment: ExperimentId
+    population: PopulationId
+    evidence_role: EvidenceRole
+    observations: tuple[MetricObservation, ...]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
