@@ -25,6 +25,7 @@ from datp_core.data.contracts import (
 from datp_core.data.materialization import (
     CanonicalAsset,
     CanonicalPublication,
+    MaterializationProgress,
     canonical_data_partition_assets,
     canonical_directory,
     excluded_source_file,
@@ -67,12 +68,16 @@ class CICIoT2023Materializer:
         return canonical_directory(canonical_root, CICIOT2023_SCHEMA)
 
     def publish(
-        self, raw_root: Path, canonical_root: Path
+        self,
+        raw_root: Path,
+        canonical_root: Path,
+        *,
+        progress: MaterializationProgress | None = None,
     ) -> MaterializedDataset[CanonicalAssetRole, CICIoT2023EligibilityReason]:
         sources = tuple(sorted(raw_root.glob(f"**/{CICIoT2023ArtifactName.MERGED_CSV_DIRECTORY}/*.csv")))
         all_csvs = tuple(sorted(raw_root.glob("**/*.csv")))
         excluded_paths = tuple(path for path in all_csvs if path not in frozenset(sources))
-        return self.materialize(sources, canonical_root, excluded_paths=excluded_paths)
+        return self.materialize(sources, canonical_root, excluded_paths=excluded_paths, progress=progress)
 
     def materialize(
         self,
@@ -80,10 +85,16 @@ class CICIoT2023Materializer:
         canonical_root: Path,
         *,
         excluded_paths: tuple[Path, ...] = (),
+        progress: MaterializationProgress | None = None,
     ) -> MaterializedDataset[CanonicalAssetRole, CICIoT2023EligibilityReason]:
         ordered_paths = tuple(sorted(source_paths))
         return publish_canonical(
-            self._prepare_publication(ordered_paths, canonical_root, excluded_paths=excluded_paths)
+            self._prepare_publication(
+                ordered_paths,
+                canonical_root,
+                excluded_paths=excluded_paths,
+                progress=progress,
+            )
         )
 
     @staticmethod
@@ -92,18 +103,24 @@ class CICIoT2023Materializer:
         canonical_root: Path,
         *,
         excluded_paths: tuple[Path, ...] = (),
+        progress: MaterializationProgress | None = None,
     ) -> CanonicalPublication[CanonicalAssetRole, CICIoT2023EligibilityReason]:
         audit = CICIoT2023Materializer.audit(
             source_paths,
             excluded_paths=excluded_paths,
+            progress=progress,
         )
         expected_assets = canonical_data_partition_assets(LogicalElementCount(len(audit.frames)))
 
         def write_assets(data_root: Path) -> tuple[CanonicalAsset[CanonicalAssetRole], ...]:
-            return tuple(
-                stream_parquet(frame, data_root, asset, CICIOT2023_ARROW_SCHEMA)
-                for frame, asset in zip(audit.frames, expected_assets, strict=True)
-            )
+            written: list[CanonicalAsset[CanonicalAssetRole]] = []
+            for index, (frame, asset) in enumerate(zip(audit.frames, expected_assets, strict=True)):
+                if progress is not None:
+                    progress(
+                        f"ciciot2023 writing canonical asset {index + 1}/{len(expected_assets)} {asset.relative_path}"
+                    )
+                written.append(stream_parquet(frame, data_root, asset, CICIOT2023_ARROW_SCHEMA))
+            return tuple(written)
 
         return CanonicalPublication(
             canonical_root=canonical_root,
@@ -121,8 +138,9 @@ class CICIoT2023Materializer:
         source_paths: tuple[Path, ...],
         *,
         excluded_paths: tuple[Path, ...] = (),
+        progress: MaterializationProgress | None = None,
     ) -> CICIoT2023AuditResult:
-        audited_sources = _audited_sources(source_paths)
+        audited_sources = _audited_sources(source_paths, progress=progress)
         return CICIoT2023AuditResult(
             frames=audited_sources.frames,
             inventory=_source_inventory(
@@ -136,14 +154,20 @@ class CICIoT2023Materializer:
 
 def _audited_sources(
     source_paths: tuple[Path, ...],
+    *,
+    progress: MaterializationProgress | None = None,
 ) -> _AuditedCICIoT2023Sources:
     reader = CICIoT2023Reader()
     ordered_paths = tuple(sorted(source_paths))
-    frames = tuple(reader.read(path) for path in ordered_paths)
+    frames: list[pl.LazyFrame] = []
+    for index, path in enumerate(ordered_paths):
+        if progress is not None:
+            progress(f"ciciot2023 reading source {index + 1}/{len(ordered_paths)} {path.name}")
+        frames.append(reader.read(path))
     summaries = tuple(reader.audit_summary(frame) for frame in frames)
     return _AuditedCICIoT2023Sources(
         paths=ordered_paths,
-        frames=frames,
+        frames=tuple(frames),
         summaries=summaries,
     )
 

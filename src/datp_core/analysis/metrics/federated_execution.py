@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from functools import lru_cache
+from math import isfinite
 
 import numpy as np
 import polars as pl
@@ -12,7 +13,7 @@ from datp_core.analysis.metrics.client import (
 from datp_core.analysis.metrics.cohort_construction import cohort_record_for_client
 from datp_core.analysis.metrics.cohorts import ClientEligibilityRecord
 from datp_core.analysis.metrics.conformal import evaluate_held_out_conformal_coverage
-from datp_core.analysis.metrics.confusion import calculate_confusion_counts_for_evaluation_arrays
+from datp_core.analysis.metrics.confusion import ConfusionCounts, RowCount
 from datp_core.analysis.metrics.family_recall import evaluate_nbaiot_family_recall
 from datp_core.analysis.metrics.federated import (
     EvaluationDiagnostics,
@@ -240,11 +241,10 @@ def _evaluate_score_record(
         raise ArtifactIntegrityError(ErrorMessage("evaluation score artifact is incomplete or changed"))
 
     score_arrays = _score_arrays(ScoreArtifactPathText(str(record.path)))
-    confusion = calculate_confusion_counts_for_evaluation_arrays(
-        score_values=score_arrays.score_values,
-        attack_mask=score_arrays.attack_mask,
-        threshold=threshold,
-        attack_assignment_valid=eligibility.attack_evaluable,
+    confusion = _confusion_counts_at_threshold(
+        ScoreArtifactPathText(str(record.path)),
+        threshold,
+        eligibility.attack_evaluable,
     )
     return ClientMetricResult(
         coordinate=request.score_manifest.coordinate,
@@ -569,6 +569,42 @@ def _score_arrays(
 def _score_auroc(path: ScoreArtifactPathText, attack_assignment_valid: bool) -> MetricAvailability:
     score_arrays = _score_arrays(path)
     return calculate_auroc(score_arrays.score_values, score_arrays.labels, attack_assignment_valid)
+
+
+@lru_cache(maxsize=9)
+def _sorted_score_partitions(path: ScoreArtifactPathText) -> tuple[np.ndarray, np.ndarray]:
+    score_arrays = _score_arrays(path)
+    benign = np.sort(score_arrays.score_values[~score_arrays.attack_mask])
+    attack = np.sort(score_arrays.score_values[score_arrays.attack_mask])
+    benign.setflags(write=False)
+    attack.setflags(write=False)
+    return benign, attack
+
+
+def _confusion_counts_at_threshold(
+    path: ScoreArtifactPathText,
+    threshold: ThresholdValue,
+    attack_assignment_valid: bool,
+) -> ConfusionCounts:
+    if not isfinite(threshold.value):
+        raise ScientificContractError(
+            ErrorMessage("scores and thresholds must be finite"), subject=ContractSubject.SCORES
+        )
+    benign_sorted, attack_sorted = _sorted_score_partitions(path)
+    if attack_sorted.size and not attack_assignment_valid:
+        raise ScientificContractError(
+            ErrorMessage("attack rows cannot enter a client with invalid attack assignment"),
+            subject=ContractSubject.ATTACK_LABELS,
+        )
+    benign_le = int(np.searchsorted(benign_sorted, threshold.value, side="right"))
+    attack_le = int(np.searchsorted(attack_sorted, threshold.value, side="right"))
+    return ConfusionCounts(
+        true_negative=RowCount(benign_le),
+        false_positive=RowCount(benign_sorted.size - benign_le),
+        true_positive=RowCount(attack_sorted.size - attack_le),
+        false_negative=RowCount(attack_le),
+        attack_assignment_valid=attack_assignment_valid,
+    )
 
 
 @lru_cache(maxsize=9)

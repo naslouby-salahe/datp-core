@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import Annotated
 
 import typer
@@ -56,18 +57,27 @@ def plan_command(
 
 @app.command("preprocess")
 def preprocess_command(
-    dataset_id: Annotated[DatasetId, typer.Argument(case_sensitive=False)],
+    dataset_id: Annotated[DatasetId | None, typer.Argument(case_sensitive=False)] = None,
     overwrite: Annotated[
         bool,
         typer.Option("--overwrite", help="Rebuild dataset-level canonical artifacts"),
     ] = False,
 ) -> None:
+    started = time.monotonic()
+
+    def _report_progress(line: str) -> None:
+        typer.echo(f"[preprocess +{time.monotonic() - started:6.1f}s] {line}")
+
     try:
-        result = preprocess_datasets(dataset_id, overwrite=_overwrite_mode(overwrite))
+        result = preprocess_datasets(dataset_id, overwrite=_overwrite_mode(overwrite), progress=_report_progress)
     except (DatpCoreError, ValueError) as error:
         fail(error)
     for publication in result.publications:
         typer.echo(publication.dataset.value)
+    typer.echo(
+        f"preprocessed datasets={','.join(dataset.value for dataset in result.datasets)} "
+        f"elapsed={time.monotonic() - started:.1f}s"
+    )
 
 
 @app.command("smoke")

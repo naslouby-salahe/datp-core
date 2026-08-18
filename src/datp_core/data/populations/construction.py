@@ -246,7 +246,7 @@ def join_handoff_with_canonical_features(
     canonical_root: Path,
     handoff: PreprocessingHandoff,
     feature_names: FeatureNameSequence,
-) -> pl.DataFrame:
+) -> pl.LazyFrame:
     assignments = handoff.assignments
     if assignments.height == 0:
         raise ScientificContractError(
@@ -261,7 +261,6 @@ def join_handoff_with_canonical_features(
     joined = (
         assignments.lazy()
         .join(feature_scan, on=STABLE_ROW_ID_COLUMN, how="inner")
-        .collect()
         .sort(
             [
                 CLIENT_ID_COLUMN,
@@ -270,7 +269,8 @@ def join_handoff_with_canonical_features(
             ]
         )
     )
-    if joined.height != assignments.height:
+
+    if joined.select(pl.len()).collect().item() != assignments.height:
         raise ScientificContractError(
             ErrorMessage("canonical feature join lost assignment rows"),
             subject=handoff.population_manifest.document.dataset,

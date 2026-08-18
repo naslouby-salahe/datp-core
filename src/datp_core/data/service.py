@@ -3,6 +3,7 @@ from pathlib import Path
 from shutil import rmtree
 
 from datp_core.core.identifiers import DatasetId
+from datp_core.data.materialization import MaterializationProgress
 from datp_core.data.paths import canonical_root_under, raw_dataset_root
 from datp_core.data.registry import DatasetPublication, dataset_binding
 
@@ -23,7 +24,11 @@ class DatasetMaterializationResult:
     publications: tuple[DatasetPublication, ...]
 
 
-def materialize_datasets(request: DatasetMaterializationRequest) -> DatasetMaterializationResult:
+def materialize_datasets(
+    request: DatasetMaterializationRequest,
+    *,
+    progress: MaterializationProgress | None = None,
+) -> DatasetMaterializationResult:
     publications: list[DatasetPublication] = []
     for dataset in request.datasets:
         canonical_root = canonical_root_under(request.data_root, dataset)
@@ -33,6 +38,7 @@ def materialize_datasets(request: DatasetMaterializationRequest) -> DatasetMater
             dataset_binding(dataset).publish(
                 raw_dataset_root(request.data_root, dataset),
                 canonical_root.parent,
+                progress=progress,
             )
         )
     return DatasetMaterializationResult(publications=tuple(publications))

@@ -49,6 +49,8 @@ from datp_core.runtime.filesystem import cleanup_staging_on_failure, create_stag
 
 DATASET_MANIFEST_FILENAME = "dataset_manifest.json"
 
+type MaterializationProgress = Callable[[str], None]
+
 
 @dataclass(frozen=True, slots=True)
 class CanonicalAssetLayout[AssetRoleT: StrEnum]:

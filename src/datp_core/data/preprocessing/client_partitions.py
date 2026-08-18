@@ -151,7 +151,7 @@ def join_published_handoff(
                 canonical_root,
                 handoff,
                 feature_names,
-            ),
+            ).collect(),
             exclusion_evidence=None,
         )
     asset_role = (

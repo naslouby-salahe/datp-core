@@ -48,6 +48,21 @@ def evaluation_run_directory(root: Path, coordinate: ExperimentCoordinate) -> Pa
         / partition
         / kll_sketch_size
         / coordinate.threshold_estimator.value
+        / (
+            coordinate.calibration_support.value
+            if coordinate.calibration_support is not None
+            else CoordinateIdentitySegment.NO_CALIBRATION_SUPPORT.value
+        )
+        / (
+            str(coordinate.calibration_replicate.value)
+            if coordinate.calibration_replicate is not None
+            else CoordinateIdentitySegment.NO_REPLICATE.value
+        )
+        / (
+            coordinate.cluster_fingerprint_omission.value
+            if coordinate.cluster_fingerprint_omission is not None
+            else CoordinateIdentitySegment.NO_CLUSTER_FINGERPRINT_OMISSION.value
+        )
     )
 
 

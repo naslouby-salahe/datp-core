@@ -71,8 +71,7 @@ validate: ## CLI: validate programme declarations (optional EXPERIMENT_ID)
 plan: ## CLI: print the execution plan (optional EXPERIMENT_ID)
 	$(UV) run datp-core plan $(EXPERIMENT_ID)
 
-preprocess: ## CLI: materialize canonical dataset artifacts (DATASET_ID=nbaiot|ciciot2023|edge_iiotset)
-	@test -n "$(DATASET_ID)" || (echo "DATASET_ID is required: nbaiot|ciciot2023|edge_iiotset" && exit 1)
+preprocess: ## CLI: materialize canonical dataset artifacts (optional DATASET_ID; omitted = all datasets)
 	$(UV) run datp-core preprocess $(DATASET_ID) $(if $(OVERWRITE),--overwrite,)
 
 smoke: ## CLI: run the bounded smoke programme (optional EXPERIMENT_ID)

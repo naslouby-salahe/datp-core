@@ -28,6 +28,7 @@ from datp_core.data.materialization import (
     CanonicalAsset,
     CanonicalAssetLayout,
     CanonicalPublication,
+    MaterializationProgress,
     canonical_directory,
     empty_asset,
     named_assets,
@@ -80,7 +81,13 @@ class EdgeIIoTsetMaterializer:
     def canonical_directory(self, canonical_root: Path) -> Path:
         return canonical_directory(canonical_root, EDGE_SCHEMA)
 
-    def publish(self, raw_root: Path, canonical_root: Path) -> MaterializedDataset[EdgeAssetRole, EdgeAssetRole]:
+    def publish(
+        self,
+        raw_root: Path,
+        canonical_root: Path,
+        *,
+        progress: MaterializationProgress | None = None,
+    ) -> MaterializedDataset[EdgeAssetRole, EdgeAssetRole]:
         bundle_root = raw_root / EdgeArtifactName.DATASET_BUNDLE_DIRECTORY
         benign_paths = tuple(
             sorted((bundle_root / EdgeArtifactName.NORMAL_TRAFFIC_DIRECTORY).glob(f"*/*{EdgeArtifactSuffix.CSV}"))
@@ -92,30 +99,36 @@ class EdgeIIoTsetMaterializer:
                 )
             )
         )
-        return self.materialize(benign_paths, attack_paths, canonical_root)
+        return self.materialize(benign_paths, attack_paths, canonical_root, progress=progress)
 
     def materialize(
         self,
         benign_paths: tuple[Path, ...],
         attack_paths: tuple[Path, ...],
         canonical_root: Path,
+        *,
+        progress: MaterializationProgress | None = None,
     ) -> MaterializedDataset[EdgeAssetRole, EdgeAssetRole]:
         ordered_benign = tuple(sorted(benign_paths))
         ordered_attack = tuple(sorted(attack_paths))
         if not ordered_benign or not ordered_attack:
             raise ValueError("Edge materialization requires benign and attack sources")
-        return publish_canonical(self._prepare_canonical_publication(ordered_benign, ordered_attack, canonical_root))
+        return publish_canonical(
+            self._prepare_canonical_publication(ordered_benign, ordered_attack, canonical_root, progress=progress)
+        )
 
     def _prepare_canonical_publication(
         self,
         benign_paths: tuple[Path, ...],
         attack_paths: tuple[Path, ...],
         canonical_root: Path,
+        *,
+        progress: MaterializationProgress | None = None,
     ) -> CanonicalPublication[EdgeAssetRole, EdgeAssetRole]:
-        publication = self._prepare_publication(benign_paths, attack_paths)
+        publication = self._prepare_publication(benign_paths, attack_paths, progress=progress)
 
         def write_assets(output_root: Path) -> tuple[CanonicalAsset[EdgeAssetRole], ...]:
-            return self._write_assets(output_root, publication.inputs)
+            return self._write_assets(output_root, publication.inputs, progress=progress)
 
         return CanonicalPublication(
             canonical_root=canonical_root,
@@ -128,24 +141,49 @@ class EdgeIIoTsetMaterializer:
             chronology=publication.validations,
         )
 
-    def _prepare_publication(self, benign_paths: tuple[Path, ...], attack_paths: tuple[Path, ...]) -> _EdgePublication:
+    def _prepare_publication(
+        self,
+        benign_paths: tuple[Path, ...],
+        attack_paths: tuple[Path, ...],
+        *,
+        progress: MaterializationProgress | None = None,
+    ) -> _EdgePublication:
         reader = EdgeIIoTsetReader()
-        benign_frames = tuple(reader.read_benign(path) for path in benign_paths)
-        attack_frames = tuple(reader.read_attack(path) for path in attack_paths)
-        chronology = tuple(
-            PcapChronology.validate(
-                ChronologyGroupIdentity(benign_sensor_group(path)),
-                path,
-                paired_capture_path(path),
+        benign_total = len(benign_paths)
+        benign_frames: list[pl.LazyFrame] = []
+        for index, path in enumerate(benign_paths):
+            if progress is not None:
+                progress(f"edge_iiotset reading benign source {index + 1}/{benign_total} {path.name}")
+            benign_frames.append(reader.read_benign(path))
+        attack_total = len(attack_paths)
+        attack_frames: list[pl.LazyFrame] = []
+        for index, path in enumerate(attack_paths):
+            if progress is not None:
+                progress(f"edge_iiotset reading attack source {index + 1}/{attack_total} {path.name}")
+            attack_frames.append(reader.read_attack(path))
+        chronology: list[PcapChronology] = []
+        for index, path in enumerate(benign_paths):
+            if progress is not None:
+                progress(f"edge_iiotset validating chronology {index + 1}/{benign_total} {path.name} (pcap alignment)")
+            chronology.append(
+                PcapChronology.validate(
+                    ChronologyGroupIdentity(benign_sensor_group(path)),
+                    path,
+                    paired_capture_path(path),
+                )
             )
-            for path in benign_paths
-        )
         validations = tuple(evidence.validation for evidence in chronology)
         attack_counts = tuple(self._row_count(frame) for frame in attack_frames)
-        inventory = self._inventory(benign_paths, chronology, attack_paths, attack_counts)
+        inventory = self._inventory(benign_paths, tuple(chronology), attack_paths, attack_counts)
         report = self._validation_report(benign_paths, validations, attack_counts)
         expected_assets = _expected_assets(benign_paths, attack_paths, validations)
-        inputs = _EdgePublicationInputs(benign_paths, benign_frames, attack_frames, chronology, expected_assets)
+        inputs = _EdgePublicationInputs(
+            benign_paths,
+            tuple(benign_frames),
+            tuple(attack_frames),
+            tuple(chronology),
+            expected_assets,
+        )
         return _EdgePublication(inputs, inventory, report, validations)
 
     @staticmethod
@@ -192,12 +230,19 @@ class EdgeIIoTsetMaterializer:
     def _write_assets(
         canonical_root: Path,
         inputs: _EdgePublicationInputs,
+        progress: MaterializationProgress | None = None,
     ) -> tuple[CanonicalAsset[EdgeAssetRole], ...]:
         timeline_root = canonical_root / ".chronology"
         try:
-            static_assets = _write_static_assets(canonical_root, timeline_root, inputs)
-            temporal_assets = _write_temporal_assets(canonical_root, static_assets, inputs)
-            attack_assets = _write_attack_assets(canonical_root, static_assets, temporal_assets, inputs)
+            static_assets = _write_static_assets(canonical_root, timeline_root, inputs, progress=progress)
+            temporal_assets = _write_temporal_assets(canonical_root, static_assets, inputs, progress=progress)
+            attack_assets = _write_attack_assets(
+                canonical_root,
+                static_assets,
+                temporal_assets,
+                inputs,
+                progress=progress,
+            )
             return static_assets + temporal_assets + attack_assets
         finally:
             rmtree(timeline_root, ignore_errors=True)
@@ -291,6 +336,8 @@ def _write_static_assets(
     canonical_root: Path,
     timeline_root: Path,
     inputs: _EdgePublicationInputs,
+    *,
+    progress: MaterializationProgress | None = None,
 ) -> tuple[CanonicalAsset[EdgeAssetRole], ...]:
     enriched_benign = tuple(
         _with_capture_timeline(path, frame, timeline_root / f"{index:05d}.parquet", evidence)
@@ -298,16 +345,24 @@ def _write_static_assets(
             zip(inputs.benign_paths, inputs.benign_frames, inputs.chronology, strict=True)
         )
     )
-    return tuple(
-        stream_parquet(frame, canonical_root, asset, EDGE_ARROW_SCHEMA)
-        for frame, asset in zip(enriched_benign, inputs.expected_assets[: len(enriched_benign)], strict=True)
-    )
+    written: list[CanonicalAsset[EdgeAssetRole]] = []
+    for index, (frame, asset) in enumerate(
+        zip(enriched_benign, inputs.expected_assets[: len(enriched_benign)], strict=True)
+    ):
+        if progress is not None:
+            progress(
+                f"edge_iiotset writing static benign asset {index + 1}/{len(enriched_benign)} {asset.relative_path}"
+            )
+        written.append(stream_parquet(frame, canonical_root, asset, EDGE_ARROW_SCHEMA))
+    return tuple(written)
 
 
 def _write_temporal_assets(
     canonical_root: Path,
     static_assets: tuple[CanonicalAsset[EdgeAssetRole], ...],
     inputs: _EdgePublicationInputs,
+    *,
+    progress: MaterializationProgress | None = None,
 ) -> tuple[CanonicalAsset[EdgeAssetRole], ...]:
     temporal_count = sum(evidence.validation.temporal_eligible for evidence in inputs.chronology) or 1
     temporal_paths = inputs.expected_assets[len(static_assets) : len(static_assets) + temporal_count]
@@ -316,10 +371,12 @@ def _write_temporal_assets(
         for asset, evidence in zip(static_assets, inputs.chronology, strict=True)
         if evidence.validation.temporal_eligible
     ) or (pl.scan_parquet(canonical_root / static_assets[0].relative_path).head(0),)
-    return tuple(
-        stream_parquet(frame, canonical_root, asset, EDGE_ARROW_SCHEMA)
-        for frame, asset in zip(temporal_frames, temporal_paths, strict=True)
-    )
+    written: list[CanonicalAsset[EdgeAssetRole]] = []
+    for index, (frame, asset) in enumerate(zip(temporal_frames, temporal_paths, strict=True)):
+        if progress is not None:
+            progress(f"edge_iiotset writing temporal asset {index + 1}/{len(temporal_paths)} {asset.relative_path}")
+        written.append(stream_parquet(frame, canonical_root, asset, EDGE_ARROW_SCHEMA))
+    return tuple(written)
 
 
 def _write_attack_assets(
@@ -327,9 +384,13 @@ def _write_attack_assets(
     static_assets: tuple[CanonicalAsset[EdgeAssetRole], ...],
     temporal_assets: tuple[CanonicalAsset[EdgeAssetRole], ...],
     inputs: _EdgePublicationInputs,
+    *,
+    progress: MaterializationProgress | None = None,
 ) -> tuple[CanonicalAsset[EdgeAssetRole], ...]:
     attack_paths = inputs.expected_assets[len(static_assets) + len(temporal_assets) :]
-    return tuple(
-        stream_parquet(frame, canonical_root, asset, EDGE_ARROW_SCHEMA)
-        for frame, asset in zip(inputs.attack_frames, attack_paths, strict=True)
-    )
+    written: list[CanonicalAsset[EdgeAssetRole]] = []
+    for index, (frame, asset) in enumerate(zip(inputs.attack_frames, attack_paths, strict=True)):
+        if progress is not None:
+            progress(f"edge_iiotset writing attack asset {index + 1}/{len(attack_paths)} {asset.relative_path}")
+        written.append(stream_parquet(frame, canonical_root, asset, EDGE_ARROW_SCHEMA))
+    return tuple(written)

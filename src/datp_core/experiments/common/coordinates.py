@@ -143,6 +143,8 @@ class CoordinateIdentitySegment(StrEnum):
     CANONICAL_QUANTILE = "canonical_quantile"
     NO_CONTROLLED_PARTITION = "no_controlled_partition"
     NO_CALIBRATION_SUPPORT = "no_calibration_support"
+    NO_REPLICATE = "no_replicate"
+    NO_CLUSTER_FINGERPRINT_OMISSION = "no_cluster_fingerprint_omission"
 
 
 class ExecutionRoute(StrEnum):

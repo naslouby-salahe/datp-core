@@ -370,7 +370,7 @@ class PreprocessingGeometrySensitivityReport(StrictModel):
 class SizeAwareShrinkageReport(StrictModel):
     experiment: ExperimentId
     methods: tuple[MethodCvSummary, ...]
-    clients: tuple[SizeAwareShrinkageClientRow, ...]
+    rows: tuple[SizeAwareShrinkageClientRow, ...]
 
 
 class SizeAwareShrinkageClientRow(StrictModel):
@@ -922,10 +922,10 @@ def report_shared_calibration_contributor_availability(
     del overwrite
     declaration = require_experiment_declaration(experiment_id)
     if declaration.federated_thresholds != (
-        FederatedThresholdMethod.LOCAL_THRESHOLD,
         FederatedThresholdMethod.SHARED_THRESHOLD,
+        FederatedThresholdMethod.LOCAL_THRESHOLD,
     ):
-        raise ScientificContractError(ErrorMessage("contributor availability requires locked local/shared methods"))
+        raise ScientificContractError(ErrorMessage("contributor availability requires locked shared/local methods"))
     directory = _analysis_directory(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES)
     directory.mkdir(parents=True, exist_ok=True)
     rows: list[ContributorAvailabilityRow] = []
@@ -1389,7 +1389,7 @@ def report_size_aware_shrinkage(
         SizeAwareShrinkageReport(
             experiment=experiment_id,
             methods=tuple(summaries),
-            clients=tuple(rows),
+            rows=tuple(rows),
         ),
         _summary_path(experiment_id, PopulationId.NBAIOT_NATURAL_DEVICES),
     )

@@ -50,7 +50,7 @@ from datp_core.detector.training.models import (
     PersonalizedTerminalModel,
     TrainingTerminationReason,
 )
-from datp_core.runtime.compute import LEARNING_DEVICE
+from datp_core.runtime.compute import TRAINING_DEVICE
 from datp_core.runtime.determinism import configure_deterministic_execution
 
 
@@ -121,7 +121,7 @@ def _ditto_runtime_environment() -> DittoRuntimeEnvironment:
 def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
     _validate_request(request)
     configure_deterministic_execution(request.training_seed)
-    device = LEARNING_DEVICE
+    device = TRAINING_DEVICE
     runtime_environment = _ditto_runtime_environment()
 
     ordered_inputs = tuple(sorted(request.clients, key=lambda item: item.client))

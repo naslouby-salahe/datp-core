@@ -12,9 +12,16 @@ from datp_core.runtime.determinism import (
 )
 
 
-def test_learning_device_is_cpu_unconditionally() -> None:
-    assert LEARNING_DEVICE.type == "cpu"
-    assert LEARNING_DEVICE == torch.device("cpu")
+def test_learning_device_prefers_cuda_when_available() -> None:
+    expected = torch.device("cuda", torch.cuda.current_device()) if torch.cuda.is_available() else torch.device("cpu")
+    assert LEARNING_DEVICE == expected
+
+
+def test_learning_device_override_forces_cpu(monkeypatch: pytest.MonkeyPatch) -> None:
+    from datp_core.runtime.compute import _select_learning_device
+
+    monkeypatch.setenv("DATP_LEARNING_DEVICE", "cpu")
+    assert _select_learning_device() == torch.device("cpu")
 
 
 def test_repository_layout_rejects_ambiguous_roots() -> None:

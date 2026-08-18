@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import polars as pl
+
 from datp_core.core.identifiers import AvailabilityStatus, CanonicalizationContractName, DatasetId
 from datp_core.core.numeric import LogicalElementCount, RowCount, ValidationIssueCount
 from datp_core.data.contracts import (
@@ -12,6 +14,7 @@ from datp_core.data.contracts import (
 from datp_core.data.materialization import (
     CanonicalAsset,
     CanonicalPublication,
+    MaterializationProgress,
     canonical_data_partition_assets,
     canonical_directory,
     excluded_source_file,
@@ -42,12 +45,14 @@ class NBaIoTMaterializer:
         self,
         raw_root: Path,
         canonical_root: Path,
+        *,
+        progress: MaterializationProgress | None = None,
     ) -> MaterializedDataset[CanonicalAssetRole, CanonicalAssetRole]:
         candidates = tuple(sorted(raw_root.glob(f"**/*{NBaIoTArtifactName.CSV_SUFFIX}")))
         demonstration_file = NBaIoTArtifactName.STRUCTURE_DEMONSTRATION_FILE
         sources = tuple(path for path in candidates if path.name != demonstration_file)
         excluded_paths = tuple(path for path in candidates if path.name == demonstration_file)
-        return self.materialize(sources, canonical_root, excluded_paths=excluded_paths)
+        return self.materialize(sources, canonical_root, excluded_paths=excluded_paths, progress=progress)
 
     def materialize(
         self,
@@ -55,10 +60,16 @@ class NBaIoTMaterializer:
         canonical_root: Path,
         *,
         excluded_paths: tuple[Path, ...] = (),
+        progress: MaterializationProgress | None = None,
     ) -> MaterializedDataset[CanonicalAssetRole, CanonicalAssetRole]:
         ordered_paths = tuple(sorted(source_paths))
         return publish_canonical(
-            self._prepare_publication(ordered_paths, canonical_root, excluded_paths=excluded_paths)
+            self._prepare_publication(
+                ordered_paths,
+                canonical_root,
+                excluded_paths=excluded_paths,
+                progress=progress,
+            )
         )
 
     @staticmethod
@@ -67,9 +78,15 @@ class NBaIoTMaterializer:
         canonical_root: Path,
         *,
         excluded_paths: tuple[Path, ...] = (),
+        progress: MaterializationProgress | None = None,
     ) -> CanonicalPublication[CanonicalAssetRole, CanonicalAssetRole]:
         reader = NBaIoTReader()
-        frames = tuple(reader.read(path) for path in source_paths)
+        total = len(source_paths)
+        frames: list[pl.LazyFrame] = []
+        for index, path in enumerate(source_paths):
+            if progress is not None:
+                progress(f"nbaiot reading source {index + 1}/{total} {path.name}")
+            frames.append(reader.read(path))
         row_counts = tuple(reader.validate_finite_values(frame) for frame in frames)
         inventory = raw_inventory(
             DatasetId.NBAIOT,
@@ -108,10 +125,12 @@ class NBaIoTMaterializer:
         expected_assets = canonical_data_partition_assets(LogicalElementCount(len(frames)))
 
         def write_assets(data_root: Path) -> tuple[CanonicalAsset[CanonicalAssetRole], ...]:
-            return tuple(
-                stream_parquet(frame, data_root, asset, NBAIOT_ARROW_SCHEMA)
-                for frame, asset in zip(frames, expected_assets, strict=True)
-            )
+            written: list[CanonicalAsset[CanonicalAssetRole]] = []
+            for index, (frame, asset) in enumerate(zip(frames, expected_assets, strict=True)):
+                if progress is not None:
+                    progress(f"nbaiot writing canonical asset {index + 1}/{len(expected_assets)} {asset.relative_path}")
+                written.append(stream_parquet(frame, data_root, asset, NBAIOT_ARROW_SCHEMA))
+            return tuple(written)
 
         return CanonicalPublication(
             canonical_root=canonical_root,

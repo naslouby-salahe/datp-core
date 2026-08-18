@@ -142,8 +142,8 @@ class SampleEfficiencyPoint:
     calibration_size: CalibrationSize
     replicate_count: SubsampleReplicateCount
     mean_threshold: ThresholdValue
-    threshold_variance_across_nested_replicates: ThresholdVariance
-    threshold_standard_deviation_across_nested_replicates: ThresholdStandardDeviation
+    threshold_variance_across_nested_replicates: ThresholdVariance | None
+    threshold_standard_deviation_across_nested_replicates: ThresholdStandardDeviation | None
 
     def __post_init__(self) -> None:
         if (
@@ -235,7 +235,7 @@ def sample_efficiency_curve(
 
         values = np.fromiter((item.estimated_threshold.value for item in replicate_group), dtype=np.float64)
 
-        variance = ThresholdVariance(float(np.var(values, ddof=1)))
+        variance = ThresholdVariance(float(np.var(values, ddof=1))) if len(replicate_group) >= 2 else None
         points.append(
             SampleEfficiencyPoint(
                 client=key[0],
@@ -245,8 +245,8 @@ def sample_efficiency_curve(
                 replicate_count=SubsampleReplicateCount(len(replicate_group)),
                 mean_threshold=ThresholdValue(float(np.mean(values))),
                 threshold_variance_across_nested_replicates=variance,
-                threshold_standard_deviation_across_nested_replicates=ThresholdStandardDeviation(
-                    float(np.sqrt(variance.value))
+                threshold_standard_deviation_across_nested_replicates=(
+                    ThresholdStandardDeviation(float(np.sqrt(variance.value))) if variance is not None else None
                 ),
             )
         )

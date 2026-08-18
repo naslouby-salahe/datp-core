@@ -119,6 +119,9 @@ class ExperimentEvidence:
         )
 
 
+_FIGURE_BASED_MECHANISM_EXPERIMENTS = frozenset((ExperimentId.PER_CLIENT_SCORE_GEOMETRY,))
+
+
 _CONFIRMATORY_CHILD_DIRECTORIES = (
     ConfirmatoryAssetDirectory.PHYSICAL_FAMILY_ADEQUACY.value,
     ConfirmatoryAssetDirectory.CALIBRATION_SUPPORT_BURDEN.value,
@@ -410,7 +413,9 @@ def _document_has_results(document: StrictModel) -> bool:
     elif isinstance(document, TemporalAnalysisDocument):
         payload = document.records
     elif isinstance(document, MechanismPublicationDocument):
-        payload = document.mechanisms
+        if document.mechanisms:
+            return True
+        return document.experiment in _FIGURE_BASED_MECHANISM_EXPERIMENTS
     else:
         payload = getattr(document, "rows", None)
         if not isinstance(payload, tuple):

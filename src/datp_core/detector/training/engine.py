@@ -71,7 +71,7 @@ from datp_core.detector.training.models import (
     GlobalModelStateReference,
     TrainingTerminationReason,
 )
-from datp_core.runtime.compute import LEARNING_DEVICE
+from datp_core.runtime.compute import TRAINING_DEVICE
 from datp_core.runtime.determinism import configure_deterministic_execution, derive_worker_seed
 
 
@@ -406,7 +406,7 @@ def train_client_update(
         device=device,
     )
     optimizer = build_optimizer(model, optimizer_protocol, learning_rate)
-    features = client_data.features_cpu
+    features = client_data.features_cpu.to(device=device)
     local_epoch = run_local_epoch_on_device(
         model,
         optimizer,
@@ -672,7 +672,7 @@ def run_federated_training[T: FedAvgProtocol | FedProxProtocol](
         request.population_client_count,
     )
     configure_deterministic_execution(request.training_seed)
-    device = LEARNING_DEVICE
+    device = TRAINING_DEVICE
 
     ordered_inputs = tuple(sorted(request.clients, key=lambda item: item.client))
     prepared = tuple(prepare_federated_client_data(item, request.autoencoder) for item in ordered_inputs)

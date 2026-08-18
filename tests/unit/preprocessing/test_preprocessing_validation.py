@@ -22,7 +22,11 @@ from datp_core.core.identifiers import (
     ValidationReasonText,
 )
 from datp_core.core.numeric import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE
-from datp_core.data.populations.contracts import OUTCOME_LABEL_COLUMN, STABLE_ROW_ID_COLUMN
+from datp_core.data.populations.contracts import (
+    ATTACK_FAMILY_COLUMN,
+    OUTCOME_LABEL_COLUMN,
+    STABLE_ROW_ID_COLUMN,
+)
 from datp_core.data.preprocessing.artifact_validation import (
     extract_partitions,
     fit_trusted_batch,
@@ -100,6 +104,31 @@ def test_extract_partitions_returns_role_indexed_collection() -> None:
 
     assert isinstance(partitions, PreprocessingPartitions)
     assert partitions.require(PartitionRole.TRAIN).row_ids.row_ids == ("r1", "r2")
+
+
+def test_extract_partitions_retains_attack_family_provenance_when_present() -> None:
+    frame = pl.DataFrame(
+        {
+            "partition_role": ["train", "calibration", "evaluation", "evaluation"],
+            STABLE_ROW_ID_COLUMN: ["r1", "r2", "r3", "r4"],
+            OUTCOME_LABEL_COLUMN: ["benign", "benign", "attack", "attack"],
+            ATTACK_FAMILY_COLUMN: [None, None, "mirai", "gafgyt"],
+            "f0": [1.0, 2.0, 3.0, 4.0],
+            "f1": [5.0, 6.0, 7.0, 8.0],
+        }
+    )
+    partitions = extract_partitions(
+        frame,
+        FeatureNameSequence((FeatureName("f0"), FeatureName("f1"))),
+        split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
+        branch=ProcessedDataBranch.FEDERATED,
+        ordering=PartitionOrdering.STABLE_ROW_ID,
+    )
+
+    train = partitions.require(PartitionRole.TRAIN).frame
+    assert train.get_column(ATTACK_FAMILY_COLUMN).to_list() == [None]
+    evaluation = partitions.require(PartitionRole.EVALUATION).frame
+    assert evaluation.get_column(ATTACK_FAMILY_COLUMN).to_list() == ["mirai", "gafgyt"]
 
 
 def test_fit_trusted_batch_validation_rules() -> None:

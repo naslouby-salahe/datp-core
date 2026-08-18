@@ -2,6 +2,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from typing import Protocol
 
 from datp_core.core.errors import (
     CapabilityError,
@@ -22,6 +23,7 @@ from datp_core.data.edge_iiotset.capabilities import EDGE_IIOTSET_CAPABILITIES
 from datp_core.data.edge_iiotset.materialize import EdgeIIoTsetMaterializer
 from datp_core.data.edge_iiotset.populations import construct_edge_sensor_groups, construct_edge_temporal_groups
 from datp_core.data.edge_iiotset.schema import EDGE_SCHEMA
+from datp_core.data.materialization import MaterializationProgress
 from datp_core.data.nbaiot.capabilities import NBAIOT_CAPABILITIES
 from datp_core.data.nbaiot.materialize import NBaIoTMaterializer
 from datp_core.data.nbaiot.populations import construct_nbaiot_dirichlet_clients, construct_nbaiot_natural_devices
@@ -46,6 +48,16 @@ from datp_core.thresholds.protocols import MINIMUM_BENIGN_SUPPORT
 type DatasetPublication = MaterializedDataset[StrEnum, StrEnum]
 
 
+class DatasetPublisher(Protocol):
+    def __call__(
+        self,
+        raw_root: Path,
+        canonical_root: Path,
+        *,
+        progress: MaterializationProgress | None = None,
+    ) -> DatasetPublication: ...
+
+
 class PopulationRegistryViolation(StrEnum):
     UNCATALOGUED_POPULATION = "uncatalogued_population"
     PARTITION_CONDITION_NOT_ACCEPTED = "partition_condition_not_accepted"
@@ -57,7 +69,7 @@ class PopulationRegistryViolation(StrEnum):
 class DatasetBinding:
     capabilities: DatasetCapabilities
     schema: CanonicalSchema
-    publish: Callable[[Path, Path], DatasetPublication]
+    publish: DatasetPublisher
 
 
 def dataset_binding(dataset_id: DatasetId) -> DatasetBinding:

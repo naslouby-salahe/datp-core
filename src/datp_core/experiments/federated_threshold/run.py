@@ -326,7 +326,8 @@ def _collect_exceedance_and_variance_diagnostics(
         for diagnostic in document.diagnostics.threshold_estimation:
             exceedances.append(diagnostic.achieved_benign_exceedance)
         for point in document.diagnostics.sample_efficiency:
-            variances.append(point.threshold_variance_across_nested_replicates)
+            if point.threshold_variance_across_nested_replicates is not None:
+                variances.append(point.threshold_variance_across_nested_replicates)
     return exceedances, variances
 
 

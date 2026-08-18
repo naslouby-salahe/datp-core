@@ -67,7 +67,7 @@ from datp_core.detector.training.protocols import (
     NBAIOT_AUTOENCODER,
     WEIGHT_DECAY,
 )
-from datp_core.runtime.compute import LEARNING_DEVICE
+from datp_core.runtime.compute import TRAINING_DEVICE
 from datp_core.runtime.determinism import configure_deterministic_execution
 
 
@@ -189,7 +189,7 @@ def train_centralized_autoencoder(request: CentralizedTrainingRequest) -> Centra
     _validate_training_request(request)
     reject_federated_preprocessing_for_training(request.preprocessing_state)
     configure_deterministic_execution(request.training_seed)
-    device = LEARNING_DEVICE
+    device = TRAINING_DEVICE
     extracted = _extract_training_arrays(request)
     reject_attack_rows_in_centralized_training(extracted.labels, request.benign_label)
     if extracted.feature_matrix.shape[1] != request.autoencoder.widths[0].value:

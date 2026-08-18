@@ -1,4 +1,6 @@
 from enum import StrEnum
+from functools import lru_cache
+from pathlib import Path
 
 import numpy as np
 import polars as pl
@@ -6,7 +8,7 @@ import polars as pl
 from datp_core.analysis.metrics.models import ClientMetricResult
 from datp_core.core.contracts import StrictModel
 from datp_core.core.errors import ErrorMessage, ScientificContractError
-from datp_core.core.identifiers import PopulationId, ScoreFrameColumn
+from datp_core.core.identifiers import PartitionRole, PopulationId, ScoreFrameColumn
 from datp_core.core.numeric import Ratio, RowCount
 from datp_core.data.nbaiot.schema import NBaIoTAttackFamily
 from datp_core.data.populations.contracts import ClientIdentity, PopulationOutcomeLabel
@@ -70,17 +72,15 @@ def evaluate_nbaiot_family_recall(
             raise ScientificContractError(
                 ErrorMessage("family recall diagnostics require every score client to be evaluated")
             )
-        frame = validate_persisted_score_frame(score_record.path, score_record.row_count, score_record.partition_role)
-        labels = frame.get_column(ScoreFrameColumn.OUTCOME_LABEL.value)
-        families = frame.get_column(ScoreFrameColumn.ATTACK_FAMILY.value)
-        scores = frame.get_column(ScoreFrameColumn.RECONSTRUCTION_ERROR.value)
-        _validate_attack_family_provenance(labels, families)
+        labels, families, scores = _family_recall_columns(
+            score_record.path, score_record.row_count, score_record.partition_role
+        )
         for family in NBaIoTAttackFamily:
             mask = (labels == PopulationOutcomeLabel.ATTACK.value) & (families == family.value)
             support = int(mask.sum())
             if not support:
                 continue
-            true_positive = int((scores.filter(mask) > client.threshold.value).sum())
+            true_positive = int((scores[mask] > client.threshold.value).sum())
             false_negative = support - true_positive
             rate = true_positive / support
             records.append(
@@ -121,6 +121,24 @@ def evaluate_nbaiot_family_recall(
             family=worst.family,
             true_positive_rate=worst.true_positive_rate,
         ),
+    )
+
+
+@lru_cache(maxsize=32)
+def _family_recall_columns(
+    path: Path,
+    row_count: RowCount,
+    partition_role: PartitionRole,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    frame = validate_persisted_score_frame(path, row_count, partition_role)
+    labels = frame.get_column(ScoreFrameColumn.OUTCOME_LABEL.value)
+    families = frame.get_column(ScoreFrameColumn.ATTACK_FAMILY.value)
+    scores = frame.get_column(ScoreFrameColumn.RECONSTRUCTION_ERROR.value)
+    _validate_attack_family_provenance(labels, families)
+    return (
+        labels.to_numpy(),
+        families.to_numpy(),
+        scores.to_numpy(),
     )
 
 

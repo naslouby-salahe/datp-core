@@ -58,7 +58,7 @@ from datp_core.data.populations.declarations import DIRICHLET_CONCENTRATIONS
 from datp_core.detector.scoring.models import FederatedScoreAssetName
 from datp_core.experiments.common.coordinates import ExperimentCoordinate
 from datp_core.experiments.common.seeds import CONFIRMATORY_SEED_COHORT, SeedCohort
-from datp_core.experiments.confirmatory.run import build_confirmatory_score_geometry, persist_score_geometry
+from datp_core.experiments.confirmatory.run import build_confirmatory_score_geometry
 from datp_core.experiments.execution import execute_declared_experiment_seed
 from datp_core.experiments.execution.evidence import load_evaluation_document, population_metric
 from datp_core.experiments.execution.layout import (
@@ -637,9 +637,8 @@ def analyze_per_client_score_geometry(*, overwrite: bool) -> Path:
         from shutil import rmtree
 
         rmtree(output)
-    geometries, figures = build_confirmatory_score_geometry()
-    persist_score_geometry(geometries, output / "score_geometry")
-    if geometries:
+    figures = build_confirmatory_score_geometry(output / "score_geometry")
+    if figures:
         export_mechanism_publication(
             (),
             experiment=ExperimentId.PER_CLIENT_SCORE_GEOMETRY,

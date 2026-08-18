@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import csv
+from collections.abc import Generator
 from dataclasses import dataclass
 from functools import singledispatch
 from hashlib import sha256
-from io import StringIO
 from itertools import chain
 from pathlib import Path
-from typing import Any, TypedDict, cast
+from typing import Any, TextIO, TypedDict, cast
 
 from datp_core.analysis.contrasts import ConfirmatoryDescriptiveEffects, PairedContrasts
 from datp_core.analysis.descriptive import DescriptiveSummary, PairedDifferenceCounts
@@ -103,7 +103,7 @@ from datp_core.presentation.validation import (
     EvidenceDecision,
     validate_claim,
 )
-from datp_core.runtime.filesystem import write_text_atomically
+from datp_core.runtime.filesystem import stream_text_atomically, write_text_atomically
 from datp_core.thresholds.policies.cluster import ClusterMembership
 
 PUBLICATION_FILENAME = "publication.md"
@@ -283,8 +283,6 @@ def export_markdown(
 def _export_publication_source_data(bundle: PublicationBundle, output_directory: Path) -> Path:
     """Emit every rendered table/figure value in a manifest-addressable tidy source table."""
 
-    rows = _publication_source_rows(bundle)
-    buffer = StringIO(newline="")
     columns = (
         "experiment",
         "population",
@@ -310,12 +308,14 @@ def _export_publication_source_data(bundle: PublicationBundle, output_directory:
         "balanced_accuracy",
         "macro_f1",
     )
-    writer = csv.DictWriter(buffer, fieldnames=columns, lineterminator="\n", extrasaction="raise")
-    writer.writeheader()
-    writer.writerows(cast(Any, rows))
-    return write_text_atomically(
-        output_directory / PUBLICATION_SOURCE_DATA_FILENAME, FileContentText(buffer.getvalue())
-    )
+    rows = _publication_source_rows(bundle)
+
+    def render(stream: TextIO) -> None:
+        writer = csv.DictWriter(stream, fieldnames=columns, lineterminator="\n", extrasaction="raise")
+        writer.writeheader()
+        writer.writerows(cast(Any, rows))
+
+    return stream_text_atomically(output_directory / PUBLICATION_SOURCE_DATA_FILENAME, render)
 
 
 def _validate_publication_source_files(sources: tuple[Path, ...], output_directory: Path) -> None:
@@ -343,11 +343,20 @@ def _sha256_file(source: Path) -> str:
     return digest.hexdigest()
 
 
-def _publication_source_rows(bundle: PublicationBundle) -> list[PublicationSourceRow]:
-    rows: list[PublicationSourceRow] = []
+def _publication_source_rows(bundle: PublicationBundle) -> Generator[PublicationSourceRow, None, None]:
+    provenance = bundle.provenance
+
+    def with_provenance(row: PublicationSourceRow) -> PublicationSourceRow:
+        return {
+            **row,
+            "experiment": provenance.experiment.value,
+            "population": provenance.population.value,
+            "evidence_role": provenance.evidence_role.value,
+        }
+
     for table in bundle.tables:
         for cell in table.cells:
-            rows.append(
+            yield with_provenance(
                 _publication_source_row(
                     output_kind="table",
                     output_title=str(table.title),
@@ -359,43 +368,41 @@ def _publication_source_rows(bundle: PublicationBundle) -> list[PublicationSourc
             )
     for figure in bundle.figures:
         for series in figure.series:
-            rows.extend(
-                _single_axis_source_rows(
-                    str(figure.title), series.label, series.metric.value, series.availability.value, series.values
-                )
-            )
+            for row in _single_axis_source_rows(
+                str(figure.title), series.label, series.metric.value, series.availability.value, series.values
+            ):
+                yield with_provenance(row)
         for series in figure.empirical_cdf_series:
-            rows.extend(
-                _paired_source_rows(
-                    str(figure.title),
-                    series.label,
-                    f"{series.x_metric.value}:{series.y_metric.value}",
-                    series.availability.value,
-                    series.x_values,
-                    series.y_values,
-                    (),
-                    str(series.unavailable_reason or ""),
-                    client_id=str(series.client_id.value) if series.client_id is not None else "",
-                    training_seed=str(series.seed.value) if series.seed is not None else "",
-                    score_role=str(series.score_role.value) if series.score_role is not None else "",
-                )
-            )
-            rows.extend(_threshold_overlay_source_rows(str(figure.title), series))
+            for row in _paired_source_rows(
+                str(figure.title),
+                series.label,
+                f"{series.x_metric.value}:{series.y_metric.value}",
+                series.availability.value,
+                series.x_values,
+                series.y_values,
+                (),
+                str(series.unavailable_reason or ""),
+                client_id=str(series.client_id.value) if series.client_id is not None else "",
+                training_seed=str(series.seed.value) if series.seed is not None else "",
+                score_role=str(series.score_role.value) if series.score_role is not None else "",
+            ):
+                yield with_provenance(row)
+            for row in _threshold_overlay_source_rows(str(figure.title), series):
+                yield with_provenance(row)
         for series in figure.paired_metric_series:
-            rows.extend(
-                _paired_source_rows(
-                    str(figure.title),
-                    series.label,
-                    f"{series.x_label}:{series.y_label}",
-                    series.availability.value,
-                    series.x_values,
-                    series.y_values,
-                    series.point_labels,
-                    str(series.unavailable_reason or ""),
-                )
-            )
+            for row in _paired_source_rows(
+                str(figure.title),
+                series.label,
+                f"{series.x_label}:{series.y_label}",
+                series.availability.value,
+                series.x_values,
+                series.y_values,
+                series.point_labels,
+                str(series.unavailable_reason or ""),
+            ):
+                yield with_provenance(row)
         for index, line in enumerate(figure.causal_map_lines):
-            rows.append(
+            yield with_provenance(
                 _publication_source_row(
                     output_kind="figure_causal_map",
                     output_title=str(figure.title),
@@ -403,23 +410,15 @@ def _publication_source_rows(bundle: PublicationBundle) -> list[PublicationSourc
                     evidence=str(line),
                 )
             )
-    provenance = bundle.provenance
-    return [
-        {
-            **row,
-            "experiment": provenance.experiment.value,
-            "population": provenance.population.value,
-            "evidence_role": provenance.evidence_role.value,
-        }
-        for row in rows
-    ]
 
 
 def _single_axis_source_rows(
     title: str, label: str, metric: str, availability: str, values: tuple[MetricValue, ...]
-) -> list[PublicationSourceRow]:
-    return [
-        _publication_source_row(
+) -> Generator[PublicationSourceRow, None, None]:
+    emitted = False
+    for index, value in enumerate(values):
+        emitted = True
+        yield _publication_source_row(
             output_kind="figure_series",
             output_title=title,
             series_label=str(label),
@@ -428,8 +427,8 @@ def _single_axis_source_rows(
             value_index=str(index),
             y_value=format(value.value, ".17g"),
         )
-        for index, value in enumerate(values)
-    ] or [_publication_source_row("figure_series", title, str(label), metric, availability)]
+    if not emitted:
+        yield _publication_source_row("figure_series", title, str(label), metric, availability)
 
 
 def _paired_source_rows(
@@ -445,9 +444,11 @@ def _paired_source_rows(
     client_id: str = "",
     training_seed: str = "",
     score_role: str = "",
-) -> list[PublicationSourceRow]:
-    return [
-        _publication_source_row(
+) -> Generator[PublicationSourceRow, None, None]:
+    emitted = False
+    for index, (x_value, y_value) in enumerate(zip(x_values, y_values, strict=True)):
+        emitted = True
+        yield _publication_source_row(
             output_kind="figure_paired_series",
             output_title=title,
             series_label=str(label),
@@ -462,9 +463,8 @@ def _paired_source_rows(
             training_seed=training_seed,
             score_role=score_role,
         )
-        for index, (x_value, y_value) in enumerate(zip(x_values, y_values, strict=True))
-    ] or [
-        _publication_source_row(
+    if not emitted:
+        yield _publication_source_row(
             "figure_paired_series",
             title,
             str(label),
@@ -475,14 +475,13 @@ def _paired_source_rows(
             training_seed=training_seed,
             score_role=score_role,
         )
-    ]
 
 
-def _threshold_overlay_source_rows(title: str, series: EmpiricalCdfFigureSeries) -> list[PublicationSourceRow]:
-    """Keep every threshold overlay value in the release's tidy figure source data."""
-
-    return [
-        _publication_source_row(
+def _threshold_overlay_source_rows(
+    title: str, series: EmpiricalCdfFigureSeries
+) -> Generator[PublicationSourceRow, None, None]:
+    for index, overlay in enumerate(series.threshold_overlays):
+        yield _publication_source_row(
             output_kind="figure_threshold_overlay",
             output_title=title,
             series_label=str(series.label),
@@ -499,8 +498,6 @@ def _threshold_overlay_source_rows(title: str, series: EmpiricalCdfFigureSeries)
             balanced_accuracy=_metric_source_value(overlay.balanced_accuracy),
             macro_f1=_metric_source_value(overlay.macro_f1),
         )
-        for index, overlay in enumerate(series.threshold_overlays)
-    ]
 
 
 def _metric_source_value(value: MetricValue | None) -> str:
@@ -1264,9 +1261,16 @@ def _mechanism_title(mechanism: MechanismEvidence) -> ReportLine:
 
 
 def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[PublicationTable, ...]:
-    cells: list[TableCell] = []
+    """Render mechanism evidence as one table per mechanism record.
+
+    Each mechanism contributes at most one cell, so the unique-metric
+    invariant of ``PublicationTable`` holds per table even when an experiment
+    emits per-seed records (10 seeds x same metric). The dedicated
+    confirmatory equity-utility companion table keeps its own title.
+    """
     tables: list[PublicationTable] = []
-    for mechanism in mechanisms:
+    for index, mechanism in enumerate(mechanisms, start=1):
+        cells: list[TableCell] = []
         match mechanism:
             case AssociationResult() if mechanism.statistics is not None:
                 stats = mechanism.statistics
@@ -1320,6 +1324,7 @@ def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[Public
                         ),
                     )
                 )
+                continue
             case DivergenceResult() if mechanism.aggregate is not None:
                 cells.append(
                     TableCell(
@@ -1381,8 +1386,13 @@ def _mechanism_tables(mechanisms: tuple[MechanismEvidence, ...]) -> tuple[Public
                 )
             case _:
                 continue
-    if cells:
-        tables.append(PublicationTable(title=TableTitle("Mechanism scientific values"), cells=tuple(cells)))
+        if cells:
+            tables.append(
+                PublicationTable(
+                    title=TableTitle(f"Mechanism scientific values — record {index}: {_mechanism_title(mechanism)}"),
+                    cells=tuple(cells),
+                )
+            )
     return tuple(tables)
 
 

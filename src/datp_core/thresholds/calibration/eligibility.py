@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import StrEnum
+from functools import lru_cache
 
 import polars as pl
 
@@ -118,8 +119,23 @@ def load_benign_calibration_references(
     benign_label: PopulationOutcomeLabel = PopulationOutcomeLabel.BENIGN,
 ) -> tuple[CalibrationSampleReference, ...]:
     reject_evaluation_partition_in_eligibility(record.partition_role)
+    row_ids, scores = _calibration_reference_arrays(str(record.path), benign_label)
+    return tuple(
+        CalibrationSampleReference(
+            client=record.scored_client,
+            stable_row_id=StableRowId(row_id),
+            score=ScoreValue(score),
+        )
+        for row_id, score in zip(row_ids, scores, strict=True)
+    )
+
+
+@lru_cache(maxsize=32)
+def _calibration_reference_arrays(
+    path_text: str, benign_label: PopulationOutcomeLabel
+) -> tuple[tuple[str, ...], tuple[float, ...]]:
     frame = pl.read_parquet(
-        record.path,
+        path_text,
         columns=[
             ScoreFrameColumn.OUTCOME_LABEL.value,
             ScoreFrameColumn.STABLE_ROW_ID.value,
@@ -141,14 +157,7 @@ def load_benign_calibration_references(
     )
     row_ids = id_column.cast(pl.String).to_list()
     scores = frame.get_column(ScoreFrameColumn.RECONSTRUCTION_ERROR.value).cast(pl.Float64).to_list()
-    return tuple(
-        CalibrationSampleReference(
-            client=record.scored_client,
-            stable_row_id=StableRowId(row_id),
-            score=ScoreValue(score),
-        )
-        for row_id, score in zip(row_ids, scores, strict=True)
-    )
+    return tuple(row_ids), tuple(scores)
 
 
 def calibration_support(

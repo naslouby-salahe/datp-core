@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import gc
+import multiprocessing
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -238,6 +241,7 @@ def analyze_confirmatory_campaign() -> Path:
         / PopulationId.NBAIOT_NATURAL_DEVICES.value
         / ConfirmatoryAssetDirectory.ANALYSIS
     )
+    figures = build_confirmatory_score_geometry(output / ConfirmatoryAssetDirectory.SCORE_GEOMETRY)
     mechanisms = _confirmatory_mechanisms()
     cluster_mechanisms = _confirmatory_cluster_mechanisms()
     all_mechanisms = mechanisms + cluster_mechanisms
@@ -265,13 +269,11 @@ def analyze_confirmatory_campaign() -> Path:
             ),
         )
     )
-    geometries, figures = build_confirmatory_score_geometry()
     figures = (
         causal_intervention_map_figure(),
         *figures,
         confirmatory_paired_effect_figure(result.document.contrasts, result.document.interval),
     )
-    persist_score_geometry(geometries, output / ConfirmatoryAssetDirectory.SCORE_GEOMETRY)
     export_confirmatory_publication(
         result.document,
         output,
@@ -655,53 +657,74 @@ def _confirmatory_mechanisms() -> tuple[MechanismEvidence, ...]:
     return tuple(mechanisms)
 
 
-def build_confirmatory_score_geometry() -> tuple[tuple[ScoreGeometryResult, ...], tuple[FigureSpec, ...]]:
-    geometries: list[ScoreGeometryResult] = []
+def _build_seed_score_geometry(
+    seed: Seed,
+    output_directory: Path,
+) -> tuple[FigureSpec, ...]:
+    shared = load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.SHARED_THRESHOLD))
+    expected_clients = tuple(sorted(item.client for item in shared.clients))
+    if not expected_clients:
+        raise ScientificContractError(
+            ErrorMessage(f"confirmatory score geometry requires evaluation clients for seed {seed.value}")
+        )
+    benign_eval = _client_evaluation_scores(
+        score_coordinate=shared.score_coordinate,
+        document_clients=tuple(item.client for item in shared.clients),
+        expected_clients=expected_clients,
+        benign_only=True,
+    )
+    attack_eval = _client_evaluation_scores(
+        score_coordinate=shared.score_coordinate,
+        document_clients=tuple(item.client for item in shared.clients),
+        expected_clients=expected_clients,
+        benign_only=False,
+    )
+    attack_available = any(item.scores for item in attack_eval)
+    geometry = score_geometry_from_client_vectors(
+        seed=seed,
+        benign_evaluation=benign_eval,
+        attack_evaluation=attack_eval,
+        threshold_overlays=_score_geometry_threshold_overlays(seed, expected_clients),
+        attack_geometry_available=attack_available,
+        attack_geometry_reason=(
+            None if attack_available else AnalysisReasonText("attack evaluation scores unavailable")
+        ),
+    )
+    persist_score_geometry((geometry,), output_directory)
+    figures = (
+        score_geometry_figure(
+            geometry,
+            title=FigureTitle(f"Per-client empirical score CDF (seed {geometry.seed.value})"),
+        ),
+        score_geometry_figure(
+            geometry,
+            title=FigureTitle(f"Ennio Doorbell empirical score CDF (seed {geometry.seed.value})"),
+            client_id=ClientIdentityToken(NBaIoTDevice.ENNIO_DOORBELL.value),
+        ),
+    )
+    del geometry, benign_eval, attack_eval
+    gc.collect()
+    return figures
+
+
+def build_confirmatory_score_geometry(
+    output_directory: Path,
+) -> tuple[FigureSpec, ...]:
+    seeds = CONFIRMATORY_SEED_COHORT.values
     figures: list[FigureSpec] = []
-    for seed in CONFIRMATORY_SEED_COHORT.values:
-        shared = load_evaluation_document(_evaluation_path(seed, FederatedThresholdMethod.SHARED_THRESHOLD))
-        expected_clients = tuple(sorted(item.client for item in shared.clients))
-        if not expected_clients:
-            raise ScientificContractError(
-                ErrorMessage(f"confirmatory score geometry requires evaluation clients for seed {seed.value}")
+    if len(seeds) <= 1:
+        for seed in seeds:
+            figures.extend(_build_seed_score_geometry(seed, output_directory))
+    else:
+        with ProcessPoolExecutor(max_workers=2, mp_context=multiprocessing.get_context("fork")) as pool:
+            results = list(
+                pool.map(
+                    _build_seed_score_geometry,
+                    seeds,
+                    (output_directory,) * len(seeds),
+                )
             )
-        benign_eval = _client_evaluation_scores(
-            score_coordinate=shared.score_coordinate,
-            document_clients=tuple(item.client for item in shared.clients),
-            expected_clients=expected_clients,
-            benign_only=True,
-        )
-        attack_eval = _client_evaluation_scores(
-            score_coordinate=shared.score_coordinate,
-            document_clients=tuple(item.client for item in shared.clients),
-            expected_clients=expected_clients,
-            benign_only=False,
-        )
-        attack_available = any(item.scores for item in attack_eval)
-        geometry = score_geometry_from_client_vectors(
-            seed=seed,
-            benign_evaluation=benign_eval,
-            attack_evaluation=attack_eval,
-            threshold_overlays=_score_geometry_threshold_overlays(seed, expected_clients),
-            attack_geometry_available=attack_available,
-            attack_geometry_reason=(
-                None if attack_available else AnalysisReasonText("attack evaluation scores unavailable")
-            ),
-        )
-        geometries.append(geometry)
-        figures.append(
-            score_geometry_figure(
-                geometry,
-                title=FigureTitle(f"Per-client empirical score CDF (seed {geometry.seed.value})"),
-            )
-        )
-        figures.append(
-            score_geometry_figure(
-                geometry,
-                title=FigureTitle(f"Ennio Doorbell empirical score CDF (seed {geometry.seed.value})"),
-                client_id=ClientIdentityToken(NBaIoTDevice.ENNIO_DOORBELL.value),
-            )
-        )
+        figures = [figure for result in results for figure in result]
     for view in _confirmatory_pareto_views():
         figures.append(
             equity_utility_pareto_figure(
@@ -709,7 +732,7 @@ def build_confirmatory_score_geometry() -> tuple[tuple[ScoreGeometryResult, ...]
                 title=FigureTitle(f"N-BaIoT equity–utility Pareto: CV(FPR) versus {view.utility_metric.value}"),
             )
         )
-    return tuple(geometries), tuple(figures)
+    return tuple(figures)
 
 
 def _confirmatory_pareto_views() -> tuple[EquityUtilityParetoView, ...]:

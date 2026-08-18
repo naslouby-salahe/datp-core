@@ -26,7 +26,6 @@ from datp_core.core.identifiers import (
 )
 from datp_core.core.numeric import Seed
 from datp_core.data.populations.declarations import split_protocol_for_population
-from datp_core.data.populations.publication import ConstructDeclaredPopulationRequest, construct_declared_population
 from datp_core.data.preprocessing.centralized import (
     CentralizedPopulationPreprocessingRequest,
     preprocess_centralized_population,
@@ -47,7 +46,6 @@ from datp_core.experiments.common.seeds import (
     SeedCohort,
 )
 from datp_core.experiments.execution.context import training_feature_names
-from datp_core.experiments.execution.layout import ExecutionArtifactDirectory
 from datp_core.presentation.export import (
     PUBLICATION_FILENAME,
     PublicationBundle,
@@ -140,16 +138,6 @@ def run_centralized_reference_seed(
 ) -> EvaluateCentralizedDetectorResult:
     population = scope.population
     split_protocol = split_protocol_for_population(population)
-    construct_declared_population(
-        ConstructDeclaredPopulationRequest(
-            population=population,
-            dataset=scope.dataset,
-            canonical_root=DATA_ROOT / ExecutionArtifactDirectory.CANONICAL_DATA / scope.dataset.value,
-            partition_seed=training_seed,
-            split_protocol=split_protocol,
-            controlled_condition=None,
-        )
-    )
     preprocessing = preprocess_centralized_population(
         CentralizedPopulationPreprocessingRequest(
             population=population,

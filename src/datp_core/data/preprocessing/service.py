@@ -102,7 +102,7 @@ def preprocess_federated(
         canonical_root,
         handoff,
         feature_names,
-    )
+    ).collect()
 
     document = construction.manifest.document
     context = PreprocessingPublishContext(

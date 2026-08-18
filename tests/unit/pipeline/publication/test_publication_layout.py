@@ -54,9 +54,10 @@ def test_threshold_methods_keep_distinct_evaluation_runs() -> None:
 
 
 def test_every_non_metric_coordinate_dimension_changes_the_run_identity() -> None:
-    from datp_core.core.identifiers import ThresholdEstimator
-    from datp_core.core.numeric import DirichletConcentration, KllSketchSize, Quantile
+    from datp_core.core.identifiers import CalibrationSupportLevel, ThresholdEstimator
+    from datp_core.core.numeric import DirichletConcentration, KllSketchSize, Quantile, ReplicateIndex
     from datp_core.data.populations.contracts import ControlledPartitionKind
+    from datp_core.thresholds.protocols import ClusterFingerprintFeature
 
     root = Path("outputs")
     primary = coordinate()
@@ -77,6 +78,31 @@ def test_every_non_metric_coordinate_dimension_changes_the_run_identity() -> Non
         replace(primary, threshold_quantile=Quantile(0.90)),
         replace(primary, kll_sketch_size=KllSketchSize(400)),
         replace(primary, threshold_estimator=ThresholdEstimator.MEAN_PLUS_STANDARD_DEVIATION_ESTIMATOR),
+        replace(
+            primary,
+            experiment=ExperimentId.HETEROGENEITY_CALIBRATION_SUPPORT_INTERACTION,
+            evidence_role=EvidenceRole.MECHANISM,
+            population=PopulationId.NBAIOT_DIRICHLET_CLIENTS,
+            controlled_partition_kind=ControlledPartitionKind.DIRICHLET,
+            dirichlet_concentration=DirichletConcentration(0.1),
+            calibration_support=CalibrationSupportLevel.M100,
+            calibration_replicate=ReplicateIndex(2),
+        ),
+        replace(
+            primary,
+            experiment=ExperimentId.HETEROGENEITY_CALIBRATION_SUPPORT_INTERACTION,
+            evidence_role=EvidenceRole.MECHANISM,
+            population=PopulationId.NBAIOT_DIRICHLET_CLIENTS,
+            controlled_partition_kind=ControlledPartitionKind.DIRICHLET,
+            dirichlet_concentration=DirichletConcentration(0.1),
+            calibration_support=CalibrationSupportLevel.M100,
+            calibration_replicate=ReplicateIndex(3),
+        ),
+        replace(
+            primary,
+            threshold_method=FederatedThresholdMethod.CLUSTER_THRESHOLD,
+            cluster_fingerprint_omission=ClusterFingerprintFeature.BENIGN_ERROR_P95,
+        ),
         replace(
             primary,
             population=PopulationId.NBAIOT_DIRICHLET_CLIENTS,

@@ -22,6 +22,7 @@ from datp_core.core.identifiers import (
 )
 from datp_core.core.numeric import RowCount
 from datp_core.data.populations.contracts import (
+    ATTACK_FAMILY_COLUMN,
     OUTCOME_LABEL_COLUMN,
     PARTITION_ROLE_COLUMN,
     STABLE_ROW_ID_COLUMN,
@@ -66,12 +67,12 @@ from datp_core.data.preprocessing.state import (
 
 
 def require_columns(
-    frame: pl.DataFrame,
+    frame: pl.DataFrame | pl.LazyFrame,
     columns: Iterable[ColumnName],
     *,
     subject: ContractSubject | PartitionRole | PreprocessingFitScope | SplitProtocolId,
 ) -> None:
-    frame_cols = set(frame.columns)
+    frame_cols = set(frame.collect_schema().names() if isinstance(frame, pl.LazyFrame) else frame.columns)
     missing = tuple(column for column in columns if column not in frame_cols)
     if missing:
         raise ScientificContractError(
@@ -93,26 +94,28 @@ def require_partitions(
 
 
 def extract_partitions(
-    frame: pl.DataFrame,
+    frame: pl.DataFrame | pl.LazyFrame,
     feature_names: FeatureNameSequence,
     *,
     split_protocol: SplitProtocolId,
     branch: ProcessedDataBranch,
     ordering: PartitionOrdering,
 ) -> PreprocessingPartitions:
+    source = frame.lazy() if isinstance(frame, pl.DataFrame) else frame
     feat_cols = feature_names.as_list()
-    require_columns(
-        frame,
-        (
-            ColumnName(PARTITION_ROLE_COLUMN),
-            ColumnName(STABLE_ROW_ID_COLUMN),
-            ColumnName(OUTCOME_LABEL_COLUMN),
-            *(ColumnName(name) for name in feat_cols),
-        ),
-        subject=ContractSubject.SCHEMA,
+    required_columns = (
+        ColumnName(PARTITION_ROLE_COLUMN),
+        ColumnName(STABLE_ROW_ID_COLUMN),
+        ColumnName(OUTCOME_LABEL_COLUMN),
+        *(ColumnName(name) for name in feat_cols),
     )
-    normalized = frame.with_columns(pl.col(PARTITION_ROLE_COLUMN).cast(pl.String))
-    role_series = normalized.get_column(PARTITION_ROLE_COLUMN)
+    keep = (STABLE_ROW_ID_COLUMN, OUTCOME_LABEL_COLUMN)
+    if ATTACK_FAMILY_COLUMN.value in source.collect_schema().names():
+        required_columns += (ColumnName(ATTACK_FAMILY_COLUMN),)
+        keep += (ATTACK_FAMILY_COLUMN,)
+    keep += tuple(feat_cols)
+    require_columns(source, required_columns, subject=ContractSubject.SCHEMA)
+    role_series = source.select(pl.col(PARTITION_ROLE_COLUMN).cast(pl.String)).collect().to_series()
     if role_series.null_count():
         raise ScientificContractError(
             ErrorMessage("partition role column contains null values"), subject=ContractSubject.SCHEMA
@@ -123,21 +126,20 @@ def extract_partitions(
             ErrorMessage(f"extracted roles do not match {split_protocol.value}"),
             subject=ContractSubject.SCHEMA,
         )
-    keep = (STABLE_ROW_ID_COLUMN, OUTCOME_LABEL_COLUMN, *feat_cols)
-    selected = normalized.select(PARTITION_ROLE_COLUMN, *keep)
     extracted: list[PreprocessingPartition] = []
     total_extracted_rows = RowCount(0)
     for role in expected_roles:
-        role_frame = selected.filter(pl.col(PARTITION_ROLE_COLUMN) == role.value).select(keep)
+        lazy_role = source.filter(pl.col(PARTITION_ROLE_COLUMN).cast(pl.String) == role.value).select(keep)
         if ordering is PartitionOrdering.STABLE_ROW_ID:
-            role_frame = role_frame.sort(STABLE_ROW_ID_COLUMN)
+            lazy_role = lazy_role.sort(STABLE_ROW_ID_COLUMN)
+        role_frame = lazy_role.collect()
         height = role_frame.height
         if not height:
             raise ScientificContractError(ErrorMessage(f"{branch.value} partition {role.value} is empty"), subject=role)
         extracted.append(PreprocessingPartition(role, role_frame))
         total_extracted_rows = total_extracted_rows.plus(RowCount(height))
     partitions = PreprocessingPartitions(tuple(extracted))
-    if total_extracted_rows.value != normalized.height:
+    if total_extracted_rows.value != source.select(pl.len()).collect().item():
         raise ScientificContractError(ErrorMessage("partition extraction lost rows"), subject=ContractSubject.ROWS)
     return partitions
 
@@ -352,23 +354,24 @@ def write_fitted_transformed_partitions(
             train_transformed,
         )
     )
+
+    del train_matrix
     evidence: list[PartitionTransformationEvidence] = []
     for role in partition_roles(split_protocol):
         partition = partitions.require(role)
         require_columns(
             partition.frame, tuple(ColumnName(name) for name in feature_names.names), subject=ContractSubject.SCHEMA
         )
-        transformed = (
-            train_transformed
-            if role is PartitionRole.TRAIN
-            else transform_feature_matrix(
+        if role is PartitionRole.TRAIN:
+            transformed = train_transformed
+        else:
+            transformed = transform_feature_matrix(
                 fitted_estimator,
                 partition.frame.select(feat_cols).to_numpy(),
                 feature_names,
                 role,
                 description=ValidationReasonText(f"transformed {role.value} matrix"),
             )
-        )
         retained = partition.frame.drop(feat_cols)
         transformed_frame = pl.from_numpy(transformed, schema=feat_cols)
         output = transformed_frame if not retained.width else retained.hstack(transformed_frame)
@@ -386,4 +389,6 @@ def write_fitted_transformed_partitions(
                 output_row_count=RowCount(output.height),
             )
         )
+
+    del train_transformed
     return PreprocessingValidationReport(partition_evidence=tuple(evidence))

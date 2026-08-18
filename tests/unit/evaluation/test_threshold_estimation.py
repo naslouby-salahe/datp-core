@@ -75,8 +75,37 @@ def test_sample_efficiency_uses_the_locked_sample_variance() -> None:
 
     assert point.replicate_count.value == 3
     assert point.mean_threshold.value == pytest.approx(2.0)
+    assert point.threshold_variance_across_nested_replicates is not None
     assert point.threshold_variance_across_nested_replicates.value == pytest.approx(1.0)
+    assert point.threshold_standard_deviation_across_nested_replicates is not None
     assert point.threshold_standard_deviation_across_nested_replicates.value == pytest.approx(1.0)
+
+
+def test_sample_efficiency_single_replicate_has_undefined_variance() -> None:
+    coordinate = fedavg_coordinate(Seed(5))
+    diagnostics = (
+        cast(
+            ThresholdEstimationDiagnostic,
+            SimpleNamespace(
+                provenance=ThresholdEstimationProvenance(
+                    client_identity("client_a"),
+                    coordinate,
+                    Seed(5),
+                    CalibrationSize(50),
+                    ReplicateIndex(0),
+                    Quantile(0.95),
+                ),
+                estimated_threshold=ThresholdValue(2.0),
+            ),
+        ),
+    )
+
+    point = sample_efficiency_curve(diagnostics)[0]
+
+    assert point.replicate_count.value == 1
+    assert point.mean_threshold.value == pytest.approx(2.0)
+    assert point.threshold_variance_across_nested_replicates is None
+    assert point.threshold_standard_deviation_across_nested_replicates is None
 
 
 def test_threshold_estimation_preserves_oracle_error_and_attainment_semantics() -> None:

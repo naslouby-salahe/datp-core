@@ -1,8 +1,9 @@
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from pathlib import Path
 from shutil import rmtree
 from tempfile import NamedTemporaryFile, mkdtemp
+from typing import Any
 
 from datp_core.core.identifiers import FileContentText
 
@@ -18,6 +19,23 @@ def write_text_atomically(path: Path, content: FileContentText, *, encoding: str
         delete=False,
     ) as temporary:
         temporary.write(content)
+        temporary_path = Path(temporary.name)
+    with cleanup_staging_on_failure(temporary_path):
+        temporary_path.replace(path)
+    return path
+
+
+def stream_text_atomically(path: Path, render: Callable[[Any], None], *, encoding: str = "utf-8") -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with NamedTemporaryFile(
+        mode="w",
+        encoding=encoding,
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        delete=False,
+    ) as temporary:
+        render(temporary)
         temporary_path = Path(temporary.name)
     with cleanup_staging_on_failure(temporary_path):
         temporary_path.replace(path)

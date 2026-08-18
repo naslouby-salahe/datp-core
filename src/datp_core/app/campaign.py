@@ -25,6 +25,7 @@ from datp_core.app.validation import (
 from datp_core.core.errors import UnresolvedScientificValueError
 from datp_core.core.identifiers import DatasetId, ExperimentId, ExperimentReadiness
 from datp_core.core.numeric import Seed
+from datp_core.data.materialization import MaterializationProgress
 from datp_core.data.registry import DatasetPublication
 from datp_core.data.service import DatasetMaterializationRequest, materialize_datasets
 from datp_core.experiments.anchor.spec import HISTORICAL_ANCHOR_SEED_COHORT
@@ -127,6 +128,7 @@ def preprocess_datasets(
     dataset_id: DatasetId | None,
     *,
     overwrite: OverwriteMode,
+    progress: MaterializationProgress | None = None,
 ) -> PreprocessResult:
     datasets = tuple(DatasetId) if dataset_id is None else (dataset_id,)
     result = materialize_datasets(
@@ -134,7 +136,8 @@ def preprocess_datasets(
             data_root=DATA_ROOT,
             datasets=datasets,
             overwrite=overwrite.requested,
-        )
+        ),
+        progress=progress,
     )
     return PreprocessResult(datasets=datasets, publications=result.publications)
 
